@@ -28,18 +28,18 @@ const fallbackLeadData = [
 ]
 
 const fallbackConversionData = [
-  { name: "Leads", value: 124, color: "#4f46e5" },
-  { name: "Enquiries", value: 82, color: "#8b5cf6" },
-  { name: "Quotations", value: 56, color: "#d946ef" },
-  { name: "Orders", value: 27, color: "#ec4899" },
+  { name: "Leads", value: 124, color: "#0284c7" },
+  { name: "Enquiries", value: 82, color: "#0ea5e9" },
+  { name: "Quotations", value: 56, color: "#38bdf8" },
+  { name: "Orders", value: 27, color: "#7dd3fc" },
 ]
 
 const fallbackSourceData = [
-  { name: "Indiamart", value: 45, color: "#06b6d4" },
+  { name: "Indiamart", value: 45, color: "#0369a1" },
   { name: "Justdial", value: 28, color: "#0ea5e9" },
-  { name: "Social Media", value: 20, color: "#3b82f6" },
-  { name: "Website", value: 15, color: "#6366f1" },
-  { name: "Referrals", value: 12, color: "#8b5cf6" },
+  { name: "Social Media", value: 20, color: "#38bdf8" },
+  { name: "Website", value: 15, color: "#7dd3fc" },
+  { name: "Referrals", value: 12, color: "#bae6fd" },
 ]
 
 function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
@@ -196,10 +196,10 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
 
         // Create conversion data
         const newConversionData = [
-          { name: "Leads", value: totalLeads, color: "#4f46e5" },
-          { name: "Enquiries", value: totalEnquiries, color: "#8b5cf6" },
-          { name: "Quotations", value: totalQuotations, color: "#d946ef" },
-          { name: "Orders", value: totalOrders, color: "#ec4899" }
+          { name: "Leads", value: totalLeads, color: "#0284c7" },
+          { name: "Enquiries", value: totalEnquiries, color: "#0ea5e9" },
+          { name: "Quotations", value: totalQuotations, color: "#38bdf8" },
+          { name: "Orders", value: totalOrders, color: "#7dd3fc" }
         ]
 
         setConversionData(newConversionData)
@@ -233,10 +233,8 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
 
           // Define a color palette
           const colorPalette = [
-            "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1", "#8b5cf6",
-            "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#ef4444",
-            "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
-            "#10b981", "#14b8a6",
+            "#0369a1", "#0ea5e9", "#38bdf8", "#7dd3fc", "#bae6fd",
+            "#0284c7", "#3b82f6", "#60a5fa", "#93c5fd", "#bfdbfe"
           ]
 
           leadSourcesData.forEach(row => {
@@ -308,24 +306,24 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
         <div className="inline-flex rounded-md shadow-sm">
           <button
             onClick={() => setActiveTab("overview")}
-            className={`px-4 py-2 text-sm font-medium rounded-l-md ${activeTab === "overview" ? "bg-slate-100 text-slate-900" : "bg-white text-slate-700 hover:bg-slate-50"
+            className={`px-4 py-2 text-sm font-medium rounded-l-md ${activeTab === "overview" ? "bg-sky-500 text-white" : "bg-white text-slate-700 hover:bg-slate-50"
               }`}
           >
             Overview
           </button>
           <button
             onClick={() => setActiveTab("conversion")}
-            className={`px-4 py-2 text-sm font-medium ${activeTab === "conversion" ? "bg-slate-100 text-slate-900" : "bg-white text-slate-700 hover:bg-slate-50"
+            className={`px-4 py-2 text-sm font-medium ${activeTab === "conversion" ? "bg-sky-500 text-white" : "bg-white text-slate-700 hover:bg-slate-50"
               }`}
           >
             Conversion
           </button>
           <button
             onClick={() => setActiveTab("sources")}
-            className={`px-4 py-2 text-sm font-medium rounded-r-md ${activeTab === "sources" ? "bg-slate-100 text-slate-900" : "bg-white text-slate-700 hover:bg-slate-50"
+            className={`px-4 py-2 text-sm font-medium rounded-r-md ${activeTab === "sources" ? "bg-sky-500 text-white" : "bg-white text-slate-700 hover:bg-slate-50"
               }`}
           >
-            Lead Sources
+            Enquiry Sources
           </button>
         </div>
       </div>
@@ -348,9 +346,9 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
                 <YAxis />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="leads" name="Leads" fill="#4f46e5" />
-                <Bar dataKey="enquiries" name="Enquiries" fill="#8b5cf6" />
-                <Bar dataKey="orders" name="Orders" fill="#ec4899" />
+                <Bar dataKey="leads" name="Leads" fill="#0ea5e9" />
+                <Bar dataKey="enquiries" name="Enquiries" fill="#38bdf8" />
+                <Bar dataKey="orders" name="Orders" fill="#0284c7" />
               </BarChart>
             </ResponsiveContainer>
           )}

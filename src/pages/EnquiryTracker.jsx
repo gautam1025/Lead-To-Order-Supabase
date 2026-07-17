@@ -1595,6 +1595,7 @@ const handleSaveClick = async (index) => {
       .select("*", { count: "exact" })
       .not("Enquiry_Received_Status", "is", null)
       .neq("Enquiry_Received_Status", "")
+      .or('Current_Stage.is.null,Current_Stage.eq.""')
       .order("LD-Lead-No", { ascending: true })
       .range(from, to);
 
@@ -1879,7 +1880,7 @@ const handleSaveClick = async (index) => {
       .from("enquiry_to_order")
       .select("*", { count: "exact" })
       .not("planned1", "is", null)
-      .is("actual1", null)
+      .or('current_stage.is.null,current_stage.eq.""')
       .order("enquiry_no", { ascending: true })
       .range(from, to);
 

@@ -283,7 +283,7 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
             change="+12%"
             trend="up"
             icon={<UsersIcon className="h-5 w-5" />}
-            color="from-blue-500 to-indigo-600"
+            color="from-sky-500 to-blue-600"
           />
 
           <MetricCard
@@ -292,7 +292,7 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
             change="+5%"
             trend="up"
             icon={<PhoneCallIcon className="h-5 w-5" />}
-            color="from-amber-500 to-orange-600"
+            color="from-blue-500 to-blue-600"
           />
 
           <MetricCard
@@ -310,7 +310,7 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
             change="-3%"
             trend="down"
             icon={<ShoppingCartIcon className="h-5 w-5" />}
-            color="from-purple-500 to-pink-600"
+            color="from-sky-500 to-blue-600"
           />
         </div>
       </div>
