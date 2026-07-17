@@ -24,16 +24,16 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
             active: location.pathname.startsWith("/leads"),
         },
         {
-            href: "/follow-up",
+            href: "/call-tracker",
             label: "Call Tracker",
             icon: <PhoneCallIcon className="h-5 w-5 mr-3" />,
-            active: location.pathname.startsWith("/follow-up"),
+            active: location.pathname.startsWith("/call-tracker"),
         },
         {
-            href: "/call-tracker",
+            href: "/enquiry-tracker",
             label: "Enquiry Tracker",
             icon: <BarChartIcon className="h-5 w-5 mr-3" />,
-            active: location.pathname.startsWith("/call-tracker"),
+            active: location.pathname.startsWith("/enquiry-tracker"),
         },
         {
             href: "/quotation",

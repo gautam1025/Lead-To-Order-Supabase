@@ -22,7 +22,7 @@ function PendingTasks() {
             </div>
           </div>
           <div className="mt-3">
-            <Link to="/follow-up/new?leadId=1">
+            <Link to="/call-tracker/new?leadId=1">
               <button className="w-full px-4 py-2 text-sm font-medium rounded-md border border-amber-300 text-amber-700 bg-white hover:bg-amber-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500">
                 Call Now <ArrowRightIcon className="ml-2 h-3 w-3 inline" />
               </button>
@@ -68,7 +68,7 @@ function PendingTasks() {
             </div>
           </div>
           <div className="mt-3">
-            <Link to="/call-tracker/new?enquiryNo=En-03">
+            <Link to="/enquiry-tracker/new?enquiryNo=En-03">
               <button className="w-full px-4 py-2 text-sm font-medium rounded-md border border-emerald-300 text-emerald-700 bg-white hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-emerald-500">
                 Update Status <ArrowRightIcon className="ml-2 h-3 w-3 inline" />
               </button>

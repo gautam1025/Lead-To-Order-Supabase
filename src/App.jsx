@@ -5,10 +5,10 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-d
 import Login from "./pages/Login"
 import Dashboard from "./pages/Dashboard"
 import Leads from "./pages/Leads"
-import FollowUp from "./pages/FollowUp"
-import NewFollowUp from "./pages/NewFollowUp"
 import CallTracker from "./pages/CallTracker"
 import NewCallTracker from "./pages/NewCallTracker"
+import EnquiryTracker from "./pages/EnquiryTracker"
+import NewEnquiryTracker from "./pages/NewEnquiryTracker"
 import Quotation from "./pages/Quotation/Quotation"
 import Report from "./pages/Report"
 import MainNav from "./components/MainNav"
@@ -306,22 +306,6 @@ function App() {
                     }
                   />
                   <Route
-                    path="/follow-up"
-                    element={
-                      <ProtectedRoute>
-                        <FollowUp />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/follow-up/new"
-                    element={
-                      <ProtectedRoute>
-                        <NewFollowUp />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
                     path="/call-tracker"
                     element={
                       <ProtectedRoute>
@@ -334,6 +318,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <NewCallTracker />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/enquiry-tracker"
+                    element={
+                      <ProtectedRoute>
+                        <EnquiryTracker />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/enquiry-tracker/new"
+                    element={
+                      <ProtectedRoute>
+                        <NewEnquiryTracker />
                       </ProtectedRoute>
                     }
                   />

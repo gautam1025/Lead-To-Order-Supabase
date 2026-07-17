@@ -3,7 +3,7 @@ import { SearchIcon } from "../Icons";
 import FilterTabs from "../FilterTabs";
 import SearchableDropdown from "../SearchableDropdown";
 
-const FollowUpFilter = ({
+const CallTrackerFilter = ({
   activeTab, setActiveTab,
   searchTerm, setSearchTerm,
   companyFilter, setCompanyFilter,
@@ -34,7 +34,7 @@ const FollowUpFilter = ({
           <input
             type="search"
             placeholder="Search Call Tracker..."
-            className="pl-8 w-full px-3 h-9 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+            className="pl-8 w-full px-3 h-9 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
@@ -107,7 +107,7 @@ const FollowUpFilter = ({
           <div className="relative dropdown-container flex-1 min-w-[100px] z-[120]">
             <button
               onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-              className="w-full h-9 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white flex justify-between items-center text-sm"
+              className="w-full h-9 px-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white flex justify-between items-center text-sm"
             >
               <span>Select Columns</span>
               <svg
@@ -129,7 +129,7 @@ const FollowUpFilter = ({
                       id="select-all-pending"
                       checked={Object.values(visibleColumnsPending).every(Boolean)}
                       onChange={handleSelectAllPending}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                     />
                     <label htmlFor="select-all-pending" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">
                       All Columns
@@ -145,7 +145,7 @@ const FollowUpFilter = ({
                         id={`column-pending-${option.key}`}
                         checked={visibleColumnsPending[option.key]}
                         onChange={() => handleColumnTogglePending(option.key)}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                       />
                       <label htmlFor={`column-pending-${option.key}`} className="ml-2 text-sm text-gray-700 cursor-pointer flex-1">
                         {option.label}
@@ -178,7 +178,7 @@ const FollowUpFilter = ({
           <div className="relative dropdown-container shrink-0 z-[110]">
             <button
               onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-              className="px-3 h-9 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white flex items-center text-sm"
+              className="px-3 h-9 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500 bg-white flex items-center text-sm"
             >
               <span>Select Columns</span>
               <svg
@@ -200,7 +200,7 @@ const FollowUpFilter = ({
                       id="select-all"
                       checked={Object.values(visibleColumns).every(Boolean)}
                       onChange={handleSelectAll}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
+                      className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                     />
                     <label htmlFor="select-all" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">
                       All Columns
@@ -214,7 +214,7 @@ const FollowUpFilter = ({
                         id={`column-${option.key}`}
                         checked={visibleColumns[option.key]}
                         onChange={() => handleColumnToggle(option.key)}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
+                        className="h-4 w-4 text-purple-600 focus:ring-purple-500 border-gray-300 rounded"
                       />
                       <label htmlFor={`column-${option.key}`} className="ml-2 text-sm text-gray-700 cursor-pointer flex-1">
                         {option.label}
@@ -247,4 +247,4 @@ const FollowUpFilter = ({
   );
 };
 
-export default FollowUpFilter;
+export default CallTrackerFilter;

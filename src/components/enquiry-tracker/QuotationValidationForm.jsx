@@ -1,5 +1,4 @@
 import { useState, useEffect } from "react"
-import { mockApi } from "../../services/mockApi"
 
 function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
   const [sendStatusOptions, setSendStatusOptions] = useState([])
@@ -7,43 +6,145 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
   const [isLoading, setIsLoading] = useState(false)
   const [quotationNumbers, setQuotationNumbers] = useState([])
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(false)
-
+  
   // Fetch dropdown options from DROPDOWN sheet
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
         setIsLoading(true)
-        const data = await mockApi.fetchValidationDropdowns();
-
-        setSendStatusOptions(data.sendStatusOptions || [])
-        setValidatorNameOptions(data.validatorNameOptions || [])
+        
+        // Fetch data from DROPDOWN sheet
+        const dropdownUrl = "https://docs.google.com/spreadsheets/d/1TZVWkmASF7tG-QER17588sl4SvRgY7knFKFDtYFjB0Q/gviz/tq?tqx=out:json&sheet=DROPDOWN"
+        const response = await fetch(dropdownUrl)
+        const text = await response.text()
+        
+        // Extract the JSON part from the response
+        const jsonStart = text.indexOf('{')
+        const jsonEnd = text.lastIndexOf('}') + 1
+        const jsonData = text.substring(jsonStart, jsonEnd)
+        
+        const data = JSON.parse(jsonData)
+        
+        // Extract column values (skip header row)
+        if (data && data.table && data.table.rows) {
+          const sendStatusOpts = []
+          const validatorNameOpts = []
+          
+          // Skip the header row (index 0)
+          data.table.rows.slice(0).forEach(row => {
+            // Column F (index 5) for send status
+            if (row.c && row.c[5] && row.c[5].v) {
+              sendStatusOpts.push(row.c[5].v)
+            }
+            // Column B (index 1) for validator names
+            if (row.c && row.c[63] && row.c[63].v) {
+              validatorNameOpts.push(row.c[63].v)
+            }
+          })
+          
+          setSendStatusOptions(sendStatusOpts)
+          setValidatorNameOptions(validatorNameOpts)
+        }
       } catch (error) {
         console.error("Error fetching dropdown options:", error)
+        // Fallback options if fetch fails
         setSendStatusOptions(["mail", "whatsapp", "both"])
         setValidatorNameOptions([])
       } finally {
         setIsLoading(false)
       }
     }
-
+    
     fetchDropdownOptions()
   }, [])
 
   // Fetch quotation numbers for the given enquiry number
+  // useEffect(() => {
+  //   const fetchQuotationNumbers = async () => {
+  //     if (!enquiryNo) return
+      
+  //     try {
+  //       setIsLoadingQuotations(true)
+        
+  //       // Fetch data from FMS sheet or use the dedicated endpoint
+  //       const scriptUrl = "https://script.google.com/macros/s/AKfycbzTPj_x_0Sh6uCNnMDi-KlwVzkGV3nC4tRF6kGUNA1vXG0Ykx4Lq6ccR9kYv6Cst108aQ/exec"
+        
+  //       const params = {
+  //         action: "getQuotationNumber",
+  //         enquiryNo: enquiryNo
+  //       }
 
+  //       const urlParams = new URLSearchParams()
+  //       for (const key in params) {
+  //         urlParams.append(key, params[key])
+  //       }
+        
+  //       const response = await fetch(scriptUrl, {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/x-www-form-urlencoded"
+  //         },
+  //         body: urlParams
+  //       })
+
+  //       const result = await response.json()
+        
+  //       if (result.success && result.quotationNumber) {
+  //         setQuotationNumbers([result.quotationNumber])
+          
+  //         // If form field is empty, auto-fill with the first match
+  //         if (!formData.validationQuotationNumber) {
+  //           onFieldChange('validationQuotationNumber', result.quotationNumber)
+  //         }
+  //       }
+  //     } catch (error) {
+  //       console.error("Error fetching quotation numbers:", error)
+  //     } finally {
+  //       setIsLoadingQuotations(false)
+  //     }
+  //   }
+    
+  //   fetchQuotationNumbers()
+  // }, [enquiryNo, formData.validationQuotationNumber, onFieldChange])
 
   useEffect(() => {
-    let isMounted = true;
     const fetchQuotationNumbers = async () => {
       if (!enquiryNo) return
-
+      
       try {
         setIsLoadingQuotations(true)
-        const matchingQuotations = await mockApi.fetchQuotationsForEnquiry(enquiryNo);
-
-        if (isMounted) {
+        
+        // Fetch data from FMS sheet
+        const fmsUrl = "https://docs.google.com/spreadsheets/d/1TZVWkmASF7tG-QER17588sl4SvRgY7knFKFDtYFjB0Q/gviz/tq?tqx=out:json&sheet=FMS"
+        const response = await fetch(fmsUrl)
+        const text = await response.text()
+        
+        // Extract the JSON part from the response
+        const jsonStart = text.indexOf('{')
+        const jsonEnd = text.lastIndexOf('}') + 1
+        const jsonData = text.substring(jsonStart, jsonEnd)
+        
+        const data = JSON.parse(jsonData)
+        
+        // Find matching quotation numbers where column B matches the enquiry number
+        if (data && data.table && data.table.rows) {
+          const matchingQuotations = []
+          
+          data.table.rows.forEach(row => {
+            // Column B is index 1 (enquiry number) and column H is index 7 (quotation number)
+            if (row.c && 
+                row.c[1] && 
+                row.c[1].v && 
+                row.c[1].v.toString() === enquiryNo.toString() &&
+                row.c[60] && 
+                row.c[60].v) {
+              matchingQuotations.push(row.c[60].v)
+            }
+          })
+          
           setQuotationNumbers(matchingQuotations)
-
+          
+          // If we found matches and the form field is empty, auto-fill with the first match
           if (matchingQuotations.length > 0 && !formData.validationQuotationNumber) {
             onFieldChange('validationQuotationNumber', matchingQuotations[0])
           }
@@ -51,13 +152,12 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
       } catch (error) {
         console.error("Error fetching quotation numbers:", error)
       } finally {
-        if (isMounted) setIsLoadingQuotations(false)
+        setIsLoadingQuotations(false)
       }
     }
-
+    
     fetchQuotationNumbers()
-    return () => { isMounted = false; }
-  }, [enquiryNo])
+  }, [enquiryNo, formData.validationQuotationNumber, onFieldChange])
 
   const handleChange = (e) => {
     const { name, value } = e.target
@@ -74,29 +174,40 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
           <label htmlFor="validationQuotationNumber" className="block text-sm font-medium text-gray-700">
             Quotation Number
           </label>
-          <div className="relative">
+          {isLoadingQuotations ? (
+            <div className="flex items-center space-x-2">
+              <input
+                id="validationQuotationNumber"
+                name="validationQuotationNumber"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Loading quotation numbers..."
+                value={formData.validationQuotationNumber || ""}
+                onChange={handleChange}
+                disabled
+                required
+              />
+              <div className="text-sm text-gray-500">Loading...</div>
+            </div>
+          ) : (
             <input
               id="validationQuotationNumber"
               name="validationQuotationNumber"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
-              placeholder={isLoadingQuotations ? "Loading quotation numbers..." : "Enter quotation number"}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              placeholder="Enter quotation number"
               value={formData.validationQuotationNumber || ""}
               onChange={handleChange}
               required
             />
-            {isLoadingQuotations && (
-              <div className="absolute right-3 top-2.5 text-xs text-gray-400">Loading...</div>
-            )}
-          </div>
+          )}
           {enquiryNo && quotationNumbers.length > 0 && !isLoadingQuotations && (
             <div className="text-xs text-green-600 mt-1">
-              {quotationNumbers.length === 1
-                ? "Found matching quotation"
+              {quotationNumbers.length === 1 
+                ? "Found matching quotation" 
                 : `Found ${quotationNumbers.length} matching quotations`}
             </div>
           )}
           {enquiryNo && quotationNumbers.length === 0 && !isLoadingQuotations && (
-            <div className="text-xs text-red-500 mt-1">No matching quotations found for enquiry #{enquiryNo}</div>
+            <div className="text-xs text-orange-500 mt-1">No matching quotations found for enquiry #{enquiryNo}</div>
           )}
         </div>
 
@@ -107,7 +218,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
           <select
             id="validatorName"
             name="validatorName"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             value={formData.validatorName || ""}
             onChange={handleChange}
             required
@@ -127,7 +238,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
         <select
           id="sendStatus"
           name="sendStatus"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           value={formData.sendStatus || ""}
           onChange={handleChange}
           required
@@ -146,7 +257,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
         <textarea
           id="validationRemark"
           name="validationRemark"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
           placeholder="Enter validation remarks"
           value={formData.validationRemark || ""}
           onChange={handleChange}
@@ -168,7 +279,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="yes"
                   checked={formData.faqVideo === "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="faq-yes" className="text-sm text-gray-700">
                   Yes
@@ -182,7 +293,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="no"
                   checked={formData.faqVideo !== "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="faq-no" className="text-sm text-gray-700">
                   No
@@ -202,7 +313,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="yes"
                   checked={formData.productVideo === "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="product-video-yes" className="text-sm text-gray-700">
                   Yes
@@ -216,7 +327,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="no"
                   checked={formData.productVideo !== "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="product-video-no" className="text-sm text-gray-700">
                   No
@@ -236,7 +347,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="yes"
                   checked={formData.offerVideo === "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="offer-video-yes" className="text-sm text-gray-700">
                   Yes
@@ -250,7 +361,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="no"
                   checked={formData.offerVideo !== "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="offer-video-no" className="text-sm text-gray-700">
                   No
@@ -270,7 +381,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="yes"
                   checked={formData.productCatalog === "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="catalog-yes" className="text-sm text-gray-700">
                   Yes
@@ -284,7 +395,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="no"
                   checked={formData.productCatalog !== "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="catalog-no" className="text-sm text-gray-700">
                   No
@@ -304,7 +415,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="yes"
                   checked={formData.productImage === "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="image-yes" className="text-sm text-gray-700">
                   Yes
@@ -318,7 +429,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
                   value="no"
                   checked={formData.productImage !== "yes"}
                   onChange={handleChange}
-                  className="h-4 w-4 text-sky-600 focus:ring-sky-500"
+                  className="h-4 w-4 text-purple-600 focus:ring-purple-500"
                 />
                 <label htmlFor="image-no" className="text-sm text-gray-700">
                   No

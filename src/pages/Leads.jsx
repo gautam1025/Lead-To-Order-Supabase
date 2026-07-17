@@ -217,6 +217,7 @@ function ExcelImportModal({ onClose, onSaved }) {
         "Credit _Access": "",
         Credit_Days: "",
         Credit_Limit: "",
+        handle_person: row.handlePerson || "",
       }));
 
       const { error } = await supabase.from("leads_to_order").insert(rowsToInsert);

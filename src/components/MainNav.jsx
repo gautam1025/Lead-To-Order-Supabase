@@ -17,11 +17,11 @@ function MainNav({ logout, setMobileMenuOpen }) {
       title: "Lead Management",
       description: "Enter the details of the new lead"
     }
-    if (path.startsWith("/follow-up")) return {
+    if (path.startsWith("/call-tracker")) return {
       title: "Call Tracker",
       description: "Track and manage all your follow-up calls"
     }
-    if (path.startsWith("/call-tracker")) return {
+    if (path.startsWith("/enquiry-tracker")) return {
       title: "Enquiry Tracker",
       description: "Track the progress of enquiries through the sales pipeline"
     }
@@ -49,7 +49,7 @@ function MainNav({ logout, setMobileMenuOpen }) {
   }
 
   const { title, description } = getPageHeader()
-  const showAdminView = (location.pathname.startsWith("/follow-up") || location.pathname.startsWith("/call-tracker")) && isAdmin && isAdmin()
+  const showAdminView = (location.pathname.startsWith("/call-tracker") || location.pathname.startsWith("/enquiry-tracker")) && isAdmin && isAdmin()
 
   return (
     <header className="sticky top-0 z-40 flex h-auto min-h-[4rem] w-full items-center justify-between border-b bg-white px-4 py-2 shadow-sm">

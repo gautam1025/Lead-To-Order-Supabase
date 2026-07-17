@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react"
 import { Link, useLocation, useParams } from "react-router-dom"
-import { mockApi } from "../../services/mockApi"
+import supabase from "../../utils/supabase"
 
 function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   const location = useLocation()
@@ -8,50 +8,96 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   const [sharedByOptions, setSharedByOptions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [fileError, setFileError] = useState(null)
+  
+  // Fetch dropdown options from DROPDOWN sheet column E
+  useEffect(() => {// adjust path
 
-  // Fetch dropdown options
-  useEffect(() => {
-    const fetchSharedByOptions = async () => {
-      try {
-        setIsLoading(true)
-        const data = await mockApi.fetchValidationDropdowns();
-        setSharedByOptions(data.validatorNameOptions || ["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
-      } catch (error) {
-        console.error("Error fetching dropdown options:", error)
-        setSharedByOptions(["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
-      } finally {
-        setIsLoading(false)
-      }
-    }
+const fetchSharedByOptions = async () => {
+  try {
+    setIsLoading(true);
+
+    // Fetch distinct values from `dropdown` table
+    const { data, error } = await supabase
+      .from("dropdown")
+      .select("quotation_shared_by")
+      .not("quotation_shared_by", "is", null);
+
+    if (error) throw error;
+
+    // Extract text values directly
+    const options = data.map(row => row.quotation_shared_by);
+
+    setSharedByOptions(options);
+  } catch (error) {
+    console.error("Error fetching dropdown options:", error);
+    // Fallback options if fetch fails
+    setSharedByOptions([
+      "Rahul Sharma",
+      "Priya Patel",
+      "Amit Singh",
+      "Neha Gupta"
+    ]);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
     fetchSharedByOptions()
   }, [])
 
   // Add this new useEffect after the existing sharedByOptions useEffect
-  useEffect(() => {
-    const generateSendQuotationNo = async () => {
-      if (!enquiryNo) return;
-
-      try {
-        const newQuotationNo = await mockApi.generateSendQuotationNo(enquiryNo);
-        onFieldChange('sendQuotationNo', newQuotationNo);
-      } catch (error) {
-        console.error("Error generating quotation number:", error)
-        onFieldChange('sendQuotationNo', `${enquiryNo}-1`);
-      }
+useEffect(() => {
+  const generateSendQuotationNo = async () => {
+    if (!enquiryNo) return;
+    
+    try {
+      // Fetch data from ENQUIRY TRACKER sheet
+      const trackerUrl = "https://docs.google.com/spreadsheets/d/1TZVWkmASF7tG-QER17588sl4SvRgY7knFKFDtYFjB0Q/gviz/tq?tqx=out:json&sheet=ENQUIRY TRACKER"
+      const response = await fetch(trackerUrl)
+      const text = await response.text()
+      
+      // Extract the JSON part from the response
+      const jsonStart = text.indexOf('{')
+      const jsonEnd = text.lastIndexOf('}') + 1
+      const jsonData = text.substring(jsonStart, jsonEnd)
+      
+      const data = JSON.parse(jsonData)
+      
+      let count = 0;
+      
+      // Count occurrences in column B (index 1)
+    // Count occurrences in column B (index 1) where column E (index 4) is "make quotation"
+if (data && data.table && data.table.rows) {
+  data.table.rows.forEach(row => {
+    if (row.c && row.c[1] && row.c[1].v === enquiryNo && 
+        row.c[4] && row.c[4].v === "make-quotation") {
+      count++;
     }
+  })
+}
+      
+      // Generate new quotation number (count + 1)
+      const newQuotationNo = `${count + 1}`;
+      onFieldChange('sendQuotationNo', newQuotationNo);
+      
+    } catch (error) {
+      console.error("Error generating quotation number:", error)
+      // Fallback: just use enquiry number with -1
+      onFieldChange('sendQuotationNo', `${enquiryNo}-1`);
+    }
+  }
+  
+  generateSendQuotationNo()
+}, [enquiryNo]) // Dependency on enquiryNo
 
-    generateSendQuotationNo()
-  }, [enquiryNo]) // Dependency on enquiryNo
-
-  // Also modify the Send Quotation No. input field to be readonly:
-  // Change this line in the JSX:
-  // className="w-full p-2 border border-gray-300 rounded-md"
-  // To:
-  // className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
-  // And add:
-  // readOnly
-
+// Also modify the Send Quotation No. input field to be readonly:
+// Change this line in the JSX:
+// className="w-full p-2 border border-gray-300 rounded-md"
+// To:
+// className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
+// And add:
+// readOnly
+  
   const handleChange = (e) => {
     const { name, value } = e.target
     onFieldChange(name, value)
@@ -182,7 +228,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
               <div className="flex flex-col items-center justify-center pt-5 pb-6">
                 <svg className="w-8 h-8 mb-4 text-gray-500" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
-                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                  <path stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2"/>
                 </svg>
                 <p className="mb-2 text-sm text-gray-500">
                   <span className="font-semibold">Click to upload</span> or drag and drop

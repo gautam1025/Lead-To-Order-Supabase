@@ -1,9 +1,9 @@
-import React from 'react';
-import { SearchIcon, PlusIcon } from "../Icons";
-import SearchableDropdown from "../SearchableDropdown";
+﻿import React from 'react';
+import { SearchIcon } from "../Icons";
 import FilterTabs from "../FilterTabs";
+import SearchableDropdown from "../SearchableDropdown";
 
-const CallTrackerFilter = ({
+const EnquiryTrackerFilter = ({
   activeTab, setActiveTab,
   searchTerm, setSearchTerm,
   callingDaysFilter, setCallingDaysFilter,
@@ -37,13 +37,12 @@ const CallTrackerFilter = ({
           <input
             type="search"
             placeholder="Search Enquiry trackers..."
-            className="pl-8 w-full px-3 h-9 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="pl-8 w-full px-3 h-9 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
         </div>
 
-        {/* Calling Days Filter */}
         <div className="flex-1 min-w-[120px] z-[60]">
           <SearchableDropdown
             isMulti={true}
@@ -66,11 +65,10 @@ const CallTrackerFilter = ({
           />
         </div>
 
-        {/* Lead No Filter */}
         <div className="flex-1 min-w-[120px] z-[50]">
           <SearchableDropdown
             isMulti={true}
-            options={Array.from(new Set(activeData.map(c => activeTab === "history" ? c.enquiryNo : c.leadId).filter(Boolean))).map(l => ({ value: l, label: l, count: activeData.filter(d => (activeTab === "history" ? d.enquiryNo : d.leadId) === l).length }))}
+            options={Array.from(new Set(activeData.map(c => activeTab === "history" ? c.enquiryNo : c.leadNo).filter(Boolean))).map(l => ({ value: l, label: l, count: activeData.filter(d => (activeTab === "history" ? d.enquiryNo : d.leadNo) === l).length }))}
             value={enquiryNoFilter}
             onChange={setEnquiryNoFilter}
             placeholder="Lead No."
@@ -80,7 +78,6 @@ const CallTrackerFilter = ({
           />
         </div>
 
-        {/* Current Stage Filter */}
         <div className="flex-1 min-w-[120px] z-[40]">
           <SearchableDropdown
             isMulti={true}
@@ -94,7 +91,6 @@ const CallTrackerFilter = ({
           />
         </div>
 
-        {/* Column Selection Dropdown for Pending tab */}
         {activeTab === "pending" && (
           <div className="relative dropdown-container">
             <button
@@ -102,51 +98,22 @@ const CallTrackerFilter = ({
               className="px-3 h-9 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white flex items-center text-sm"
             >
               <span>Select Columns</span>
-              <svg
-                className={`w-4 h-4 ml-2 transition-transform ${showColumnDropdown ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className={`w-4 h-4 ml-2 transition-transform ${showColumnDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-
             {showColumnDropdown && (
               <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto">
                 <div className="p-2">
-                  {/* Select All Option */}
                   <div className="flex items-center p-2 hover:bg-gray-50 rounded">
-                    <input
-                      type="checkbox"
-                      id="select-all-pending"
-                      checked={Object.values(visiblePendingColumns || {}).every(Boolean)}
-                      onChange={handleSelectAllPending}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="select-all-pending" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">
-                      All Columns
-                    </label>
+                    <input type="checkbox" id="select-all-pending" checked={Object.values(visiblePendingColumns || {}).every(Boolean)} onChange={handleSelectAllPending} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded" />
+                    <label htmlFor="select-all-pending" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">All Columns</label>
                   </div>
-
                   <hr className="my-2" />
-
-                  {/* Individual Column Options */}
                   {pendingColumnOptions.map((option) => (
                     <div key={option.key} className="flex items-center p-2 hover:bg-gray-50 rounded">
-                      <input
-                        type="checkbox"
-                        id={`column-pending-${option.key}`}
-                        checked={visiblePendingColumns[option.key]}
-                        onChange={() => handleColumnTogglePending(option.key)}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
-                      />
-                      <label
-                        htmlFor={`column-pending-${option.key}`}
-                        className="ml-2 text-sm text-gray-700 cursor-pointer flex-1"
-                      >
-                        {option.label}
-                      </label>
+                      <input type="checkbox" id={`column-pending-${option.key}`} checked={!!visiblePendingColumns[option.key]} onChange={() => handleColumnTogglePending(option.key)} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded" />
+                      <label htmlFor={`column-pending-${option.key}`} className="ml-2 text-sm text-gray-700 cursor-pointer flex-1">{option.label}</label>
                     </div>
                   ))}
                 </div>
@@ -155,7 +122,6 @@ const CallTrackerFilter = ({
           </div>
         )}
 
-        {/* Column Selection Dropdown - Only show for history tab */}
         {activeTab === "history" && (
           <div className="relative dropdown-container">
             <button
@@ -163,51 +129,22 @@ const CallTrackerFilter = ({
               className="px-3 h-9 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white flex items-center text-sm"
             >
               <span>Select Columns</span>
-              <svg
-                className={`w-4 h-4 ml-2 transition-transform ${showColumnDropdown ? "rotate-180" : ""}`}
-                fill="none"
-                stroke="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className={`w-4 h-4 ml-2 transition-transform ${showColumnDropdown ? "rotate-180" : ""}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
               </svg>
             </button>
-
             {showColumnDropdown && (
               <div className="absolute top-full left-0 mt-1 w-64 bg-white border border-gray-300 rounded-md shadow-lg z-50 max-h-80 overflow-y-auto">
                 <div className="p-2">
-                  {/* Select All Option */}
                   <div className="flex items-center p-2 hover:bg-gray-50 rounded">
-                    <input
-                      type="checkbox"
-                      id="select-all-history"
-                      checked={Object.values(visibleColumns).every(Boolean)}
-                      onChange={handleSelectAll}
-                      className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
-                    />
-                    <label htmlFor="select-all-history" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">
-                      All Columns
-                    </label>
+                    <input type="checkbox" id="select-all-history" checked={Object.values(visibleColumns).every(Boolean)} onChange={handleSelectAll} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded" />
+                    <label htmlFor="select-all-history" className="ml-2 text-sm font-medium text-gray-900 cursor-pointer">All Columns</label>
                   </div>
-
                   <hr className="my-2" />
-
-                  {/* Individual Column Options */}
                   {columnOptions.map((option) => (
                     <div key={option.key} className="flex items-center p-2 hover:bg-gray-50 rounded">
-                      <input
-                        type="checkbox"
-                        id={`column-${option.key}`}
-                        checked={visibleColumns[option.key]}
-                        onChange={() => handleColumnToggle(option.key)}
-                        className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded"
-                      />
-                      <label
-                        htmlFor={`column-${option.key}`}
-                        className="ml-2 text-sm text-gray-700 cursor-pointer flex-1"
-                      >
-                        {option.label}
-                      </label>
+                      <input type="checkbox" id={`column-${option.key}`} checked={!!visibleColumns[option.key]} onChange={() => handleColumnToggle(option.key)} className="h-4 w-4 text-sky-600 focus:ring-sky-500 border-gray-300 rounded" />
+                      <label htmlFor={`column-${option.key}`} className="ml-2 text-sm text-gray-700 cursor-pointer flex-1">{option.label}</label>
                     </div>
                   ))}
                 </div>
@@ -216,21 +153,16 @@ const CallTrackerFilter = ({
           </div>
         )}
 
-        {/* Clear Filters Button */}
-        {(callingDaysFilter.length > 0 || enquiryNoFilter.length > 0 || currentStageFilter.length > 0) && (
+        {(callingDaysFilter.length > 0 || enquiryNoFilter.length > 0 || currentStageFilter.length > 0 || searchTerm) && (
           <button
-            className="px-3 h-9 text-sm border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-sky-500 shrink-0"
-            onClick={() => {
-              setCallingDaysFilter([])
-              setEnquiryNoFilter([])
-              setCurrentStageFilter([])
-            }}
+            className="px-3 h-9 text-sm border border-red-200 rounded-md text-red-600 hover:bg-red-50 focus:outline-none shrink-0"
+            onClick={() => { setCallingDaysFilter([]); setEnquiryNoFilter([]); setCurrentStageFilter([]); setSearchTerm(""); }}
           >
             Clear Filters
           </button>
         )}
 
-        {activeTab !== "history" && (
+        {activeTab !== "history" && setShowNewCallTrackerForm && (
           <button
             className="px-3 h-9 flex items-center gap-1.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 shrink-0 text-sm font-medium"
             onClick={() => setShowNewCallTrackerForm(true)}
@@ -243,4 +175,4 @@ const CallTrackerFilter = ({
   );
 };
 
-export default CallTrackerFilter;
+export default EnquiryTrackerFilter;

@@ -1,25 +1,44 @@
 import { useState, useEffect } from "react"
-import { mockApi } from "../../services/mockApi"
+import supabase from "../../utils/supabase";
 
 function OrderExpectedForm({ formData, onFieldChange }) {
   const [followupStatusOptions, setFollowupStatusOptions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
-
+  
   // Fetch dropdown options from DROPDOWN sheet column 81
   useEffect(() => {
-    const fetchFollowupStatusOptions = async () => {
-      try {
-        setIsLoading(true)
-        const data = await mockApi.fetchOrderExpectedDropdowns();
-        setFollowupStatusOptions(data.followupStatusOptions || [])
-      } catch (error) {
-        console.error("Error fetching followup status options:", error)
-        setFollowupStatusOptions(["Pending", "In Progress", "Completed", "Cancelled"])
-      } finally {
-        setIsLoading(false)
-      }
-    }
 
+const fetchFollowupStatusOptions = async () => {
+  try {
+    setIsLoading(true);
+
+    // Fetch distinct values from dropdown table where followup_status is not null
+    const { data, error } = await supabase
+      .from("dropdown")
+      .select("followup_status")
+      .not("followup_status", "is", null);
+
+    if (error) throw error;
+
+    // Extract values into array
+    const options = data.map(row => row.followup_status);
+
+    setFollowupStatusOptions(options);
+  } catch (error) {
+    console.error("Error fetching followup status options:", error);
+    // fallback options
+    setFollowupStatusOptions([
+      "Pending",
+      "In Progress",
+      "Completed",
+      "Cancelled"
+    ]);
+  } finally {
+    setIsLoading(false);
+  }
+};
+
+    
     fetchFollowupStatusOptions()
   }, [])
 
@@ -43,7 +62,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
             name="followupStatus"
             value={formData.followupStatus || ""}
             onChange={handleChange}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             required
             disabled={isLoading}
           >
@@ -64,7 +83,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
             id="nextCallDate"
             name="nextCallDate"
             type="date"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             value={formData.nextCallDate || ""}
             onChange={handleChange}
             required
@@ -79,7 +98,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
             id="nextCallTime"
             name="nextCallTime"
             type="time"
-            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
             value={formData.nextCallTime || ""}
             onChange={handleChange}
             required
