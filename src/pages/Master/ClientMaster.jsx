@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { Search, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
 import DataTable from "../../components/DataTable";
 import SearchableDropdown from "../../components/SearchableDropdown";
-import { mockApi } from "../../services/mockApi";
+import supabase from "../../utils/supabase";
 import ModalForm from "../../components/ModalForm";
 import { AuthContext } from "../../App";
 
@@ -31,34 +31,21 @@ function ClientMaster() {
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      const apiCompanies = await mockApi.fetchCompanies();
-      const followUps = await mockApi.fetchFollowUps(currentUser, isAdmin);
-      const callTrackers = await mockApi.fetchCallTrackers(currentUser, isAdmin);
+      // Fetch clients from Supabase
+      const { data: clientsData, error: clientErr } = await supabase.from("client_master").select("*").order('created_at', { ascending: false });
+      if (clientErr) throw clientErr;
 
-      const followUpCompanies = new Set(
-        (followUps.pending || [])
-          .map(item => (item.companyName || "").toLowerCase().trim())
-          .filter(Boolean)
-      );
+      // Fetch active tracking leads
+      const { data: leadsData } = await supabase.from("leads_to_order").select("Company_Name, Leads_Tracking_Status").eq("Leads_Tracking_Status", "Pending");
+      const { data: enquiryData } = await supabase.from("enquiry_tracker").select("companyName, currentStage").eq("currentStage", "pending");
 
-      const callTrackerCompanies = new Set(
-        [...(callTrackers.pending || []), ...(callTrackers.directEnquiry || [])]
-          .map(item => (item.companyName || "").toLowerCase().trim())
-          .filter(Boolean)
-      );
+      const leadCompanies = new Set((leadsData || []).map(l => (l.Company_Name || "").toLowerCase().trim()).filter(Boolean));
+      const enquiryCompanies = new Set((enquiryData || []).map(e => (e.companyName || "").toLowerCase().trim()).filter(Boolean));
 
-      const companyHandlePersonMap = {};
-      [...(followUps.pending || []), ...(followUps.history || []), ...(callTrackers.pending || []), ...(callTrackers.history || [])].forEach(item => {
-        const cName = (item.companyName || item.company || "").toLowerCase().trim();
-        if (cName && item.handlePerson) {
-          companyHandlePersonMap[cName] = item.handlePerson;
-        }
-      });
-
-      const formattedData = apiCompanies.map((c, i) => {
-        const nameLower = (c.name || "").toLowerCase().trim();
-        const inLead = followUpCompanies.has(nameLower);
-        const inEnquiry = callTrackerCompanies.has(nameLower);
+      const formattedData = (clientsData || []).map((c, i) => {
+        const nameLower = (c.company_name || "").toLowerCase().trim();
+        const inLead = leadCompanies.has(nameLower);
+        const inEnquiry = enquiryCompanies.has(nameLower);
         
         let trackerStatus = "-";
         if (inLead && inEnquiry) {
@@ -71,15 +58,16 @@ function ClientMaster() {
 
         return {
           id: i + 1,
-          companyName: c.name || "",
-          personName: c.salesPerson || "",
-          handlePerson: c.handlePerson || companyHandlePersonMap[nameLower] || "-",
-          personNumber: c.phoneNumber || "",
+          dbId: c.id, // For precise operations if needed
+          companyName: c.company_name || "",
+          personName: c.person_name || "",
+          handlePerson: c.handle_person || "-",
+          personNumber: c.person_number || "",
           location: c.location || "",
-          emailAddress: c.email || "",
-          state: c.consignorState || "",
-          address: c.consignorAddress || "",
-          gst: c.consignorGSTIN || c.gst || `27ABCDE${1000 + i}F1Z5`,
+          emailAddress: c.email_address || "",
+          state: c.state || "",
+          address: c.address || "",
+          gst: c.gst || "",
           trackerStatus
         };
       });
@@ -133,32 +121,44 @@ function ClientMaster() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const apiData = {
-      name: formData.companyName,
-      salesPerson: formData.personName,
-      phoneNumber: formData.personNumber,
+    const supabaseData = {
+      company_name: formData.companyName,
+      person_name: formData.personName,
+      person_number: formData.personNumber,
       location: formData.location,
-      email: formData.emailAddress,
-      consignorState: formData.state,
-      consignorGSTIN: formData.gst,
-      consignorAddress: formData.address
+      email_address: formData.emailAddress,
+      state: formData.state,
+      gst: formData.gst,
+      address: formData.address
     };
 
-    if (modalMode === "add") {
-      await mockApi.addCompany(apiData);
-    } else {
-      await mockApi.updateCompany(currentClient.companyName, apiData);
+    try {
+      if (modalMode === "add") {
+        await supabase.from("client_master").insert([supabaseData]);
+      } else {
+        await supabase.from("client_master")
+          .update(supabaseData)
+          .eq("company_name", currentClient.companyName);
+      }
+      
+      await fetchClients();
+      handleCloseModal();
+    } catch (err) {
+      console.error("Error saving client:", err);
+      setIsLoading(false);
     }
-    
-    await fetchClients();
-    handleCloseModal();
   };
 
   const handleDelete = async (client) => {
     if (window.confirm(`Are you sure you want to delete ${client.companyName}?`)) {
       setIsLoading(true);
-      await mockApi.deleteCompany(client.companyName);
-      await fetchClients();
+      try {
+        await supabase.from("client_master").delete().eq("company_name", client.companyName);
+        await fetchClients();
+      } catch (err) {
+        console.error("Error deleting client:", err);
+        setIsLoading(false);
+      }
     }
   };
   

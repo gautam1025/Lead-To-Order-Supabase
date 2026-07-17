@@ -8,7 +8,6 @@ import supabase from "../utils/supabase"
 function NewCallTracker() {
   const navigate = useNavigate()
    const location = useLocation();
-    const scName = location.state;
   const [searchParams] = useSearchParams()
   const leadId = searchParams.get("leadId")
   const leadNo = searchParams.get("leadNo")
@@ -24,129 +23,226 @@ function NewCallTracker() {
     nextCallDate: "",
     nextCallTime: "",
     customerFeedback: "",
-    enquiryApproach: "", // Add this new field
+    enquiryApproach: "",
   })
-console.log(scName);
 
   const [leadStatus, setLeadStatus] = useState("")
+
+  // Form fields states
+  const [leadSource, setLeadSource] = useState("")
+  const [scName, setScName] = useState(location.state || "")
+  const [companyName, setCompanyName] = useState("")
+  const [phoneNumber, setPhoneNumber] = useState("")
+  const [salesPersonName, setSalesPersonName] = useState("")
+  const [billingLocation, setBillingLocation] = useState("")
+  const [emailAddress, setEmailAddress] = useState("")
+  const [shippingAddress, setShippingAddress] = useState("")
+  const [enquiryReceiverName, setEnquiryReceiverName] = useState("")
+  const [enquiryAssignToProject, setEnquiryAssignToProject] = useState("")
+  const [gstNumber, setGstNumber] = useState("")
+  const [enquiryDate, setEnquiryDate] = useState(() => {
+    const today = new Date();
+    const day = String(today.getDate()).padStart(2, "0");
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const year = today.getFullYear();
+    return `${year}-${month}-${day}`;
+  })
+  const [enquiryState, setEnquiryState] = useState("")
+  const [projectName, setProjectName] = useState("")
+  const [salesType, setSalesType] = useState("")
+  const [enquiryApproach, setEnquiryApproach] = useState("")
+  const [leadsTrackingStatus, setLeadsTrackingStatus] = useState("Pending")
 
   // New state for dropdown options
   const [enquiryStates, setEnquiryStates] = useState([])
   const [salesTypes, setSalesTypes] = useState([])
-  const [productCategories, setProductCategories] = useState([]) // New state for product categories
+  const [productCategories, setProductCategories] = useState([])
   const [nobOptions, setNobOptions] = useState([])
   const [enquiryApproachOptions, setEnquiryApproachOptions] = useState([])
+  const [leadSources, setLeadSources] = useState([])
+  const [receiverOptions, setReceiverOptions] = useState([])
+  const [assignToProjectOptions, setAssignToProjectOptions] = useState([])
+  const [companyOptions, setCompanyOptions] = useState([])
+  const [companyDetailsMap, setCompanyDetailsMap] = useState({})
 
-  // Function to fetch dropdown data from DROPDOWNSHEET
- const fetchDropdownData = async () => {
+  // Function to fetch dropdown data from Supabase
+  const fetchDropdownData = async () => {
     try {
-      // Fetch states
-      const { data: statesData, error: statesError } = await supabase
+      const { data, error } = await supabase
         .from('dropdown')
-        .select('state')
-        .not('state', 'is', null)
+        .select('*')
       
-      if (statesError) throw statesError
-      
-      // Fetch sales types
-      const { data: salesTypesData, error: salesTypesError } = await supabase
-        .from('dropdown')
-        .select('sales_type')
-        .not('sales_type', 'is', null)
-      
-      if (salesTypesError) throw salesTypesError
-      
-      // Fetch product categories (item_name)
-      const { data: productCategoriesData, error: productCategoriesError } = await supabase
-        .from('dropdown')
-        .select('item_name')
-        .not('item_name', 'is', null)
-      
-      if (productCategoriesError) throw productCategoriesError
-      
-      // Fetch NOB options
-      const { data: nobData, error: nobError } = await supabase
-        .from('dropdown')
-        .select('nob')
-        .not('nob', 'is', null)
-      
-      if (nobError) throw nobError
-      
-      // Fetch enquiry approach options
-      const { data: enquiryApproachData, error: enquiryApproachError } = await supabase
-        .from('dropdown')
-        .select('enquiry_approach')
-        .not('enquiry_approach', 'is', null)
-      
-      if (enquiryApproachError) throw enquiryApproachError
-      
-      // Fetch customer feedback options
-      const { data: customerFeedbackData, error: customerFeedbackError } = await supabase
-        .from('dropdown')
-        .select('what_did_customer_say')
-        .not('what_did_customer_say', 'is', null)
-      
-      if (customerFeedbackError) throw customerFeedbackError
+      if (error) throw error
 
-      // Process and set states
-      if (statesData) {
-        const uniqueStates = [...new Set(statesData.map(item => item.state))].filter(Boolean)
-        setEnquiryStates(uniqueStates)
+      if (data) {
+        const uniqueStates = [...new Set(data.map(item => item.state))].filter(Boolean)
+        const uniqueSalesTypes = [...new Set(data.map(item => item.sales_type))].filter(Boolean)
+        const uniqueProductCategories = [...new Set(data.map(item => item.item_name))].filter(Boolean)
+        const uniqueNobOptions = [...new Set(data.map(item => item.nob))].filter(Boolean)
+        const uniqueEnquiryApproachOptions = [...new Set(data.map(item => item.enquiry_approach))].filter(Boolean)
+        const uniqueCustomerFeedbackOptions = [...new Set(data.map(item => item.what_did_customer_say))].filter(Boolean)
+        
+        const uniqueSources = [...new Set(data.map(item => item.lead_source))].filter(Boolean)
+        const uniqueReceivers = [...new Set(data.map(item => item.lead_receiver_name))].filter(Boolean)
+        const uniqueScs = [...new Set(data.map(item => item.sales_co_ordinator_name))].filter(Boolean)
+
+        setEnquiryStates(uniqueStates.sort())
+        setSalesTypes(uniqueSalesTypes.sort())
+        setProductCategories(uniqueProductCategories.sort())
+        setNobOptions(uniqueNobOptions.sort())
+        setEnquiryApproachOptions(uniqueEnquiryApproachOptions.sort())
+        setCustomerFeedbackOptions(uniqueCustomerFeedbackOptions.sort())
+        
+        setLeadSources(uniqueSources.sort())
+        setReceiverOptions(uniqueReceivers.sort())
+        setAssignToProjectOptions(uniqueScs.sort())
       }
-
-      // Process and set sales types
-      if (salesTypesData) {
-        const uniqueSalesTypes = [...new Set(salesTypesData.map(item => item.sales_type))].filter(Boolean)
-        setSalesTypes(uniqueSalesTypes)
-      }
-
-      // Process and set product categories
-      if (productCategoriesData) {
-        const uniqueProductCategories = [...new Set(productCategoriesData.map(item => item.item_name))].filter(Boolean)
-        setProductCategories(uniqueProductCategories)
-      }
-
-      // Process and set NOB options
-      if (nobData) {
-        const uniqueNobOptions = [...new Set(nobData.map(item => item.nob))].filter(Boolean)
-        setNobOptions(uniqueNobOptions)
-      }
-
-      // Process and set enquiry approach options
-      if (enquiryApproachData) {
-        const uniqueEnquiryApproachOptions = [...new Set(enquiryApproachData.map(item => item.enquiry_approach))].filter(Boolean)
-        setEnquiryApproachOptions(uniqueEnquiryApproachOptions)
-      }
-
-      // Process and set customer feedback options
-      if (customerFeedbackData) {
-        const uniqueCustomerFeedbackOptions = [...new Set(customerFeedbackData.map(item => item.what_did_customer_say))].filter(Boolean)
-        setCustomerFeedbackOptions(uniqueCustomerFeedbackOptions)
-      }
-
     } catch (error) {
       console.error("Error fetching dropdown values:", error)
-      // Fallback values
       setEnquiryStates(["Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Delhi"])
       setSalesTypes(["NBD", "CRR", "NBD_CRR"])
       setProductCategories(["Product 1", "Product 2", "Product 3"])
       setNobOptions(["NOB 1", "NOB 2", "NOB 3"])
-      setEnquiryApproachOptions(["Approach 1", "Approach 2", "Approach 3"])
+      setEnquiryApproachOptions(["Incoming", "Outgoing"])
       setCustomerFeedbackOptions(["Feedback 1", "Feedback 2", "Feedback 3"])
+      setLeadSources(["Indiamart", "Justdial", "Social Media", "Website", "Referral", "Other"])
+      setReceiverOptions(["Receiver 1", "Receiver 2"])
+      setAssignToProjectOptions(["Person 1", "Person 2"])
     }
   }
 
-  useEffect(() => {
-    // Fetch dropdown data when component mounts
-    fetchDropdownData()
+  // Fetch company options and details
+  const fetchCompanyData = async () => {
+    try {
+      const { data, error } = await supabase
+        .from("dropdown")
+        .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
+        .not("lead_form_company_name", "is", null)
 
-    // Prepopulate lead number if available
+      if (error) throw error
+
+      if (data && data.length > 0) {
+        const companies = []
+        const detailsMap = {}
+
+        data.forEach((row) => {
+          if (row.lead_form_company_name) {
+            companies.push(row.lead_form_company_name)
+            detailsMap[row.lead_form_company_name] = {
+              salesPerson: row.lead_form_person_name || "",
+              phoneNumber: row.lead_form_mobile_no || "",
+              email: row.lead_form_email || "",
+              billingAddress: row.lead_form_address || "",
+              shippingAddress: row.lead_form_address || "",
+            }
+          }
+        })
+
+        setCompanyOptions([...new Set(companies)].sort())
+        setCompanyDetailsMap(detailsMap)
+      }
+    } catch (error) {
+      console.error("Error fetching company data:", error)
+    }
+  }
+
+  const handleCompanyChange = (companyNameValue) => {
+    setCompanyName(companyNameValue)
+    if (companyNameValue && companyDetailsMap[companyNameValue]) {
+      const details = companyDetailsMap[companyNameValue]
+      setPhoneNumber(details.phoneNumber || "")
+      setSalesPersonName(details.salesPerson || "")
+      setBillingLocation(details.billingAddress || "")
+      setGstNumber(details.gstNumber || "")
+      setShippingAddress(details.shippingAddress || "")
+    }
+  }
+
+  const handleSourceChange = (sourceValue) => {
+    setLeadSource(sourceValue)
+  }
+
+  useEffect(() => {
+    fetchDropdownData()
+    fetchCompanyData()
+
     if (leadNo) {
       setFormData((prevData) => ({
         ...prevData,
         leadNo: leadNo,
       }))
     }
+  }, [leadNo])
+
+  // Prefill lead details
+  useEffect(() => {
+    const loadLeadDetails = async () => {
+      if (leadNo) {
+        try {
+          const { data, error } = await supabase
+            .from("leads_to_order")
+            .select("*")
+            .eq("LD-Lead-No", leadNo)
+            .maybeSingle()
+
+          if (error) throw error
+          if (data) {
+            setLeadSource(data.Lead_Source || "")
+            setScName(data.SC_Name || "")
+            setCompanyName(data.Company_Name || "")
+            setPhoneNumber(data.Phone_Number || "")
+            setSalesPersonName(data.Salesperson_Name || "")
+            setBillingLocation(data.Location || "")
+            setEmailAddress(data.Email_Address || "")
+            setShippingAddress(data.Address || "")
+            setEnquiryReceiverName(data.Lead_Receiver_Name || "")
+            setGstNumber(data.GST_Number || "")
+            setEnquiryState(data.State || "")
+            setProjectName(data.NOB || "")
+            setSalesType(data.Sales_Type || "")
+            setEnquiryApproach(data.Enquiry_Approach || "")
+            setLeadsTrackingStatus(data.Leads_Tracking_Status || "Pending")
+            setLeadStatus(data.Status || "")
+            
+            // Prefill items
+            const loadedItems = []
+            for (let i = 1; i <= 5; i++) {
+              const name = data[`Item_Name${i}`]
+              const quantity = data[`Quantity${i}`]
+              if (name) {
+                loadedItems.push({
+                  id: i.toString(),
+                  name: name,
+                  quantity: quantity || ""
+                })
+              }
+            }
+            if (data["Item/qty"]) {
+              try {
+                const remaining = JSON.parse(data["Item/qty"])
+                remaining.forEach((item, index) => {
+                  loadedItems.push({
+                    id: (loadedItems.length + 1).toString(),
+                    name: item.name || "",
+                    quantity: item.quantity || ""
+                  })
+                })
+              } catch (e) {
+                console.error("Error parsing Item/qty JSON:", e)
+              }
+            }
+            if (loadedItems.length > 0) {
+              setItems(loadedItems)
+            } else {
+              setItems([{ id: "1", name: "", quantity: "" }])
+            }
+          }
+        } catch (error) {
+          console.error("Error loading lead details:", error)
+        }
+      }
+    }
+    loadLeadDetails()
   }, [leadNo])
 
 
@@ -172,39 +268,32 @@ const handleSubmit = async (e) => {
   try {
     // Prepare the data object for Supabase insertion
     const insertData = {
-      "Timestamp": new Date().toISOString().split('T')[0], // Add this line
+      "Timestamp": new Date().toISOString().split('T')[0],
       "LD-Lead-No": formData.leadNo,
-      "What_Did_The_Customer_say?": document.getElementById("customerFeedback").value,
-      "SC_Name":scName,
+      "What_Did_The_Customer_say?": formData.customerFeedback,
+      "SC_Name": scName,
+      "Company_Name": companyName,
       "Enquiry_Received_Status": enquiryStatus === "yes" ? "Yes" : 
                                 enquiryStatus === "expected" ? "Expected" : 
                                 enquiryStatus === "not-interested" ? "Not Interested" : enquiryStatus,
     }
 
     // Handle different scenarios based on enquiry status
-   if (enquiryStatus === "expected") {
-  insertData["Next_Action"] = document.getElementById("nextAction").value
-
-  const nextCallDateInput = document.getElementById("nextCallDate").value
-  insertData["Next_Call_Date"] = nextCallDateInput 
-    ? new Date(nextCallDateInput).toISOString().split("T")[0] // "YYYY-MM-DD"
-    : null
-
-  const nextCallTimeInput = document.getElementById("nextCallTime").value
-  insertData["Next_Call_Time"] = nextCallTimeInput || null // "HH:mm"
-}
-
+    if (enquiryStatus === "expected") {
+      insertData["Next_Action"] = formData.nextAction
+      insertData["Next_Call_Date"] = formData.nextCallDate ? new Date(formData.nextCallDate).toISOString().split("T")[0] : null
+      insertData["Next_Call_Time"] = formData.nextCallTime || null
+    }
     else if (enquiryStatus === "yes") {
       // For confirmed enquiries, add all enquiry details
-      const enquiryDateInput = document.getElementById("enquiryDate").value;
-      insertData["Enquiry_Received_Date"] = enquiryDateInput ? new Date(enquiryDateInput).toISOString().split('T')[0] : null;
+      insertData["Enquiry_Received_Date"] = enquiryDate ? new Date(enquiryDate).toISOString().split('T')[0] : null
+      insertData["Enquiry_for_State"] = enquiryState
+      insertData["Project_Name"] = projectName
+      insertData["Enquiry_Type"] = salesType
+      insertData["Enquiry_Approach"] = enquiryApproach
+      insertData["Leads_Tracking_Status"] = leadsTrackingStatus
+      insertData["lead_status"] = leadStatus
       
-      insertData["Enquiry_for_State"] = document.getElementById("enquiryState").value
-      insertData["Project_Name"] = document.getElementById("projectName").value
-      insertData["Enquiry_Type"] = document.getElementById("salesType").value
-      insertData["Enquiry_Approach"] = formData.enquiryApproach
-      insertData["Leads_Tracking_Status"] = document.getElementById("leadsTrackingStatus").value
- insertData["lead_status"] = leadStatus
       // Handle first 5 items
       const first5Items = items.slice(0, 5)
       first5Items.forEach((item, index) => {
@@ -219,20 +308,19 @@ const handleSubmit = async (e) => {
         insertData[`Quantity${i}`] = "0"
       }
 
-      // NEW: Store remaining items (after first 5) in JSON format
+      // Store remaining items in JSON format
       const remainingItems = items.slice(5)
       if (remainingItems.length > 0) {
-        // Create an array of objects with name and quantity
         const itemsJson = remainingItems.map(item => ({
           name: item.name || "",
           quantity: item.quantity || "0"
         }))
         insertData["Item_Qty"] = JSON.stringify(itemsJson)
       } else {
-        insertData["Item_Qty"] = null // or "[]" if you prefer empty array
+        insertData["Item_Qty"] = null
       }
 
-      // Calculate total quantity for project approximate value
+      // Calculate total quantity
       const totalQuantity = calculateTotalQuantity()
       insertData["Total_Qty"] = totalQuantity.toString()
     }
@@ -293,30 +381,26 @@ const handleSubmit = async (e) => {
     // Map the fields that need to be updated
     updateData["What_Did_The_Customer say?"] = insertData["What_Did_The_Customer_say?"]
     updateData["Enquiry_Received_Status"] = insertData["Enquiry_Received_Status"]
-     updateData["Status"] = insertData["lead_status"]
+    updateData["Status"] = insertData["lead_status"]
     if (leadStatus === "Not Relevant") {
-  const now = new Date();
+      const now = new Date();
+      const pad = (n) => n.toString().padStart(2, "0");
+      const formatted =
+        pad(now.getDate()) + "/" +
+        pad(now.getMonth() + 1) + "/" +
+        now.getFullYear() + " " +
+        pad(now.getHours()) + ":" +
+        pad(now.getMinutes()) + ":" +
+        pad(now.getSeconds());
 
-  const pad = (n) => n.toString().padStart(2, "0");
-
-  const formatted =
-    pad(now.getDate()) + "/" +
-    pad(now.getMonth() + 1) + "/" +   // months are 0-based
-    now.getFullYear() + " " +
-    pad(now.getHours()) + ":" +
-    pad(now.getMinutes()) + ":" +
-    pad(now.getSeconds());
-
-  updateData["Actual"] = formatted;
-}
+      updateData["Actual"] = formatted;
+    }
 
     if (enquiryStatus === "expected") {
       updateData["Next_Action"] = insertData["Next_Action"]
       updateData["Next_Call_Date"] = insertData["Next_Call_Date"]
       updateData["Next_Call_Time"] = insertData["Next_Call_Time"]
     }
-
-
     
     if (enquiryStatus === "yes") {
       updateData["Enquiry_Received_Date"] = insertData["Enquiry_Received_Date"]
@@ -332,13 +416,22 @@ const handleSubmit = async (e) => {
         updateData[`Item_Name${i}`] = insertData[`Item_Name${i}`] || ""
         updateData[`Quantity${i}`] = insertData[`Quantity${i}`] || "0"
       }
+
+      // Update lead details in leads_to_order
+      updateData["Lead_Source"] = leadSource
+      updateData["SC_Name"] = scName
+      updateData["Company_Name"] = companyName
+      updateData["Phone_Number"] = phoneNumber
+      updateData["Salesperson_Name"] = salesPersonName
+      updateData["Location"] = billingLocation
+      updateData["Email_Address"] = emailAddress
+      updateData["Address"] = shippingAddress
+      updateData["Lead_Receiver_Name"] = enquiryReceiverName
+      updateData["GST_Number"] = gstNumber
     }
 
-      // NEW: Update the JSON field for remaining items
-      updateData["Item/qty"] = insertData["Item_Qty"] || null
-        updateData["Total Order Qty"] = insertData["Total_Qty"] || null
-  
-
+    updateData["Item/qty"] = insertData["Item_Qty"] || null
+    updateData["Total Order Qty"] = insertData["Total_Qty"] || null
 
     // Update the leads_to_order table with new data
     const { data: updateResult, error: updateError } = await supabase
@@ -349,7 +442,6 @@ const handleSubmit = async (e) => {
 
     if (updateError) {
       console.error("Error updating leads_to_order:", updateError)
-      // Don't throw error here, as the main insert was successful
       showNotification("Follow-up recorded successfully, but there was an issue updating the order table", "warning")
     } else {
       console.log("Successfully updated leads_to_order:", updateResult)
@@ -428,6 +520,8 @@ const handleSubmit = async (e) => {
   <select
     id="customerFeedback"
     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+    value={formData.customerFeedback || ""}
+    onChange={handleChange}
     required
   >
     <option value="">Select customer feedback</option>
@@ -470,20 +564,6 @@ const handleSubmit = async (e) => {
                     Not Relevant
                   </label>
                 </div>
-                {/* <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="cold"
-                    name="leadStatus"
-                    value="cold"
-                    checked={leadStatus === "cold"}
-                    onChange={() => setLeadStatus("cold")}
-                    className="h-4 w-4 text-blue-600 focus:ring-blue-500"
-                  />
-                  <label htmlFor="cold" className="text-sm text-gray-700">
-                    Cold
-                  </label>
-                </div> */}
               </div>
             </div>
 
@@ -543,6 +623,8 @@ const handleSubmit = async (e) => {
                   </label>
                   <input
                     id="nextAction"
+                    value={formData.nextAction || ""}
+                    onChange={handleChange}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                     placeholder="Enter next action"
                     required
@@ -557,6 +639,8 @@ const handleSubmit = async (e) => {
                     <input
                       id="nextCallDate"
                       type="date"
+                      value={formData.nextCallDate || ""}
+                      onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       required
                     />
@@ -569,6 +653,8 @@ const handleSubmit = async (e) => {
                     <input
                       id="nextCallTime"
                       type="time"
+                      value={formData.nextCallTime || ""}
+                      onChange={handleChange}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       required
                     />
@@ -584,6 +670,179 @@ const handleSubmit = async (e) => {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
+                    <label htmlFor="leadSource" className="block text-sm font-medium text-gray-700">
+                      Enquiry Source
+                    </label>
+                    <select
+                      id="leadSource"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      value={leadSource}
+                      onChange={(e) => handleSourceChange(e.target.value)}
+                      required
+                    >
+                      <option value="">Select source</option>
+                      {leadSources.map((source, index) => (
+                        <option key={index} value={source}>
+                          {source}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="scName" className="block text-sm font-medium text-gray-700">
+                      SC Name
+                    </label>
+                    <input
+                      id="scName"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Auto-fills from Lead Source"
+                      value={scName}
+                      onChange={(e) => setScName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
+                      Company Name
+                    </label>
+                    <input
+                      list="companyOptions"
+                      id="companyName"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      value={companyName}
+                      onChange={(e) => handleCompanyChange(e.target.value)}
+                      required
+                    />
+                    <datalist id="companyOptions">
+                      {companyOptions.map((company, index) => (
+                        <option key={index} value={company} />
+                      ))}
+                    </datalist>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
+                      Phone Number
+                    </label>
+                    <input
+                      id="phoneNumber"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter phone number"
+                      value={phoneNumber}
+                      onChange={(e) => setPhoneNumber(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="salesPersonName" className="block text-sm font-medium text-gray-700">
+                      Person Name
+                    </label>
+                    <input
+                      id="salesPersonName"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter person name"
+                      value={salesPersonName}
+                      onChange={(e) => setSalesPersonName(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="location" className="block text-sm font-medium text-gray-700">
+                      Billing Address
+                    </label>
+                    <input
+                      id="location"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter billing address"
+                      value={billingLocation}
+                      onChange={(e) => setBillingLocation(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="emailAddress" className="block text-sm font-medium text-gray-700">
+                      Email Address
+                    </label>
+                    <input
+                      id="emailAddress"
+                      type="email"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter email address"
+                      value={emailAddress}
+                      onChange={(e) => setEmailAddress(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="shippingAddress" className="block text-sm font-medium text-gray-700">
+                      Shipping Address
+                    </label>
+                    <input
+                      id="shippingAddress"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter shipping address"
+                      value={shippingAddress}
+                      onChange={(e) => setShippingAddress(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="enquiryReceiverName" className="block text-sm font-medium text-gray-700">
+                      Enquiry Receiver Name
+                    </label>
+                    <select
+                      id="enquiryReceiverName"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      value={enquiryReceiverName}
+                      onChange={(e) => setEnquiryReceiverName(e.target.value)}
+                    >
+                      <option value="">Select receiver</option>
+                      {receiverOptions.map((receiver, index) => (
+                        <option key={index} value={receiver}>
+                          {receiver}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="enquiryAssignToProject" className="block text-sm font-medium text-gray-700">
+                      Enquiry Assign to Person
+                    </label>
+                    <select
+                      id="enquiryAssignToProject"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                      value={enquiryAssignToProject}
+                      onChange={(e) => setEnquiryAssignToProject(e.target.value)}
+                    >
+                      <option value="">Select project</option>
+                      {assignToProjectOptions.map((project, index) => (
+                        <option key={index} value={project}>
+                          {project}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label htmlFor="gstNumber" className="block text-sm font-medium text-gray-700">
+                      GST Number
+                    </label>
+                    <input
+                      id="gstNumber"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Enter GST number"
+                      value={gstNumber}
+                      onChange={(e) => setGstNumber(e.target.value)}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
                     <label htmlFor="enquiryDate" className="block text-sm font-medium text-gray-700">
                       Enquiry Received Date
                     </label>
@@ -591,6 +850,8 @@ const handleSubmit = async (e) => {
                       id="enquiryDate"
                       type="date"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      value={enquiryDate}
+                      onChange={(e) => setEnquiryDate(e.target.value)}
                       required
                     />
                   </div>
@@ -602,6 +863,8 @@ const handleSubmit = async (e) => {
                     <select
                       id="enquiryState"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      value={enquiryState}
+                      onChange={(e) => setEnquiryState(e.target.value)}
                       required
                     >
                       <option value="">Select state</option>
@@ -620,6 +883,8 @@ const handleSubmit = async (e) => {
                     <select
                       id="projectName"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      value={projectName}
+                      onChange={(e) => setProjectName(e.target.value)}
                       required
                     >
                       <option value="">Select NOB</option>
@@ -638,6 +903,8 @@ const handleSubmit = async (e) => {
                     <select
                       id="salesType"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      value={salesType}
+                      onChange={(e) => setSalesType(e.target.value)}
                       required
                     >
                       <option value="">Select type</option>
@@ -656,8 +923,8 @@ const handleSubmit = async (e) => {
                     <select
                       id="enquiryApproach"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      value={formData.enquiryApproach}
-                      onChange={handleChange}
+                      value={enquiryApproach}
+                      onChange={(e) => setEnquiryApproach(e.target.value)}
                       required
                     >
                       <option value="">Select approach</option>
@@ -676,6 +943,8 @@ const handleSubmit = async (e) => {
         <select
           id="leadsTrackingStatus"
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+          value={leadsTrackingStatus}
+          onChange={(e) => setLeadsTrackingStatus(e.target.value)}
           required
         >
           <option value="">Select status</option>
@@ -683,32 +952,7 @@ const handleSubmit = async (e) => {
           <option value="Completed">Completed</option>
         </select>
       </div>
-
-                  {/* <div className="space-y-2">
-                    <label htmlFor="requiredDate" className="block text-sm font-medium text-gray-700">
-                      Required Product Date
-                    </label>
-                    <input
-                      id="requiredDate"
-                      type="date"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label htmlFor="projectValue" className="block text-sm font-medium text-gray-700">
-                      Project Approximate Value
-                    </label>
-                    <input
-                      id="projectValue"
-                      type="number"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      placeholder="Enter value"
-                      required
-                    />
-                  </div> */}
-                </div>
+    </div>
 
                 <div className="space-y-4">
                   <div className="flex items-center justify-between">

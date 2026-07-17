@@ -764,6 +764,10 @@ const updateLeadToOrderTable = async (enquiryNo, allFormData, currentStage, orde
       
       updateData.Order_No = orderNumber;
       console.log("🔄 Setting Order_No in leads_to_order:", orderNumber);
+      
+      if (orderStatusData.resolvedHandlePerson) {
+        updateData.handle_person = orderStatusData.resolvedHandlePerson;
+      }
     }
 
     switch (currentStage) {
@@ -1457,6 +1461,75 @@ const handleSubmit = async (e) => {
       }
     }
     
+
+    // --- START: Client Master Sync & Round-Robin Logic ---
+    let resolvedHandlePerson = "";
+    if (currentStage === "order-status" && orderStatusData.orderStatus === "yes") {
+      try {
+        // Fetch current lead's handle_person to see if already assigned
+        const { data: leadData } = await supabase
+          .from("leads_to_order")
+          .select("handle_person, Company_Name, Salesperson_Name, Phone_Number, Email_Address, Location, State, Address, GST_Number")
+          .eq("LD-Lead-No", formData.enquiryNo)
+          .maybeSingle();
+
+        resolvedHandlePerson = leadData?.handle_person;
+        
+        // Fetch current enquiry data if not in lead data
+        const { data: enqData } = await supabase
+          .from("enquiry_to_order")
+          .select("companyName, scName, phoneNumber, emailAddress, location, enquiryState, shippingAddress, gstNumber")
+          .eq("leadNumber", formData.enquiryNo)
+          .maybeSingle();
+
+        if (!resolvedHandlePerson) {
+          // Resolve round-robin
+          const { data: lastAssigned } = await supabase
+            .from("leads_to_order")
+            .select("handle_person")
+            .in("handle_person", ["Nikita", "Priya"])
+            .order("Timestamp", { ascending: false })
+            .limit(1);
+          
+          if (lastAssigned && lastAssigned.length > 0) {
+            resolvedHandlePerson = lastAssigned[0].handle_person === "Nikita" ? "Priya" : "Nikita";
+          } else {
+            resolvedHandlePerson = "Nikita";
+          }
+        }
+        
+        // Insert into client_master
+        const clientName = leadData?.Salesperson_Name || enqData?.scName || "";
+        const compName = leadData?.Company_Name || enqData?.companyName || formData.companyName || "";
+        
+        // Only insert if company name is present
+        if (compName) {
+          const { error: cmError } = await supabase.from("client_master").insert([{
+            company_name: compName,
+            person_name: clientName,
+            handle_person: resolvedHandlePerson,
+            person_number: leadData?.Phone_Number || enqData?.phoneNumber || "9876543210",
+            email_address: leadData?.Email_Address || enqData?.emailAddress || "",
+            location: leadData?.Location || enqData?.location || "",
+            state: leadData?.State || enqData?.enquiryState || "",
+            address: leadData?.Address || enqData?.shippingAddress || "",
+            gst: leadData?.GST_Number || enqData?.gstNumber || ""
+          }]);
+          
+          if (cmError) {
+            console.error("Error inserting into client_master:", cmError);
+          } else {
+            console.log("Successfully inserted into client_master");
+          }
+        }
+        
+        orderStatusData.resolvedHandlePerson = resolvedHandlePerson;
+        
+      } catch (err) {
+        console.error("Error creating client record:", err);
+      }
+    }
+    // --- END: Client Master Sync ---
 
     console.log("Supabase Data to be inserted:", supabaseData);
 
