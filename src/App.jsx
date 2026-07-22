@@ -2,15 +2,15 @@
 
 import { useState, useEffect, createContext } from "react"
 import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom"
-import Login from "./pages/Login"
-import Dashboard from "./pages/Dashboard"
-import Leads from "./pages/Leads"
-import CallTracker from "./pages/CallTracker"
-import NewCallTracker from "./pages/NewCallTracker"
-import EnquiryTracker from "./pages/EnquiryTracker"
-import NewEnquiryTracker from "./pages/NewEnquiryTracker"
+import Login from "./pages/auth/Login"
+import Dashboard from "./pages/dashboard/Dashboard"
+import Leads from "./pages/leads/Leads"
+import CallTracker from "./pages/call-tracker/CallTracker"
+import CallTrackerForm from "./pages/call-tracker/CallTrackerForm"
+import EnquiryTracker from "./pages/enquiry-tracker/EnquiryTracker"
+import EnquiryTrackerForm from "./pages/enquiry-tracker/EnquiryTrackerForm"
 import Quotation from "./pages/Quotation/Quotation"
-import Report from "./pages/Report"
+import Report from "./pages/report/Report"
 import MainNav from "./components/MainNav"
 import Footer from "./components/Footer"
 import Notification from "./components/Notification"
@@ -317,7 +317,23 @@ function App() {
                     path="/call-tracker/new"
                     element={
                       <ProtectedRoute>
-                        <NewCallTracker />
+                        <CallTrackerForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/call-tracker/form"
+                    element={
+                      <ProtectedRoute>
+                        <CallTrackerForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/call-tracker-form"
+                    element={
+                      <ProtectedRoute>
+                        <CallTrackerForm />
                       </ProtectedRoute>
                     }
                   />
@@ -330,10 +346,18 @@ function App() {
                     }
                   />
                   <Route
+                    path="/enquiry-tracker/form"
+                    element={
+                      <ProtectedRoute>
+                        <EnquiryTrackerForm />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
                     path="/enquiry-tracker/new"
                     element={
                       <ProtectedRoute>
-                        <NewEnquiryTracker />
+                        <EnquiryTrackerForm />
                       </ProtectedRoute>
                     }
                   />

@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useContext, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AuthContext } from "../App";
-import supabase from "../utils/supabase";
+import { AuthContext } from "../../App";
+import supabase from "../../utils/supabase";
 import * as XLSX from "xlsx";
 
 // Helper function to format date as dd/mm/yyyy

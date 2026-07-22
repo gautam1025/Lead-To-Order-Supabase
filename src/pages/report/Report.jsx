@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useContext, useCallback } from "react";
-import { AuthContext } from "../App";
-import supabase from "../utils/supabase";
-import { BarChartIcon, PhoneCallIcon, FileTextIcon, ShoppingCartIcon, UsersIcon } from "../components/Icons";
+import { AuthContext } from "../../App";
+import supabase from "../../utils/supabase";
+import { BarChartIcon, PhoneCallIcon, FileTextIcon, ShoppingCartIcon, UsersIcon } from "../../components/Icons";
 import { MapPin } from "lucide-react";
 
 // import { supabaseVisit } from "../supabaseClientVisit";

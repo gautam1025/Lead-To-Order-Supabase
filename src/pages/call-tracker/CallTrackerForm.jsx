@@ -2,8 +2,8 @@
 
 import { useState, useContext, useEffect } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
-import { AuthContext } from "../App"
-import supabase from "../utils/supabase"
+import { AuthContext } from "../../App"
+import supabase from "../../utils/supabase"
 
 function NewCallTracker() {
   const navigate = useNavigate()
@@ -273,9 +273,9 @@ const handleSubmit = async (e) => {
       "What_Did_The_Customer_say?": formData.customerFeedback,
       "SC_Name": scName,
       "Company_Name": companyName,
-      "Enquiry_Received_Status": enquiryStatus === "yes" ? "Yes" : 
-                                enquiryStatus === "expected" ? "Expected" : 
-                                enquiryStatus === "not-interested" ? "Not Interested" : enquiryStatus,
+      "Enquiry_Received_Status": enquiryStatus === "yes" ? "yes" : 
+                                enquiryStatus === "expected" ? "expected" : 
+                                enquiryStatus === "not-interested" ? "not-interested" : enquiryStatus,
     }
 
     // Handle different scenarios based on enquiry status

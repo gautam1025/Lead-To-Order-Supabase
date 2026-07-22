@@ -7,12 +7,12 @@ import {
   SearchIcon,
   ArrowRightIcon,
   BuildingIcon,
-} from "../components/Icons";
-import { AuthContext } from "../App";
-import CallTrackerForm from "./Enquiry-Tracker-Form";
-import supabase from "../utils/supabase";
-import DataTable from "../components/DataTable";
-import EnquiryTrackerFilter from "../components/enquiry-tracker/EnquiryTrackerFilter";
+} from "../../components/Icons";
+import { AuthContext } from "../../App";
+import DirectEnquiryForm from "./DirectEnquiryForm";
+import supabase from "../../utils/supabase";
+import DataTable from "../../components/DataTable";
+import EnquiryTrackerFilter from "../../components/enquiry-tracker/EnquiryTrackerFilter";
 
 // Animation classes
 const slideIn = "animate-in slide-in-from-right duration-300";
@@ -2999,7 +2999,7 @@ const handleSaveClick = async (index) => {
               <div className="px-4 pb-4">
                 <Link
                   state={{ activeTab: "pending", sc_name: tracker.sc_name }}
-                  to={`/enquiry-tracker/new?leadId=${tracker.lead_no}`}
+                  to={`/enquiry-tracker/form?leadId=${tracker.lead_no}`}
                   className="flex justify-center items-center px-4 py-3 w-full text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg shadow-md transition-all duration-200 hover:from-purple-700 hover:to-pink-700"
                 >
                   <ArrowRightIcon className="mr-2 w-5 h-5" />
@@ -3099,7 +3099,7 @@ const handleSaveClick = async (index) => {
                     activeTab: "directEnquiry",
                     sc_name: tracker.sc_name,
                   }}
-                  to={`/enquiry-tracker/new?leadId=${tracker.enquiry_no}`}
+                  to={`/enquiry-tracker/form?leadId=${tracker.enquiry_no}`}
                   className="flex flex-1 justify-center items-center px-4 py-3 text-white bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg shadow-md transition-all duration-200 hover:from-purple-700 hover:to-pink-700"
                 >
                   <ArrowRightIcon className="mr-2 w-5 h-5" />
@@ -3383,7 +3383,7 @@ const handleSaveClick = async (index) => {
     <tr key={tracker.id || index} className="hover:bg-slate-50 transition-colors group">
       <td className="px-3 py-3 whitespace-nowrap text-sm font-medium sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200">
         <div className="flex gap-2">
-          <Link to={`/enquiry-tracker/new?leadId=${tracker.leadNo || tracker.lead_no || tracker.leadId || tracker.enquiryNo || tracker.enquiry_no}`}>
+          <Link to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no || tracker.leadId || tracker.enquiryNo || tracker.enquiry_no}`}>
             <button className="px-2 py-1 text-xs border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md">
               Process <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
             </button>
@@ -3431,7 +3431,7 @@ const handleSaveClick = async (index) => {
         <div><span className="block text-xs text-gray-400">Stage</span><p className="text-sky-600 font-medium">{tracker.currentStage || "Pending"}</p></div>
       </div>
       <div className="pt-2 border-t border-gray-100 flex justify-end">
-        <Link to={`/enquiry-tracker/new?leadId=${tracker.leadNo || tracker.lead_no}`} className="w-full">
+        <Link to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no}`} className="w-full">
           <button className="flex items-center justify-center w-full px-3 py-2 text-sm border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md font-medium">
             Process <ArrowRightIcon className="ml-1 h-3 w-3" />
           </button>
@@ -3543,7 +3543,7 @@ const handleSaveClick = async (index) => {
 
       {/* New Enquiry Form Modal */}
       {showNewCallTrackerForm && (
-        <CallTrackerForm onClose={() => setShowNewCallTrackerForm(false)} />
+        <DirectEnquiryForm onClose={() => setShowNewCallTrackerForm(false)} />
       )}
 
       {/* View Popup Modal */}
@@ -3574,7 +3574,7 @@ const handleSaveClick = async (index) => {
             <div className="border-t p-4 flex justify-end gap-3">
               <button onClick={() => setShowPopup(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Close</button>
               {activeTab === "pending" && (
-                <Link to={`/enquiry-tracker/new?leadId=${selectedTracker?.leadNo || selectedTracker?.lead_no}`}>
+                <Link to={`/enquiry-tracker/form?leadId=${selectedTracker?.leadNo || selectedTracker?.lead_no}`}>
                   <button className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 text-white font-medium rounded-md">
                     Process <ArrowRightIcon className="ml-1 h-4 w-4 inline" />
                   </button>

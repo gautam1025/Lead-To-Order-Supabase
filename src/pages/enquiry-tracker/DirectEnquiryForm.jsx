@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import supabase from "../utils/supabase"
+import supabase from "../../utils/supabase"
 
 const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   const [leadSources, setLeadSources] = useState([])
@@ -383,6 +383,20 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         alert("Error saving data: " + error.message);
       } else {
         console.log("Inserted successfully:", data);
+        
+        // Insert initial blank tracking log for Direct Enquiry
+        const trackingData = {
+          "Timestamp": new Date().toISOString().split('T')[0],
+          "enquiry_no": rowData.enquiry_no,
+        };
+        const { error: trackerError } = await supabase
+          .from("enquiry_tracker")
+          .insert([trackingData]);
+          
+        if (trackerError) {
+          console.error("Error inserting into enquiry_tracker:", trackerError.message);
+        }
+
         alert(`Call tracker updated successfully. Enquiry No: ${latestEnquiryNo}`);
         onClose();
       }

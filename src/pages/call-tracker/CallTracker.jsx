@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useContext, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { SearchIcon, ArrowRightIcon } from "../components/Icons";
-import { AuthContext } from "../App";
-import supabase from "../utils/supabase";
-import SearchableDropdown from "../components/SearchableDropdown";
-import DataTable from "../components/DataTable";
-import CallTrackerFilter from "../components/call-tracker/CallTrackerFilter";
+import { SearchIcon, ArrowRightIcon } from "../../components/Icons";
+import { AuthContext } from "../../App";
+import supabase from "../../utils/supabase";
+import SearchableDropdown from "../../components/SearchableDropdown";
+import DataTable from "../../components/DataTable";
+import CallTrackerFilter from "../../components/call-tracker/CallTrackerFilter";
 
 const slideIn = "animate-in slide-in-from-right duration-300";
 const slideOut = "animate-out slide-out-to-right duration-300";
@@ -1640,7 +1640,7 @@ function CallTracker() {
             <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
               <Link
                 state={followUp.assignedTo}
-                to={`/call-tracker/new?leadId=${followUp.leadId}&leadNo=${followUp.leadId}`}
+                to={`/call-tracker/form?leadId=${followUp.leadId}&leadNo=${followUp.leadId}`}
               >
                 <button className="w-full sm:w-auto px-2 sm:px-3 py-1 text-xs border border-purple-200 text-purple-600 hover:bg-purple-50 rounded-md transition-colors whitespace-nowrap">
                   Call Now <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
@@ -2766,7 +2766,7 @@ function CallTracker() {
         <div className="px-4 pb-4">
           <Link
             state={followUp.assignedTo}
-            to={`/call-tracker/new?leadId=${followUp.leadId}&leadNo=${followUp.leadId}`}
+            to={`/call-tracker/form?leadId=${followUp.leadId}&leadNo=${followUp.leadId}`}
             className="w-full flex items-center justify-center px-4 py-2.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg shadow hover:from-purple-700 hover:to-pink-700 transition-all duration-200 font-semibold"
           >
             <svg

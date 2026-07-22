@@ -2,12 +2,12 @@
 
 import { useState, useContext, useEffect, useCallback } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
-import { AuthContext } from "../App"
-import MakeQuotationForm from "../components/enquiry-tracker/MakeQuotationFrom"
-import QuotationValidationForm from "../components/enquiry-tracker/QuotationValidationForm"
-import OrderExpectedForm from "../components/enquiry-tracker/OrderExpectedForm"
-import OrderStatusForm from "../components/enquiry-tracker/OrderStatusFrom"
-import supabase from "../utils/supabase"
+import { AuthContext } from "../../App"
+import MakeQuotationForm from "../../components/enquiry-tracker/MakeQuotationFrom"
+import QuotationValidationForm from "../../components/enquiry-tracker/QuotationValidationForm"
+import OrderExpectedForm from "../../components/enquiry-tracker/OrderExpectedForm"
+import OrderStatusForm from "../../components/enquiry-tracker/OrderStatusFrom"
+import supabase from "../../utils/supabase"
 
 function NewEnquiryTracker() {
   const navigate = useNavigate()

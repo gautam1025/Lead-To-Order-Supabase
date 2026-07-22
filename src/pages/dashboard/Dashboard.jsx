@@ -1,7 +1,7 @@
-import DashboardMetrics from "../components/dashboard/DashboardMetrics"
-import DashboardCharts from "../components/dashboard/DashboardCharts"
-import PendingTasks from "../components/dashboard/PendingTasks"
-import RecentActivities from "../components/dashboard/RecentActivities"
+import DashboardMetrics from "../../components/dashboard/DashboardMetrics"
+import DashboardCharts from "../../components/dashboard/DashboardCharts"
+import PendingTasks from "../../components/dashboard/PendingTasks"
+import RecentActivities from "../../components/dashboard/RecentActivities"
 
 function Dashboard() {
   return (
