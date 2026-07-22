@@ -349,6 +349,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       const rowData = {
         timestamp: new Date().toISOString(),
         enquiry_no: latestEnquiryNo, // Use the freshly fetched number
+        current_stage: null,
         lead_source: newCallTrackerData.leadSource,
         sales_coordinator_name: newCallTrackerData.scName,
         company_name: newCallTrackerData.companyName,
@@ -431,7 +432,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
           <div className="space-y-4">
             <div className="space-y-2">
               <label htmlFor="leadSource" className="block text-sm font-medium text-gray-700">
-                Lead Source
+                Enquiry Source
               </label>
               <select
                 id="leadSource"

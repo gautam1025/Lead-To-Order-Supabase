@@ -95,17 +95,16 @@ const { activeTab, sc_name } = location.state || {}; // fallback to {} if undefi
     try {
       let tableName, columnName, filterColumn;
 
-      if (activeTab === "pending") {
-        tableName = "leads_to_order";
-        columnName = "Quotation_Number";
-        filterColumn = "LD-Lead-No";
-      } else if (activeTab === "directEnquiry") {
+      const isEnquiryTableRecord = (enquiryNo && enquiryNo.toUpperCase().startsWith("EN-")) || activeTab === "directEnquiry";
+
+      if (isEnquiryTableRecord) {
         tableName = "enquiry_to_order";
         columnName = "quotation_number";
         filterColumn = "enquiry_no";
       } else {
-        console.error("Invalid active tab:", activeTab);
-        return "";
+        tableName = "leads_to_order";
+        columnName = "Quotation_Number";
+        filterColumn = "LD-Lead-No";
       }
 
       const { data, error } = await supabase
@@ -752,6 +751,7 @@ const updateLeadToOrderTable = async (enquiryNo, allFormData, currentStage, orde
       Enquiry_Status: allFormData.enquiryStatus,
       What_Did_Customer_Say: allFormData.customerFeedback,
       Current_Stage: currentStage,
+      Leads_Tracking_Status: (currentStage === "order-status" && (orderStatusData.orderStatus?.toLowerCase() === "yes" || orderStatusData.orderStatus?.toLowerCase() === "no")) ? "Completed" : "Pending",
     };
 
     // ✅ Add Order Number if status is "yes"
@@ -1170,6 +1170,7 @@ const checkItemFieldsPopulated = (data) => {
       enquiry_status: allFormData.enquiryStatus,
       customer_feedback: allFormData.customerFeedback,
       current_stage: currentStage,
+      status: (currentStage === "order-status" && (orderStatusData.orderStatus?.toLowerCase() === "yes" || orderStatusData.orderStatus?.toLowerCase() === "no")) ? "Completed" : "Pending",
     };
 
     switch (currentStage) {
@@ -1389,13 +1390,14 @@ const handleSubmit = async (e) => {
 
      const currentDate = new Date();
     const formattedDate = formatDate(currentDate);
+
     // Prepare the data object for Supabase
     const supabaseData = {
       "Enquiry No.": formData.enquiryNo,
-      "Enquiry Status": formData.enquiryStatus,
-      "What Did Customer Say": formData.customerFeedback,
+      "Enquiry Status": formData.enquiryStatus || "Active",
+      "What Did Customer Say": formData.customerFeedback || "",
       "Current Stage": currentStage,
-      "Sales Cordinator":sc_name,
+      "Sales Cordinator": sc_name || "",
     };
 
     // Add stage-specific data with proper numeric handling
@@ -1464,24 +1466,32 @@ const handleSubmit = async (e) => {
 
     // --- START: Client Master Sync & Round-Robin Logic ---
     let resolvedHandlePerson = "";
-    if (currentStage === "order-status" && orderStatusData.orderStatus === "yes") {
+    const isOrderYes = orderStatusData.orderStatus && orderStatusData.orderStatus.toLowerCase() === "yes";
+    const isOrderStatusStage = currentStage === "order-status" || currentStage === "Order Status";
+
+    if (isOrderStatusStage && isOrderYes) {
       try {
-        // Fetch current lead's handle_person to see if already assigned
-        const { data: leadData } = await supabase
-          .from("leads_to_order")
-          .select("handle_person, Company_Name, Salesperson_Name, Phone_Number, Email_Address, Location, State, Address, GST_Number")
-          .eq("LD-Lead-No", formData.enquiryNo)
-          .maybeSingle();
+        let leadData = null;
+        let enqData = null;
+
+        if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
+          const { data: ld } = await supabase
+            .from("leads_to_order")
+            .select("handle_person, Company_Name, Salesperson_Name, Phone_Number, Email_Address, Location, State, Address, GST_Number")
+            .eq("LD-Lead-No", formData.enquiryNo)
+            .maybeSingle();
+          leadData = ld;
+        } else {
+          const { data: ed } = await supabase
+            .from("enquiry_to_order")
+            .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number")
+            .eq("enquiry_no", formData.enquiryNo)
+            .maybeSingle();
+          enqData = ed;
+        }
 
         resolvedHandlePerson = leadData?.handle_person;
         
-        // Fetch current enquiry data if not in lead data
-        const { data: enqData } = await supabase
-          .from("enquiry_to_order")
-          .select("companyName, scName, phoneNumber, emailAddress, location, enquiryState, shippingAddress, gstNumber")
-          .eq("leadNumber", formData.enquiryNo)
-          .maybeSingle();
-
         if (!resolvedHandlePerson) {
           // Resolve round-robin
           const { data: lastAssigned } = await supabase
@@ -1491,36 +1501,60 @@ const handleSubmit = async (e) => {
             .order("Timestamp", { ascending: false })
             .limit(1);
           
-          if (lastAssigned && lastAssigned.length > 0) {
+          if (lastAssigned && lastAssigned.length > 0 && lastAssigned[0].handle_person) {
             resolvedHandlePerson = lastAssigned[0].handle_person === "Nikita" ? "Priya" : "Nikita";
           } else {
             resolvedHandlePerson = "Nikita";
           }
         }
         
-        // Insert into client_master
-        const clientName = leadData?.Salesperson_Name || enqData?.scName || "";
-        const compName = leadData?.Company_Name || enqData?.companyName || formData.companyName || "";
+        // Insert / Update client_master
+        const clientName = leadData?.Salesperson_Name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
+        const compName = leadData?.Company_Name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
         
-        // Only insert if company name is present
+        console.log("Syncing Client Master - Company:", compName, "Person:", clientName, "HandlePerson:", resolvedHandlePerson);
+
+        // Only sync if company name is present
         if (compName) {
-          const { error: cmError } = await supabase.from("client_master").insert([{
+          const clientPayload = {
             company_name: compName,
             person_name: clientName,
             handle_person: resolvedHandlePerson,
-            person_number: leadData?.Phone_Number || enqData?.phoneNumber || "9876543210",
-            email_address: leadData?.Email_Address || enqData?.emailAddress || "",
+            person_number: leadData?.Phone_Number || enqData?.phone_number || enqData?.phoneNumber || "",
+            email_address: leadData?.Email_Address || enqData?.email || enqData?.emailAddress || "",
             location: leadData?.Location || enqData?.location || "",
-            state: leadData?.State || enqData?.enquiryState || "",
-            address: leadData?.Address || enqData?.shippingAddress || "",
-            gst: leadData?.GST_Number || enqData?.gstNumber || ""
-          }]);
+            state: leadData?.State || enqData?.enquiry_for_state || enqData?.enquiryState || "",
+            address: leadData?.Address || enqData?.shipping_address || enqData?.shippingAddress || "",
+            gst: leadData?.GST_Number || enqData?.gst_number || enqData?.gstNumber || ""
+          };
+
+          const { data: existingClient } = await supabase
+            .from("client_master")
+            .select("id, company_name")
+            .eq("company_name", compName)
+            .maybeSingle();
+
+          let cmError = null;
+          if (existingClient) {
+            const { error: err } = await supabase
+              .from("client_master")
+              .update(clientPayload)
+              .eq("company_name", compName);
+            cmError = err;
+          } else {
+            const { error: err } = await supabase
+              .from("client_master")
+              .insert([clientPayload]);
+            cmError = err;
+          }
           
           if (cmError) {
-            console.error("Error inserting into client_master:", cmError);
+            console.error("Error syncing client_master:", cmError);
           } else {
-            console.log("Successfully inserted into client_master");
+            console.log("Successfully synced client_master for:", compName);
           }
+        } else {
+          console.warn("Client Master sync skipped: No company name found");
         }
         
         orderStatusData.resolvedHandlePerson = resolvedHandlePerson;
@@ -1544,8 +1578,10 @@ const handleSubmit = async (e) => {
     } else {
       console.log("Inserted successfully:", data);
       
-      // Update the appropriate table based on activeTab
-      if (activeTab === "directEnquiry") { 
+      // Update the appropriate table based on record ID prefix and activeTab
+      const isEnquiryTableRecord = (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("EN-")) || activeTab === "directEnquiry";
+
+      if (isEnquiryTableRecord) { 
         const updateSuccess = await updateEnquiryToOrderTable(
           formData.enquiryNo, 
           {
@@ -1562,7 +1598,7 @@ const handleSubmit = async (e) => {
           showNotification("Call tracker updated successfully and enquiry record updated", "success");
           
           // ✅ Wait for database to settle
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // ✅ Manually trigger webhook to ensure Google Sheets gets updated
           const webhookSuccess = await triggerWebhookManually(
@@ -1578,9 +1614,7 @@ const handleSubmit = async (e) => {
         } else {
           showNotification("Call tracker updated but enquiry record could not be updated", "warning");
         }
-      }
-      
-      if (activeTab === "pending") { 
+      } else { 
         // Pass the correct data structure
         const updateSuccess = await updateLeadToOrderTable(
           formData.enquiryNo,
@@ -1598,7 +1632,7 @@ const handleSubmit = async (e) => {
           showNotification("Call tracker updated successfully and lead record updated", "success");
           
           // ✅ Wait for database to settle
-          await new Promise(resolve => setTimeout(resolve, 2000));
+          await new Promise(resolve => setTimeout(resolve, 1000));
           
           // ✅ Manually trigger webhook to ensure Google Sheets gets updated
           const webhookSuccess = await triggerWebhookManually(

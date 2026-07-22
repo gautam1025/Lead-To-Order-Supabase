@@ -665,7 +665,7 @@ function Leads() {
         NOB: formData.nob,
         GST_Number: formData.gst,
         Sales_Type: formData.salesType,
-        Group_Name: formData.groupName,
+        Group_Name: formData.groupName || "",
         Additional_Notes: formData.notes,
         "Customer_Registration Form": formData.customerRegistrationForm,
         "Credit _Access": formData.creditAccess,
@@ -961,18 +961,6 @@ function Leads() {
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="groupName" className="block text-sm font-semibold text-gray-700">
-                  Group Name
-                </label>
-                <input
-                  id="groupName"
-                  value={formData.groupName}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  placeholder="Enter group name (optional)"
-                />
-              </div>
             </div>
 
             <div className="space-y-2">

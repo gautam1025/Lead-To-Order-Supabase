@@ -88,10 +88,10 @@ function Quotation() {
         .from("quotation_image")
         .getPublicUrl(fileName);
 
-      return publicUrlData.publicUrl;
+      return publicUrlData?.publicUrl || null;
     } catch (error) {
       console.error("Error in PDF upload:", error);
-      throw error;
+      return null;
     }
   };
 
@@ -721,17 +721,24 @@ function Quotation() {
       const pdfBlob = new Blob([bytes], { type: "application/pdf" });
 
       // Upload PDF to Supabase bucket with authoritative number in filename
-      const fileName = `Quotation_${authoritativeQuotationNo}.pdf`;
-      const uploadedPdfUrl = await uploadPDFToSupabase(pdfBlob, fileName);
+      let uploadedPdfUrl = null;
+      try {
+        const fileName = `Quotation_${authoritativeQuotationNo}.pdf`;
+        uploadedPdfUrl = await uploadPDFToSupabase(pdfBlob, fileName);
+      } catch (pdfErr) {
+        console.warn("PDF Storage upload failed, proceeding with DB save:", pdfErr);
+      }
 
-      // Update the record with the Pdf_Url
-      await supabase
-        .from("Make_Quotation")
-        .update({ Pdf_Url: uploadedPdfUrl })
-        .eq("Quotation_No", authoritativeQuotationNo);
+      if (uploadedPdfUrl) {
+        // Update the record with the Pdf_Url
+        await supabase
+          .from("Make_Quotation")
+          .update({ Pdf_Url: uploadedPdfUrl })
+          .eq("Quotation_No", authoritativeQuotationNo);
 
-      // Set the PDF URL for reference
-      setPdfUrl(uploadedPdfUrl);
+        // Set the PDF URL for reference
+        setPdfUrl(uploadedPdfUrl);
+      }
 
       if (isRevising && selectedQuotation) {
         setQuotationData((prev) => ({
@@ -740,7 +747,11 @@ function Quotation() {
         }));
       }
 
-      alert("Quotation saved successfully with PDF uploaded to Supabase!");
+      if (uploadedPdfUrl) {
+        alert("Quotation saved successfully with PDF uploaded to Supabase!");
+      } else {
+        alert("Quotation saved to database successfully! (Note: PDF storage upload failed or bucket permissions restricted)");
+      }
 
       // Reset form for new quotation
       const nextQuotationNumber = await getNextQuotationNumber();

@@ -1,191 +1,125 @@
 import { useState, useEffect, useCallback } from "react"
 import supabase from "../../utils/supabase"
 
-function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
+function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
   const [orderStatus, setOrderStatus] = useState(formData.orderStatus || "")
-  const [acceptanceViaOptions, setAcceptanceViaOptions] = useState([])
-  const [paymentModeOptions, setPaymentModeOptions] = useState([])
-  const [reasonStatusOptions, setReasonStatusOptions] = useState([])
-  const [holdReasonOptions, setHoldReasonOptions] = useState([])
-  const [paymentTermsOptions, setPaymentTermsOptions] = useState([])
-  const [conveyedOptions, setConveyedOptions] = useState([])
+  const [acceptanceViaOptions, setAcceptanceViaOptions] = useState(["email", "phone", "in-person", "other"])
+  const [paymentModeOptions, setPaymentModeOptions] = useState(["cash", "check", "bank-transfer", "credit-card"])
+  const [reasonStatusOptions, setReasonStatusOptions] = useState(["price", "competitor", "timeline", "specifications", "other"])
+  const [holdReasonOptions, setHoldReasonOptions] = useState(["budget", "approval", "project-delay", "reconsideration", "other"])
+  const [paymentTermsOptions, setPaymentTermsOptions] = useState(["30", "45", "60", "90"])
+  const [conveyedOptions, setConveyedOptions] = useState(["Yes", "No"])
   const [isLoadingDropdowns, setIsLoadingDropdowns] = useState(false)
   const [orderVideoError, setOrderVideoError] = useState("")
-  const [transportModeOptions, setTransportModeOptions] = useState([])
+  const [transportModeOptions, setTransportModeOptions] = useState(["Road", "Air", "Sea", "Rail"])
   const [quotationNumbers, setQuotationNumbers] = useState([])
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(false)
-  const [creditDaysOptions, setCreditDaysOptions] = useState([])
-  const [creditLimitOptions, setCreditLimitOptions] = useState([])
-  
+  const [creditDaysOptions, setCreditDaysOptions] = useState(["30", "45", "60", "90"])
+  const [creditLimitOptions, setCreditLimitOptions] = useState(["10000", "25000", "50000", "100000"])
+
   // State for items fetched from Make_Quotation table
   const [quotationItems, setQuotationItems] = useState([])
   const [isLoadingItems, setIsLoadingItems] = useState(false)
 
-  // Fetch dropdown options from DROPDOWN sheet
+  // Standard options matching Lead-System strictly
   useEffect(() => {
-    const fetchDropdownOptions = async () => {
-      try {
-        setIsLoadingDropdowns(true)
-
-        // ✅ Fetch all needed columns from Supabase
-        const { data, error } = await supabase
-          .from("dropdown")
-          .select(
-            `
-              acceptance_via,
-              payment_mode,
-              payment_terms_in_days,
-              transport_mode,
-              credit_days,
-              credit_limit,
-              conveyd_for_registration_form,
-              customer_order_hold_reason_category,
-              if_no_then_get_relavant_status
-            `
-          )
-
-        if (error) throw error
-
-     if (data) {
-  // helper fn to get unique, non-null, non-empty values
-  const extractOptions = (key) =>
-    [...new Set(data.map((row) => row[key]).filter((val) => val !== null && val !== ""))]
-
-  const acceptance = extractOptions("acceptance_via")
-  const paymentModes = extractOptions("payment_mode")
-  const paymentTerms = extractOptions("payment_terms_in_days")
-  console.log(paymentTerms);
-  
-  const transport = extractOptions("transport_mode")
-  const creditDays = extractOptions("credit_days")
-  const creditLimit = extractOptions("credit_limit")   // ⬅️ numeric now
-
-  // ✅ If no credit limit data, fallback to [10, 20]
-
-
-  const conveyed = extractOptions("conveyd_for_registration_form")
-  const holdReasons = extractOptions("customer_order_hold_reason_category")
-  const reasonStatus = extractOptions("if_no_then_get_relavant_status")
-
-  // set states
-  setAcceptanceViaOptions(acceptance)
-  setPaymentModeOptions(paymentModes)
-  setPaymentTermsOptions(paymentTerms)
-  setTransportModeOptions(transport)
-  setCreditDaysOptions(creditDays)
-  setCreditLimitOptions(creditLimit)  // ⬅️ safe now
-  setConveyedOptions(conveyed)
-  setHoldReasonOptions(holdReasons)
-  setReasonStatusOptions(reasonStatus)
-}
-
-      } catch (error) {
-        console.error("Error fetching dropdown options:", error)
-
-        // fallback values
-        setAcceptanceViaOptions(["email", "phone", "in-person", "other"])
-        setPaymentModeOptions(["cash", "check", "bank-transfer", "credit-card"])
-        setReasonStatusOptions(["price", "competitor", "timeline", "specifications", "other"])
-        setHoldReasonOptions(["budget", "approval", "project-delay", "reconsideration", "other"])
-        setPaymentTermsOptions(["30", "45", "60", "90"])
-        setConveyedOptions(["Yes", "No"])
-        setTransportModeOptions(["Road", "Air", "Sea", "Rail"])
-        setCreditDaysOptions(["30", "45", "60", "90"])
-        setCreditLimitOptions(["10000", "25000", "50000", "100000"])
-      } finally {
-        setIsLoadingDropdowns(false)
-      }
-    }
-
-    fetchDropdownOptions()
+    setAcceptanceViaOptions(["email", "phone", "in-person", "other"])
+    setPaymentModeOptions(["cash", "check", "bank-transfer", "credit-card"])
+    setReasonStatusOptions(["price", "competitor", "timeline", "specifications", "other"])
+    setHoldReasonOptions(["budget", "approval", "project-delay", "reconsideration", "other"])
+    setPaymentTermsOptions(["30", "45", "60", "90"])
+    setConveyedOptions(["Yes", "No"])
+    setTransportModeOptions(["Road", "Air", "Sea", "Rail"])
+    setCreditDaysOptions(["30", "45", "60", "90"])
+    setCreditLimitOptions(["10000", "25000", "50000", "100000"])
   }, [])
 
   // Fetch quotation numbers for the given enquiry number
- useEffect(() => {
-  const fetchQuotationNumbers = async () => {
-  if (!enquiryNo) return;
-  
-  try {
-    setIsLoadingQuotations(true);
-    
-    let tableName, columnName, filterColumn;
+  useEffect(() => {
+    const fetchQuotationNumbers = async () => {
+      if (!enquiryNo) return;
 
-    if (activeTab === "pending") {
-      tableName = "leads_to_order";
-      columnName = "Quotation_Number";
-      filterColumn = "LD-Lead-No";
-    } else if (activeTab === "directEnquiry") {
-      tableName = "enquiry_to_order";
-      columnName = "quotation_number";
-      filterColumn = "enquiry_no";
-    } else {
-      console.error("Invalid active tab:", activeTab);
-      return;
-    }
+      try {
+        setIsLoadingQuotations(true);
 
-    const { data, error } = await supabase
-      .from(tableName)
-      .select(columnName)
-      .eq(filterColumn, enquiryNo);
+        let tableName, columnName, filterColumn;
 
-    if (error) {
-      console.error(`Supabase error fetching from ${tableName}:`, error);
-      return;
-    }
+        if (activeTab === "pending") {
+          tableName = "leads_to_order";
+          columnName = "Quotation_Number";
+          filterColumn = "LD-Lead-No";
+        } else if (activeTab === "directEnquiry") {
+          tableName = "enquiry_to_order";
+          columnName = "quotation_number";
+          filterColumn = "enquiry_no";
+        } else {
+          console.error("Invalid active tab:", activeTab);
+          return;
+        }
 
-    if (data && data.length > 0) {
-      const uniqueQuotations = [...new Set(data.map(item => item[columnName]).filter(item => item))];
-      setQuotationNumbers(uniqueQuotations);
-      
-      // Auto-select only if we don't already have a value
-      if (uniqueQuotations.length > 0 && !formData.orderStatusQuotationNumber) {
-        onFieldChange('orderStatusQuotationNumber', uniqueQuotations[0]);
+        const { data, error } = await supabase
+          .from(tableName)
+          .select(columnName)
+          .eq(filterColumn, enquiryNo);
+
+        if (error) {
+          console.error(`Supabase error fetching from ${tableName}:`, error);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          const uniqueQuotations = [...new Set(data.map(item => item[columnName]).filter(item => item))];
+          setQuotationNumbers(uniqueQuotations);
+
+          // Auto-select only if we don't already have a value
+          if (uniqueQuotations.length > 0 && !formData.orderStatusQuotationNumber) {
+            onFieldChange('orderStatusQuotationNumber', uniqueQuotations[0]);
+          }
+        } else {
+          setQuotationNumbers([]);
+        }
+      } catch (error) {
+        console.error("Error fetching quotation numbers:", error);
+      } finally {
+        setIsLoadingQuotations(false);
       }
-    } else {
-      setQuotationNumbers([]);
     }
-  } catch (error) {
-    console.error("Error fetching quotation numbers:", error);
-  } finally {
-    setIsLoadingQuotations(false);
-  }
-}
-    
+
     fetchQuotationNumbers();
   }, [enquiryNo, formData.orderStatusQuotationNumber, onFieldChange, activeTab]);
 
-   const stableOnFieldChange = useCallback(onFieldChange, [onFieldChange])
+  const stableOnFieldChange = useCallback(onFieldChange, [onFieldChange])
 
 
-    //  useEffect(() => {
-    //    if (quotationNumbers.length > 0 && !formData.orderStatusQuotationNumber) {
-    //      stableOnFieldChange('orderStatusQuotationNumber', quotationNumbers[0]);
-    //    }
-    //  }, [quotationNumbers, formData.orderStatusQuotationNumber, stableOnFieldChange]);
-   
+  //  useEffect(() => {
+  //    if (quotationNumbers.length > 0 && !formData.orderStatusQuotationNumber) {
+  //      stableOnFieldChange('orderStatusQuotationNumber', quotationNumbers[0]);
+  //    }
+  //  }, [quotationNumbers, formData.orderStatusQuotationNumber, stableOnFieldChange]);
+
   // Function to fetch items from Make_Quotation table based on quotation number
   const fetchItemsFromQuotation = async (quotationNumber) => {
     if (!quotationNumber) {
       setQuotationItems([])
       return
     }
-    
+
     try {
       setIsLoadingItems(true)
       console.log("Fetching items for quotation number:", quotationNumber)
-      
+
       const { data, error } = await supabase
         .from("Make_Quotation")
         .select("Items")
         .eq("Quotation_No", quotationNumber)
         .single()
-      
+
       if (error) {
         console.error("Error fetching from Make_Quotation:", error)
         setQuotationItems([])
         return
       }
-      
+
       if (data && data.Items) {
         // Parse Items JSON and extract name and qty
         let items = []
@@ -195,17 +129,17 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
           console.error("Error parsing Items JSON:", e)
           items = []
         }
-        
+
         // Extract only name and qty from items
         const extractedItems = items.map((item, index) => ({
           id: index + 1,
           name: item.name || "",
           qty: item.qty || 0
         }))
-        
+
         console.log("Fetched items from Make_Quotation:", extractedItems)
         setQuotationItems(extractedItems)
-        
+
         // Pass items to parent component
         onFieldChange('quotationItems', extractedItems)
       } else {
@@ -228,13 +162,13 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
   const handleFileChange = (e) => {
     const { name } = e.target
     const file = e.target.files[0]
-    
+
     if (name === "orderVideo" && !file) {
       setOrderVideoError("Order Video is mandatory")
     } else {
       setOrderVideoError("")
     }
-    
+
     if (file) {
       onFieldChange(name, file)
     }
@@ -243,7 +177,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
   const handleStatusChange = (status) => {
     setOrderStatus(status)
     onFieldChange('orderStatus', status)
-    
+
     // When "yes" is selected, fetch items from Make_Quotation table
     if (status === "yes" && formData.orderStatusQuotationNumber) {
       fetchItemsFromQuotation(formData.orderStatusQuotationNumber)
@@ -258,7 +192,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
       <h3 className="text-lg font-medium">Order Status</h3>
       <hr className="border-gray-200" />
 
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="space-y-2">
           <label htmlFor="orderStatusQuotationNumber" className="block text-sm font-medium text-gray-700">
             Quotation Number
@@ -304,8 +238,8 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
           )}
           {enquiryNo && quotationNumbers.length > 0 && !isLoadingQuotations && (
             <div className="text-xs text-green-600 mt-1">
-              {quotationNumbers.length === 1 
-                ? "Found matching quotation" 
+              {quotationNumbers.length === 1
+                ? "Found matching quotation"
                 : `Found ${quotationNumbers.length} matching quotations`}
             </div>
           )}
@@ -395,7 +329,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
                 </table>
               </div>
               <p className="text-xs text-blue-600 mt-2">
-                Total Items: {quotationItems.length} | 
+                Total Items: {quotationItems.length} |
                 Total Qty: {quotationItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0)}
               </p>
             </div>
@@ -492,42 +426,42 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
             </div>
 
             <div className="space-y-2">
-  <label htmlFor="transportMode" className="block text-sm font-medium text-gray-700">
-    Transport Mode
-  </label>
-  <select
-    id="transportMode"
-    name="transportMode"
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-    value={formData.transportMode || ""}
-    onChange={handleChange}
-  >
-    <option value="">Select transport mode</option>
-    {transportModeOptions.map((option, index) => (
-      <option key={index} value={option.toLowerCase()}>{option}</option>
-    ))}
-  </select>
-</div>
+              <label htmlFor="transportMode" className="block text-sm font-medium text-gray-700">
+                Transport Mode
+              </label>
+              <select
+                id="transportMode"
+                name="transportMode"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={formData.transportMode || ""}
+                onChange={handleChange}
+              >
+                <option value="">Select transport mode</option>
+                {transportModeOptions.map((option, index) => (
+                  <option key={index} value={option.toLowerCase()}>{option}</option>
+                ))}
+              </select>
+            </div>
 
-<div className="space-y-2">
-  <label htmlFor="creditDays" className="block text-sm font-medium text-gray-700">
-    Credit Days
-  </label>
-  <select
-    id="creditDays"
-    name="creditDays"
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-    value={formData.creditDays || ""}
-    onChange={handleChange}
-  >
-    <option value="">Select credit days</option>
-    {creditDaysOptions.map((option, index) => (
-      <option key={index} value={option}>{option}</option>
-    ))}
-  </select>
-</div>
+            <div className="space-y-2">
+              <label htmlFor="creditDays" className="block text-sm font-medium text-gray-700">
+                Credit Days
+              </label>
+              <select
+                id="creditDays"
+                name="creditDays"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={formData.creditDays || ""}
+                onChange={handleChange}
+              >
+                <option value="">Select credit days</option>
+                {creditDaysOptions.map((option, index) => (
+                  <option key={index} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
 
-   <div className="space-y-2">
+            <div className="space-y-2">
               <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700">
                 Credit Limit
               </label>
@@ -540,7 +474,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
               >
                 <option value="">Select credit limit</option>
                 {creditLimitOptions.map((option, index) => (
-                  <option key={index} value={option}>{option.toLocaleString()}</option>
+                  <option key={index} value={option}>{option}</option>
                 ))}
               </select>
             </div>
@@ -565,20 +499,20 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
           </div>
 
           <div className="space-y-2">
-  <label htmlFor="orderVideo" className="block text-sm font-medium text-gray-700">
-    Offer No.
-  </label>
-  <select
-    id="orderVideo"
-    name="orderVideo"
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-    onChange={handleChange}
-  >
-    <option value="">Select an option</option>
-    <option value="yes">Yes</option>
-    <option value="no">No</option>
-  </select>
-</div>
+            <label htmlFor="orderVideo" className="block text-sm font-medium text-gray-700">
+              Offer No.
+            </label>
+            <select
+              id="orderVideo"
+              name="orderVideo"
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              onChange={handleChange}
+            >
+              <option value="">Select an option</option>
+              <option value="yes">Yes</option>
+              <option value="no">No</option>
+            </select>
+          </div>
 
           <div className="space-y-2">
             <label htmlFor="acceptanceFile" className="block text-sm font-medium text-gray-700">
@@ -639,6 +573,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo,activeTab }) {
               required
             >
               <option value="">Select reason</option>
+
               {reasonStatusOptions.map((option, index) => (
                 <option key={index} value={option.toLowerCase()}>{option}</option>
               ))}

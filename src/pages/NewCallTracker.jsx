@@ -90,7 +90,7 @@ function NewCallTracker() {
         setSalesTypes(uniqueSalesTypes.sort())
         setProductCategories(uniqueProductCategories.sort())
         setNobOptions(uniqueNobOptions.sort())
-        setEnquiryApproachOptions(uniqueEnquiryApproachOptions.sort())
+        setEnquiryApproachOptions(uniqueEnquiryApproachOptions.length > 0 ? uniqueEnquiryApproachOptions.sort() : ["Incoming", "Outgoing"])
         setCustomerFeedbackOptions(uniqueCustomerFeedbackOptions.sort())
         
         setLeadSources(uniqueSources.sort())

@@ -5,44 +5,12 @@ import supabase from "../../utils/supabase"
 function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   const location = useLocation()
   const params = useParams()
-  const [sharedByOptions, setSharedByOptions] = useState([])
+  const [sharedByOptions, setSharedByOptions] = useState(["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
   const [isLoading, setIsLoading] = useState(false)
   const [fileError, setFileError] = useState(null)
   
-  // Fetch dropdown options from DROPDOWN sheet column E
-  useEffect(() => {// adjust path
-
-const fetchSharedByOptions = async () => {
-  try {
-    setIsLoading(true);
-
-    // Fetch distinct values from `dropdown` table
-    const { data, error } = await supabase
-      .from("dropdown")
-      .select("quotation_shared_by")
-      .not("quotation_shared_by", "is", null);
-
-    if (error) throw error;
-
-    // Extract text values directly
-    const options = data.map(row => row.quotation_shared_by);
-
-    setSharedByOptions(options);
-  } catch (error) {
-    console.error("Error fetching dropdown options:", error);
-    // Fallback options if fetch fails
-    setSharedByOptions([
-      "Rahul Sharma",
-      "Priya Patel",
-      "Amit Singh",
-      "Neha Gupta"
-    ]);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-    fetchSharedByOptions()
+  useEffect(() => {
+    setSharedByOptions(["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
   }, [])
 
   // Add this new useEffect after the existing sharedByOptions useEffect

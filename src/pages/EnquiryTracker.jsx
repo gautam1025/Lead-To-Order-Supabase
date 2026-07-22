@@ -41,6 +41,130 @@ const useIsMobile = () => {
   return isMobile;
 };
 
+const columnsConfig = [
+  { key: "timestamp", label: "Timestamp" },
+  { key: "leadId", label: "Lead No." },
+  { key: "leadSource", label: "Enquiry Source" },
+  { key: "companyName", label: "Company Name" },
+  { key: "phoneNumber", label: "Phone Number" },
+  { key: "salespersonName", label: "Person Name" },
+  { key: "nextCallDate", label: "Next Follow Update" },
+  { key: "currentStage", label: "Current Stage" },
+  { key: "callingDate", label: "Calling Date" },
+  { key: "itemQty", label: "Item/Qty" },
+  { key: "totalQty", label: "Total Qty" },
+  { key: "shippingAddress", label: "Shipping Address" },
+  { key: "enquiryReceiverName", label: "Enquiry Receiver Name" },
+  { key: "enquiryAssignToProject", label: "Enquiry Assign to Person" },
+  { key: "gstNumber", label: "GST Number" },
+  { key: "enquiryDate", label: "Enquiry Date" },
+  { key: "enquiryState", label: "Enquiry for State" },
+  { key: "projectName", label: "Project Name" },
+  { key: "salesType", label: "Sales Type" },
+  { key: "enquiryApproach", label: "Enquiry Approach" },
+  { key: "itemName1", label: "Item Name 1" },
+  { key: "itemQty1", label: "Quantity 1" },
+  { key: "itemName2", label: "Item Name 2" },
+  { key: "itemQty2", label: "Quantity 2" },
+  { key: "itemName3", label: "Item Name 3" },
+  { key: "itemQty3", label: "Quantity 3" },
+  { key: "itemName4", label: "Item Name 4" },
+  { key: "itemQty4", label: "Quantity 4" },
+  { key: "itemName5", label: "Item Name 5" },
+  { key: "itemQty5", label: "Quantity 5" },
+  { key: "enquiryStatus", label: "Enquiry Status" },
+  { key: "customerFeedback", label: "Customer Feedback" },
+  { key: "sendQuotationNo", label: "Send Quotation No." },
+  { key: "quotationSharedBy", label: "Quotation Shared By" },
+  { key: "quotationNumber", label: "Quotation Number" },
+  { key: "valueWithoutTax", label: "Quotation Value Without Tax" },
+  { key: "valueWithTax", label: "Quotation Value With Tax" },
+  { key: "quotationUpload", label: "Quotation Upload" },
+  { key: "quotationRemarks", label: "Quotation Remarks" },
+  { key: "validatorName", label: "Quotation Validator Name" },
+  { key: "sendStatus", label: "Quotation Send Status" },
+  { key: "validationRemark", label: "Quotation Validation Remark" },
+  { key: "faqVideo", label: "Send FAQ Video" },
+  { key: "productVideo", label: "Send Product Video" },
+  { key: "offerVideo", label: "Send Offer Video" },
+  { key: "productCatalog", label: "Send Product Catalog" },
+  { key: "productImage", label: "Send Product Image" },
+  { key: "nextCallTime", label: "Next Follow Uptime" },
+  { key: "orderStatus", label: "Order Received Status" },
+  { key: "reasonStatus", label: "If No Reason Status" },
+  { key: "reasonRemark", label: "If No Reason Remark" },
+  { key: "holdReason", label: "Customer Order Hold Reason Category" },
+  { key: "holdingDate", label: "Holding Date" },
+  { key: "holdRemark", label: "Hold Remark" },
+  { key: "transportMode", label: "Transport Mode" },
+  { key: "conveyedForRegistration", label: "Conveyed For Registration Form" },
+  { key: "orderNo", label: "Order No" },
+  { key: "destination", label: "Destination" },
+  { key: "poNumber", label: "PO Number" },
+];
+
+const defaultVisibility = {
+  timestamp: true,
+  leadId: true,
+  leadSource: true,
+  companyName: true,
+  phoneNumber: true,
+  salespersonName: true,
+  customerFeedback: true,
+  nextCallDate: true,
+  nextCallTime: true,
+  currentStage: false,
+  callingDate: false,
+  itemQty: false,
+  totalQty: false,
+  shippingAddress: false,
+  enquiryReceiverName: false,
+  enquiryAssignToProject: false,
+  gstNumber: false,
+  enquiryDate: false,
+  enquiryState: false,
+  projectName: false,
+  salesType: false,
+  enquiryApproach: false,
+  itemName1: false,
+  itemQty1: false,
+  itemName2: false,
+  itemQty2: false,
+  itemName3: false,
+  itemQty3: false,
+  itemName4: false,
+  itemQty4: false,
+  itemName5: false,
+  itemQty5: false,
+  enquiryStatus: false,
+  sendQuotationNo: false,
+  quotationSharedBy: false,
+  quotationNumber: false,
+  valueWithoutTax: false,
+  valueWithTax: false,
+  quotationUpload: false,
+  quotationRemarks: false,
+  validatorName: false,
+  sendStatus: false,
+  validationRemark: false,
+  faqVideo: false,
+  productVideo: false,
+  offerVideo: false,
+  productCatalog: false,
+  productImage: false,
+  orderStatus: false,
+  reasonStatus: false,
+  reasonRemark: false,
+  holdReason: false,
+  holdingDate: false,
+  holdRemark: false,
+  transportMode: false,
+  conveyedForRegistration: false,
+  orderNo: false,
+  destination: false,
+  poNumber: false,
+};
+
 function EnquiryTracker() {
   const isMobile = useIsMobile();
   const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext);
@@ -107,160 +231,15 @@ function EnquiryTracker() {
     historyOlder: 0,
   });
 
-  const [visibleColumns, setVisibleColumns] = useState({
-    timestamp: true,
-    enquiryNo: true,
-    enquiryStatus: true,
-    customerFeedback: true,
-    currentStage: true,
-    sendQuotationNo: true,
-    quotationSharedBy: true,
-    quotationNumber: true,
-    valueWithoutTax: true,
-    valueWithTax: true,
-    quotationUpload: true,
-    quotationRemarks: true,
-    validatorName: true,
-    sendStatus: true,
-    validationRemark: true,
-    faqVideo: true,
-    productVideo: true,
-    offerVideo: true,
-    productCatalog: true,
-    productImage: true,
-    nextCallDate: true,
-    nextCallTime: true,
-    orderStatus: true,
-    acceptanceVia: true,
-    paymentMode: true,
-    paymentTerms: true,
-    transportMode: true,
-    registrationFrom: true,
-    orderVideo: true,
-    acceptanceFile: true,
-    orderRemark: true,
-    apologyVideo: true,
-    reasonStatus: true,
-    reasonRemark: true,
-    holdReason: true,
-    holdingDate: true,
-    holdRemark: true,
-  });
+  const [visibleColumns, setVisibleColumns] = useState(defaultVisibility);
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
   // Pending tab column visibility state
-  const [visiblePendingColumns, setVisiblePendingColumns] = useState({
-    actions: true,
-    timestamp: true,
-    leadNo: true,
-    leadReceiverName: false,
-    leadSource: true,
-    phoneNo: true,
-    salespersonName: true,
-    companyName: true,
-    currentStage: true,
-    callingDate: true,
-    assignedTo: true,
-    itemQty: false,
-    totalQty: true,
-    customerSay: false,
-    enquiryReceivedStatus: false,
-    enquiryReceivedDate: false,
-    enquiryForState: false,
-    projectName: false,
-    enquiryType: false,
-    enquiryApproach: false,
-    projectApproximateValue: false,
-    itemName1: false,
-    quantity1: false,
-    itemName2: false,
-    quantity2: false,
-    itemName3: false,
-    quantity3: false,
-    itemName4: false,
-    quantity4: false,
-    itemName5: false,
-    quantity5: false,
-    nextAction: false,
-    nextCallDate: false,
-    nextCallTime: false,
-  });
+  const [visiblePendingColumns, setVisiblePendingColumns] = useState(defaultVisibility);
   const [showPendingColumnDropdown, setShowPendingColumnDropdown] = useState(false);
 
   // Direct Enquiry tab column visibility state
-  const [visibleDirectEnquiryColumns, setVisibleDirectEnquiryColumns] = useState({
-    actions: true,
-    timestamp: true,
-    enquiryNo: true,
-    leadSource: true,
-    companyName: true,
-    phoneNo: true,
-    salespersonName: true,
-    currentStage: true,
-    callingDate: true,
-    assignedTo: true,
-    itemQty: false,
-    totalQty: true,
-    shippingAddress: false,
-    leadReceiverName: true,
-    enquiryAssignToProject: false,
-    gstNumber: false,
-    enquiryDate: false,
-    enquiryForState: false,
-    projectName: false,
-    salesType: false,
-    enquiryApproach: false,
-    itemName1: false,
-    quantity1: false,
-    itemName2: false,
-    quantity2: false,
-    itemName3: false,
-    quantity3: false,
-    itemName4: false,
-    quantity4: false,
-    itemName5: false,
-    quantity5: false,
-    itemName6: false,
-    quantity6: false,
-    itemName7: false,
-    quantity7: false,
-    itemName8: false,
-    quantity8: false,
-    itemName9: false,
-    quantity9: false,
-    itemName10: false,
-    quantity10: false,
-    enquiryStatus: false,
-    customerFeedback: false,
-    sendQuotationNo: false,
-    quotationSharedBy: false,
-    quotationNumber: false,
-    quotationValueWithoutTax: false,
-    quotationValueWithTax: false,
-    quotationUpload: false,
-    quotationRemarks: false,
-    quotationValidatorName: false,
-    quotationSendStatus: false,
-    quotationValidationRemark: false,
-    sendFaqVideo: false,
-    sendProductVideo: false,
-    sendOfferVideo: false,
-    sendProductCatalog: false,
-    sendProductImage: false,
-    nextCallTime: false,
-    isOrderReceivedStatus: false,
-    ifNoReasonStatus: false,
-    ifNoReasonRemark: false,
-    customerOrderHoldReasonCategory: false,
-    holdingDate: false,
-    holdRemark: false,
-    transportMode: false,
-    conveyedForRegistrationForm: false,
-    orderNo: false,
-    amountWithGst: false,
-    destination: false,
-    poNumber: false,
-  });
+  const [visibleDirectEnquiryColumns, setVisibleDirectEnquiryColumns] = useState(defaultVisibility);
   const [showDirectEnquiryColumnDropdown, setShowDirectEnquiryColumnDropdown] = useState(false);
 
   // Refs for observer
@@ -388,6 +367,63 @@ const handleSaveClick = async (index) => {
 
       const updateId = editedData.id || editedData.dbId;
       console.log("Updating record with ID:", updateId);
+
+      const isEnquiryRecord = editedData.tableSource === "enquiry_to_order" || (editedData.leadNo && editedData.leadNo.toUpperCase().startsWith("EN-"));
+
+      if (isEnquiryRecord) {
+        const directEnquiryUpdateData = {
+          enquiry_no: editedData.lead_no || editedData.leadNo,
+          lead_source: editedData.Lead_Source || editedData.leadSource,
+          company_name: editedData.Company_Name || editedData.companyName,
+          phone_number: editedData.Phone_Number || editedData.phoneNo,
+          sales_person_name: editedData.salesperson_Name || editedData.salespersonName,
+          enquiry_receiver_name: editedData.Lead_Receiver_Name || editedData.leadReceiverName,
+          sales_coordinator_name: editedData.sc_name || editedData.assignedTo,
+          customer_feedback: editedData.What_Did_The_Customer_Say || editedData.customerSay,
+          current_stage: editedData.Current_Stage || editedData.currentStage,
+          calling_days: editedData.Calling_Days || editedData.callingDate,
+          enquiry_for_state: editedData.Enquiry_for_State || editedData.enquiryForState,
+          project_name: editedData.Project_Name || editedData.projectName,
+          sales_type: editedData.Enquiry_Type || editedData.enquiryType,
+          enquiry_approach: editedData.Enquiry_Approach || editedData.enquiryApproach,
+          item_name1: editedData.Item_Name1 || editedData.itemName1,
+          quantity1: (editedData.Quantity1 || editedData.quantity1) ? parseInt(editedData.Quantity1 || editedData.quantity1, 10) : null,
+          item_name2: editedData.Item_Name2 || editedData.itemName2,
+          quantity2: (editedData.Quantity2 || editedData.quantity2) ? parseInt(editedData.Quantity2 || editedData.quantity2, 10) : null,
+          item_name3: editedData.Item_Name3 || editedData.itemName3,
+          quantity3: (editedData.Quantity3 || editedData.quantity3) ? parseInt(editedData.Quantity3 || editedData.quantity3, 10) : null,
+          item_name4: editedData.Item_Name4 || editedData.itemName4,
+          quantity4: (editedData.Quantity4 || editedData.quantity4) ? parseInt(editedData.Quantity4 || editedData.quantity4, 10) : null,
+          item_name5: editedData.Item_Name5 || editedData.itemName5,
+          quantity5: (editedData.Quantity5 || editedData.quantity5) ? parseInt(editedData.Quantity5 || editedData.quantity5, 10) : null,
+          next_call_date: convertDateToYYYYMMDD(editedData.Next_Call_Date_Field || editedData.nextCallDate),
+          next_call_time: convertTimeTo24Hour(editedData.Next_Call_Time || editedData.nextCallTime),
+        };
+
+        Object.keys(directEnquiryUpdateData).forEach((key) => {
+          if (directEnquiryUpdateData[key] === undefined || directEnquiryUpdateData[key] === null) {
+            delete directEnquiryUpdateData[key];
+          }
+        });
+
+        const { data: updatedData, error } = await supabase
+          .from("enquiry_to_order")
+          .update(directEnquiryUpdateData)
+          .eq("id", updateId)
+          .select();
+
+        if (error) {
+          console.error("Pending direct enquiry update error:", error);
+          alert(`Error updating record: ${error.message}`);
+          throw error;
+        }
+
+        alert("Updated successfully!");
+        fetchPendingData(pendingPage, searchTerm, false, getDateFiltersFromCallingDays());
+        setEditingRowId(null);
+        setEditedData({});
+        return;
+      }
 
       const pendingUpdateData = {
         "LD-Lead-No": editedData.lead_no,
@@ -1030,157 +1066,9 @@ const handleSaveClick = async (index) => {
     setVisibleColumns(newState);
   };
 
-  const columnOptions = [
-    { key: "timestamp", label: "Timestamp" },
-    { key: "enquiryNo", label: "Enquiry No." },
-    { key: "enquiryStatus", label: "Enquiry Status" },
-    { key: "customerFeedback", label: "What Did Customer Say" },
-    { key: "currentStage", label: "Current Stage" },
-    { key: "sendQuotationNo", label: "Send Quotation No." },
-    { key: "quotationSharedBy", label: "Quotation Shared By" },
-    { key: "quotationNumber", label: "Quotation Number" },
-    { key: "valueWithoutTax", label: "Value Without Tax" },
-    { key: "valueWithTax", label: "Value With Tax" },
-    { key: "quotationUpload", label: "Quotation Upload" },
-    { key: "quotationRemarks", label: "Quotation Remarks" },
-    { key: "validatorName", label: "Validator Name" },
-    { key: "sendStatus", label: "Send Status" },
-    { key: "validationRemark", label: "Validation Remark" },
-    { key: "faqVideo", label: "FAQ Video" },
-    { key: "productVideo", label: "Product Video" },
-    { key: "offerVideo", label: "Offer Video" },
-    { key: "productCatalog", label: "Product Catalog" },
-    { key: "productImage", label: "Product Image" },
-    { key: "nextCallDate", label: "Next Call Date" },
-    { key: "nextCallTime", label: "Next Call Time" },
-    { key: "orderStatus", label: "Order Status" },
-    { key: "acceptanceVia", label: "Acceptance Via" },
-    { key: "paymentMode", label: "Payment Mode" },
-    { key: "paymentTerms", label: "Payment Terms" },
-    { key: "transportMode", label: "Transport Mode" },
-    { key: "registrationFrom", label: "Registration From" },
-    { key: "orderVideo", label: "Order Video" },
-    { key: "acceptanceFile", label: "Acceptance File" },
-    { key: "orderRemark", label: "Remark" },
-    { key: "apologyVideo", label: "Apology Video" },
-    { key: "reasonStatus", label: "Reason Status" },
-    { key: "reasonRemark", label: "Reason Remark" },
-    { key: "holdReason", label: "Hold Reason" },
-    { key: "holdingDate", label: "Holding Date" },
-    { key: "holdRemark", label: "Hold Remark" },
-  ];
-
-  // Pending tab column options
-  const pendingColumnOptions = [
-    { key: "actions", label: "Actions" },
-    { key: "timestamp", label: "Timestamp" },
-    { key: "leadNo", label: "Lead No." },
-    { key: "leadReceiverName", label: "Lead Receiver Name" },
-    { key: "leadSource", label: "Lead Source" },
-    { key: "phoneNo", label: "Phone No." },
-    { key: "salespersonName", label: "Salesperson Name" },
-    { key: "companyName", label: "Company Name" },
-    { key: "currentStage", label: "Current Stage" },
-    { key: "callingDate", label: "Calling Date" },
-    { key: "assignedTo", label: "Assigned To" },
-    { key: "itemQty", label: "Item/Qty" },
-    { key: "totalQty", label: "Total Qty" },
-    { key: "customerSay", label: "What Did Customer Say" },
-    { key: "enquiryReceivedStatus", label: "Enquiry Received Status" },
-    { key: "enquiryReceivedDate", label: "Enquiry Received Date" },
-    { key: "enquiryForState", label: "Enquiry for State" },
-    { key: "projectName", label: "Project Name" },
-    { key: "enquiryType", label: "Enquiry Type" },
-    { key: "enquiryApproach", label: "Enquiry Approach" },
-    { key: "projectApproximateValue", label: "Project Approximate Value" },
-    { key: "itemName1", label: "Item Name 1" },
-    { key: "quantity1", label: "Quantity 1" },
-    { key: "itemName2", label: "Item Name 2" },
-    { key: "quantity2", label: "Quantity 2" },
-    { key: "itemName3", label: "Item Name 3" },
-    { key: "quantity3", label: "Quantity 3" },
-    { key: "itemName4", label: "Item Name 4" },
-    { key: "quantity4", label: "Quantity 4" },
-    { key: "itemName5", label: "Item Name 5" },
-    { key: "quantity5", label: "Quantity 5" },
-    { key: "nextAction", label: "Next Action" },
-    { key: "nextCallDate", label: "Next Call Date" },
-    { key: "nextCallTime", label: "Next Call Time" },
-  ];
-
-  // Direct Enquiry tab column options
-  const directEnquiryColumnOptions = [
-    { key: "actions", label: "Actions" },
-    { key: "timestamp", label: "Timestamp" },
-    { key: "enquiryNo", label: "Lead No." },
-    { key: "leadSource", label: "Lead Source" },
-    { key: "companyName", label: "Company Name" },
-    { key: "phoneNo", label: "Phone Number" },
-    { key: "salespersonName", label: "Salesperson Name" },
-    { key: "currentStage", label: "Current Stage" },
-    { key: "callingDate", label: "Calling Date" },
-    { key: "itemQty", label: "Item/Qty" },
-    { key: "totalQty", label: "Total Qty" },
-    { key: "shippingAddress", label: "Shipping Address" },
-    { key: "leadReceiverName", label: "Enquiry Receiver Name" },
-    { key: "enquiryAssignToProject", label: "Enquiry Assign to Project" },
-    { key: "gstNumber", label: "GST Number" },
-    { key: "enquiryDate", label: "Enquiry Date" },
-    { key: "enquiryForState", label: "Enquiry for State" },
-    { key: "projectName", label: "Project Name" },
-    { key: "salesType", label: "Sales Type" },
-    { key: "enquiryApproach", label: "Enquiry Approach" },
-    { key: "itemName1", label: "Item Name 1" },
-    { key: "quantity1", label: "Quantity 1" },
-    { key: "itemName2", label: "Item Name 2" },
-    { key: "quantity2", label: "Quantity 2" },
-    { key: "itemName3", label: "Item Name 3" },
-    { key: "quantity3", label: "Quantity 3" },
-    { key: "itemName4", label: "Item Name 4" },
-    { key: "quantity4", label: "Quantity 4" },
-    { key: "itemName5", label: "Item Name 5" },
-    { key: "quantity5", label: "Quantity 5" },
-    { key: "itemName6", label: "Item Name 6" },
-    { key: "quantity6", label: "Quantity 6" },
-    { key: "itemName7", label: "Item Name 7" },
-    { key: "quantity7", label: "Quantity 7" },
-    { key: "itemName8", label: "Item Name 8" },
-    { key: "quantity8", label: "Quantity 8" },
-    { key: "itemName9", label: "Item Name 9" },
-    { key: "quantity9", label: "Quantity 9" },
-    { key: "itemName10", label: "Item Name 10" },
-    { key: "quantity10", label: "Quantity 10" },
-    { key: "enquiryStatus", label: "Enquiry Status" },
-    { key: "customerFeedback", label: "Customer Feedback" },
-    { key: "sendQuotationNo", label: "Send Quotation No." },
-    { key: "quotationSharedBy", label: "Quotation Shared By" },
-    { key: "quotationNumber", label: "Quotation Number" },
-    { key: "quotationValueWithoutTax", label: "Quotation Value Without Tax" },
-    { key: "quotationValueWithTax", label: "Quotation Value With Tax" },
-    { key: "quotationUpload", label: "Quotation Upload" },
-    { key: "quotationRemarks", label: "Quotation Remarks" },
-    { key: "quotationValidatorName", label: "Quotation Validator Name" },
-    { key: "quotationSendStatus", label: "Quotation Send Status" },
-    { key: "quotationValidationRemark", label: "Quotation Validation Remark" },
-    { key: "sendFaqVideo", label: "Send FAQ Video" },
-    { key: "sendProductVideo", label: "Send Product Video" },
-    { key: "sendOfferVideo", label: "Send Offer Video" },
-    { key: "sendProductCatalog", label: "Send Product Catalog" },
-    { key: "sendProductImage", label: "Send Product Image" },
-    { key: "nextCallTime", label: "Next Call Time" },
-    { key: "isOrderReceivedStatus", label: "Order Received Status" },
-    { key: "ifNoReasonStatus", label: "If No Reason Status" },
-    { key: "ifNoReasonRemark", label: "If No Reason Remark" },
-    { key: "customerOrderHoldReasonCategory", label: "Customer Order Hold Reason Category" },
-    { key: "holdingDate", label: "Holding Date" },
-    { key: "holdRemark", label: "Hold Remark" },
-    { key: "transportMode", label: "Transport Mode" },
-    { key: "conveyedForRegistrationForm", label: "Conveyed For Registration Form" },
-    { key: "orderNo", label: "Order No" },
-    { key: "amountWithGst", label: "Amount With GST" },
-    { key: "destination", label: "Destination" },
-    { key: "poNumber", label: "PO Number" },
-  ];
+  const columnOptions = columnsConfig;
+  const pendingColumnOptions = columnsConfig;
+  const directEnquiryColumnOptions = columnsConfig;
 
   // Toggle functions for pending tab columns
   const handlePendingColumnToggle = (columnKey) => {
@@ -1590,19 +1478,18 @@ const handleSaveClick = async (index) => {
     const from = (page - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
 
-    let query = supabase
+    // 1. Query leads_to_order
+    let leadsQuery = supabase
       .from("leads_to_order")
       .select("*", { count: "exact" })
       .not("Enquiry_Received_Status", "is", null)
       .neq("Enquiry_Received_Status", "")
-      .or('Current_Stage.is.null,Current_Stage.eq.""')
-      .order("LD-Lead-No", { ascending: true })
-      .range(from, to);
+      .or('Current_Stage.is.null,Current_Stage.eq."",Current_Stage.eq.make-quotation,Current_Stage.eq.order-expected')
+      .order("LD-Lead-No", { ascending: true });
 
-    // Add date filtering for pending data
     if (dateFilters.today) {
       const today = new Date().toISOString().split("T")[0];
-      query = query
+      leadsQuery = leadsQuery
         .gte("Next Call Date_1", today)
         .lt(
           "Next Call Date_1",
@@ -1610,124 +1497,241 @@ const handleSaveClick = async (index) => {
         );
     } else if (dateFilters.overdue) {
       const today = new Date().toISOString().split("T")[0];
-      query = query.lt("Next Call Date_1", today);
+      leadsQuery = leadsQuery.lt("Next Call Date_1", today);
     } else if (dateFilters.upcoming) {
       const today = new Date().toISOString().split("T")[0];
-      query = query.gt("Next Call Date_1", today);
+      leadsQuery = leadsQuery.gt("Next Call Date_1", today);
     }
 
     if (searchTerm) {
-      query = query.or(
+      leadsQuery = leadsQuery.or(
         `LD-Lead-No.ilike.%${searchTerm}%,Lead_Receiver_Name.ilike.%${searchTerm}%,Company_Name.ilike.%${searchTerm}%,Phone_Number.ilike.%${searchTerm}%`
       );
     }
 
     if (!isAdmin() && currentUser && currentUser.username) {
       const usernamesToFilter = getUsernamesToFilter();
-      query = query.in("SC_Name", usernamesToFilter);
+      leadsQuery = leadsQuery.in("SC_Name", usernamesToFilter);
     }
 
-    // Apply SC name filter for admin
     if (isAdmin() && scNameFilter !== "all") {
-      query = query.eq("SC_Name", scNameFilter);
+      leadsQuery = leadsQuery.eq("SC_Name", scNameFilter);
     }
 
-    const { data, error, count } = await query;
+    // 2. Query enquiry_to_order (Direct Enquiries)
+    let enquiryQuery = supabase
+      .from("enquiry_to_order")
+      .select("*", { count: "exact" })
+      .or('current_stage.is.null,current_stage.eq."",current_stage.eq.make-quotation,current_stage.eq.order-expected')
+      .order("enquiry_no", { ascending: true });
 
-    if (error) {
-      console.error("Error fetching leads:", error.message);
-      setIsLoading(false);
-      return [];
+    if (dateFilters.today) {
+      const today = new Date().toISOString().split("T")[0];
+      enquiryQuery = enquiryQuery
+        .gte("next_call_date", today)
+        .lt(
+          "next_call_date",
+          new Date(Date.now() + 86400000).toISOString().split("T")[0]
+        );
+    } else if (dateFilters.overdue) {
+      const today = new Date().toISOString().split("T")[0];
+      enquiryQuery = enquiryQuery.lt("next_call_date", today);
+    } else if (dateFilters.upcoming) {
+      const today = new Date().toISOString().split("T")[0];
+      enquiryQuery = enquiryQuery.gt("next_call_date", today);
+    }
+
+    if (searchTerm) {
+      enquiryQuery = enquiryQuery.or(
+        `enquiry_no.ilike.%${searchTerm}%,enquiry_receiver_name.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%`
+      );
+    }
+
+    if (!isAdmin() && currentUser && currentUser.username) {
+      const usernamesToFilter = getUsernamesToFilter();
+      enquiryQuery = enquiryQuery.in("sales_coordinator_name", usernamesToFilter);
+    }
+
+    if (isAdmin() && scNameFilter !== "all") {
+      enquiryQuery = enquiryQuery.eq("sales_coordinator_name", scNameFilter);
+    }
+
+    // Fetch both datasets concurrently
+    const [leadsRes, enquiryRes] = await Promise.all([leadsQuery, enquiryQuery]);
+
+    if (leadsRes.error) {
+      console.error("Error fetching leads_to_order:", leadsRes.error.message);
+    }
+    if (enquiryRes.error) {
+      console.error("Error fetching enquiry_to_order:", enquiryRes.error.message);
+    }
+
+    const leadsData = leadsRes.data || [];
+    const enquiryData = enquiryRes.data || [];
+
+    const transformedLeads = leadsData.map((item) => ({
+      id: item.id,
+      dbId: item.id,
+      tableSource: "leads_to_order",
+      timestamp: formatDateToDDMMYYYY(item.Timestamp) || "",
+      leadNo: item["LD-Lead-No"] || "",
+      lead_no: item["LD-Lead-No"] || "",
+      leadReceiverName: item["Lead_Receiver_Name"] || "",
+      leadSource: item["Lead_Source"] || "",
+      phoneNo: item["Phone_Number"] || "",
+      salespersonName: item["Salesperson_Name"] || "",
+      companyName: item["Company_Name"] || "",
+      currentStage: item["Current_Stage"] || "",
+      callingDate: item["Calling_Days"] || "",
+      priority: determinePriority(item["Lead_Source"] || ""),
+      itemQty: aggregateItemsForSummary(item, "Item_Name", "Quantity", "Item/qty") || "",
+      assignedTo: item["SC_Name"] || "",
+      nextCallDate: item["Next_Call_Date"] || "",
+      nextCallDate1: item["Next Call Date_1"] || "",
+      nextCallTime: item["Next_Call_Time"] || "",
+      customerSay: item["What_Did_The_Customer say?"] || "",
+      enquiryStatus: item["Enquiry_Status"] || item["Enquiry_Received_Status"] || "",
+      enquiry_status: item["Enquiry_Status"] || item["Enquiry_Received_Status"] || "",
+      enquiryReceivedStatus: item["Enquiry_Received_Status"] || "",
+      enquiryReceivedDate: formatDateToDDMMYYYY(item["Enquiry_Received_Date"]) || "",
+      enquiryForState: item["Enquiry_for_State"] || "",
+      projectName: item["Project_Name"] || "",
+      enquiryType: item["Enquiry_Type"] || "",
+      enquiryApproach: item["Enquiry_Approach"] || "",
+      projectApproximateValue: item["Project_Approximate_Value"] || "",
+      itemName1: item["Item_Name1"] || "",
+      quantity1: item["Quantity1"] || "",
+      itemName2: item["Item_Name2"] || "",
+      quantity2: item["Quantity2"] || "",
+      itemName3: item["Item_Name3"] || "",
+      quantity3: item["Quantity3"] || "",
+      itemName4: item["Item_Name4"] || "",
+      quantity4: item["Quantity4"] || "",
+      itemName5: item["Item_Name5"] || "",
+      quantity5: item["Quantity5"] || "",
+      nextAction: item["Next_Action"] || "",
+      nextCallDateField: formatDateToDDMMYYYY(item["Next_Call_Date"]) || "",
+      Lead_Receiver_Name: item["Lead_Receiver_Name"] || "",
+      Lead_Source: item["Lead_Source"] || "",
+      Phone_Number: item["Phone_Number"] || "",
+      salesperson_Name: item["Salesperson_Name"] || "",
+      Company_Name: item["Company_Name"] || "",
+      Current_Stage: item["Current_Stage"] || "",
+      Calling_Days: item["Calling_Days"] || "",
+      sc_name: item["SC_Name"] || "",
+      What_Did_The_Customer_Say: item["What_Did_The_Customer say?"] || "",
+      Enquiry_Received_Status: item["Enquiry_Received_Status"] || "",
+      Enquiry_Received_Date: formatDateToDDMMYYYY(item["Enquiry_Received_Date"]) || "",
+      Enquiry_for_State: item["Enquiry_for_State"] || "",
+      Project_Name: item["Project_Name"] || "",
+      Enquiry_Type: item["Enquiry_Type"] || "",
+      Enquiry_Approach: item["Enquiry_Approach"] || "",
+      Item_Name1: item["Item_Name1"] || "",
+      Quantity1: item["Quantity1"] || "",
+      Item_Name2: item["Item_Name2"] || "",
+      Quantity2: item["Quantity2"] || "",
+      Item_Name3: item["Item_Name3"] || "",
+      Quantity3: item["Quantity3"] || "",
+      Item_Name4: item["Item_Name4"] || "",
+      Quantity4: item["Quantity4"] || "",
+      Item_Name5: item["Item_Name5"] || "",
+      Quantity5: item["Quantity5"] || "",
+      Next_Action: item["Next_Action"] || "",
+      Next_Call_Date_Field: formatDateToDDMMYYYY(item["Next_Call_Date"]) || "",
+      Next_Call_Time: formatTimeTo12Hour(item["Next_Call_Time"]) || "",
+    }));
+
+    const transformedEnquiries = enquiryData.map((item) => ({
+      id: item.id,
+      dbId: item.id,
+      tableSource: "enquiry_to_order",
+      timestamp: formatDateToDDMMYYYY(item.timestamp || item.created_at || item.enquiry_date) || "",
+      leadNo: item.enquiry_no || "",
+      lead_no: item.enquiry_no || "",
+      leadReceiverName: item.enquiry_receiver_name || "",
+      leadSource: item.lead_source || "",
+      phoneNo: item.phone_number || "",
+      salespersonName: item.sales_person_name || "",
+      companyName: item.company_name || "",
+      currentStage: item.current_stage || "",
+      callingDate: item.calling_days || "",
+      priority: determinePriority(item.lead_source || ""),
+      itemQty: aggregateItemsForSummary(item, "item_name", "quantity", "item_qty") || "",
+      assignedTo: item.sales_coordinator_name || "",
+      nextCallDate: item.next_call_date || "",
+      nextCallDate1: item.next_call_date || "",
+      nextCallTime: item.next_call_time || "",
+      customerSay: item.customer_feedback || "",
+      enquiryStatus: "Direct Enquiry",
+      enquiry_status: "Direct Enquiry",
+      enquiryReceivedStatus: "Direct Enquiry",
+      enquiryReceivedDate: formatDateToDDMMYYYY(item.enquiry_date) || "",
+      enquiryForState: item.enquiry_for_state || "",
+      projectName: item.project_name || "",
+      enquiryType: item.sales_type || "",
+      enquiryApproach: item.enquiry_approach || "",
+      projectApproximateValue: item.amount_with_gst || "",
+      itemName1: item.item_name1 || "",
+      quantity1: item.quantity1 || "",
+      itemName2: item.item_name2 || "",
+      quantity2: item.quantity2 || "",
+      itemName3: item.item_name3 || "",
+      quantity3: item.quantity3 || "",
+      itemName4: item.item_name4 || "",
+      quantity4: item.quantity4 || "",
+      itemName5: item.item_name5 || "",
+      quantity5: item.quantity5 || "",
+      nextAction: "",
+      nextCallDateField: formatDateToDDMMYYYY(item.next_call_date) || "",
+      Lead_Receiver_Name: item.enquiry_receiver_name || "",
+      Lead_Source: item.lead_source || "",
+      Phone_Number: item.phone_number || "",
+      salesperson_Name: item.sales_person_name || "",
+      Company_Name: item.company_name || "",
+      Current_Stage: item.current_stage || "",
+      Calling_Days: item.calling_days || "",
+      sc_name: item.sales_coordinator_name || "",
+      What_Did_The_Customer_Say: item.customer_feedback || "",
+      Enquiry_Received_Status: "Direct Enquiry",
+      Enquiry_Received_Date: formatDateToDDMMYYYY(item.enquiry_date) || "",
+      Enquiry_for_State: item.enquiry_for_state || "",
+      Project_Name: item.project_name || "",
+      Enquiry_Type: item.sales_type || "",
+      Enquiry_Approach: item.enquiry_approach || "",
+      Item_Name1: item.item_name1 || "",
+      Quantity1: item.quantity1 || "",
+      Item_Name2: item.item_name2 || "",
+      Quantity2: item.quantity2 || "",
+      Item_Name3: item.item_name3 || "",
+      Quantity3: item.quantity3 || "",
+      Item_Name4: item.item_name4 || "",
+      Quantity4: item.quantity4 || "",
+      Item_Name5: item.item_name5 || "",
+      Quantity5: item.quantity5 || "",
+      Next_Action: "",
+      Next_Call_Date_Field: formatDateToDDMMYYYY(item.next_call_date) || "",
+      Next_Call_Time: formatTimeTo12Hour(item.next_call_time) || "",
+    }));
+
+    const allCombined = [...transformedLeads, ...transformedEnquiries];
+    const totalCount = (leadsRes.count || 0) + (enquiryRes.count || 0);
+
+    const paginated = allCombined.slice(from, to + 1).map((item, index) => ({
+      ...item,
+      serialNo: from + index + 1
+    }));
+
+    if (isLoadMore) {
+      setPendingData((prev) => [...prev, ...paginated]);
     } else {
-      const transformedData = data.map((item, index) => ({
-        id: item.id,
-        dbId: item.id,
-        serialNo: from + index + 1,
-        timestamp: formatDateToDDMMYYYY(item.Timestamp) || "",
-        leadNo: item["LD-Lead-No"] || "",
-        lead_no: item["LD-Lead-No"] || "", // keep alias for Process link
-        leadReceiverName: item["Lead_Receiver_Name"] || "",
-        leadSource: item["Lead_Source"] || "",
-        phoneNo: item["Phone_Number"] || "",
-        salespersonName: item["Salesperson_Name"] || "",
-        companyName: item["Company_Name"] || "",
-        currentStage: item["Current_Stage"] || "",
-        callingDate: item["Calling_Days"] || "",
-        priority: determinePriority(item["Lead_Source"] || ""),
-        itemQty: aggregateItemsForSummary(item, "Item_Name", "Quantity", "Item/qty") || "",
-        assignedTo: item["SC_Name"] || "",
-        nextCallDate: item["Next_Call_Date"] || "",
-        nextCallDate1: item["Next Call Date_1"] || "",
-        nextCallTime: item["Next_Call_Time"] || "",
-        customerSay: item["What_Did_The_Customer say?"] || "",
-        enquiryReceivedStatus: item["Enquiry_Received_Status"] || "",
-        enquiryReceivedDate: formatDateToDDMMYYYY(item["Enquiry_Received_Date"]) || "",
-        enquiryForState: item["Enquiry_for_State"] || "",
-        projectName: item["Project_Name"] || "",
-        enquiryType: item["Enquiry_Type"] || "",
-        enquiryApproach: item["Enquiry_Approach"] || "",
-        projectApproximateValue: item["Project_Approximate_Value"] || "",
-        itemName1: item["Item_Name1"] || "",
-        quantity1: item["Quantity1"] || "",
-        itemName2: item["Item_Name2"] || "",
-        quantity2: item["Quantity2"] || "",
-        itemName3: item["Item_Name3"] || "",
-        quantity3: item["Quantity3"] || "",
-        itemName4: item["Item_Name4"] || "",
-        quantity4: item["Quantity4"] || "",
-        itemName5: item["Item_Name5"] || "",
-        quantity5: item["Quantity5"] || "",
-        nextAction: item["Next_Action"] || "",
-        nextCallDateField: formatDateToDDMMYYYY(item["Next_Call_Date"]) || "",
-        // Keep legacy uppercase aliases for save/edit
-        Lead_Receiver_Name: item["Lead_Receiver_Name"] || "",
-        Lead_Source: item["Lead_Source"] || "",
-        Phone_Number: item["Phone_Number"] || "",
-        salesperson_Name: item["Salesperson_Name"] || "",
-        Company_Name: item["Company_Name"] || "",
-        Current_Stage: item["Current_Stage"] || "",
-        Calling_Days: item["Calling_Days"] || "",
-        sc_name: item["SC_Name"] || "",
-        What_Did_The_Customer_Say: item["What_Did_The_Customer say?"] || "",
-        Enquiry_Received_Status: item["Enquiry_Received_Status"] || "",
-        Enquiry_Received_Date: formatDateToDDMMYYYY(item["Enquiry_Received_Date"]) || "",
-        Enquiry_for_State: item["Enquiry_for_State"] || "",
-        Project_Name: item["Project_Name"] || "",
-        Enquiry_Type: item["Enquiry_Type"] || "",
-        Enquiry_Approach: item["Enquiry_Approach"] || "",
-        Item_Name1: item["Item_Name1"] || "",
-        Quantity1: item["Quantity1"] || "",
-        Item_Name2: item["Item_Name2"] || "",
-        Quantity2: item["Quantity2"] || "",
-        Item_Name3: item["Item_Name3"] || "",
-        Quantity3: item["Quantity3"] || "",
-        Item_Name4: item["Item_Name4"] || "",
-        Quantity4: item["Quantity4"] || "",
-        Item_Name5: item["Item_Name5"] || "",
-        Quantity5: item["Quantity5"] || "",
-        Next_Action: item["Next_Action"] || "",
-        Next_Call_Date_Field: formatDateToDDMMYYYY(item["Next_Call_Date"]) || "",
-        Next_Call_Time: formatTimeTo12Hour(item["Next_Call_Time"]) || "",
-      }));
-
-
-      if (isLoadMore) {
-        setPendingData((prev) => {
-          return [...prev, ...transformedData];
-        });
-      } else {
-        setPendingData(transformedData);
-      }
-
-      // Check if there's more data - fixed logic
-      const hasMore =
-        transformedData.length === itemsPerPage &&
-        from + transformedData.length < (count || 0);
-      setHasMorePending(hasMore);
-
-      setIsLoading(false);
-      return transformedData;
+      setPendingData(paginated);
     }
+
+    const hasMore = from + paginated.length < totalCount;
+    setHasMorePending(hasMore);
+
+    setIsLoading(false);
+    return paginated;
   };
 
   // Replace your existing fetchHistoryData function with this:
@@ -1789,59 +1793,150 @@ const handleSaveClick = async (index) => {
       setIsLoading(false);
       return [];
     } else {
-      const transformedData = data.map((item, index) => ({
-        // id: from + index + 1,
-        id: item.id,
-        uuid: item.id,
-        serialNo: from + index + 1,
-        Timestamp: formatDateToDDMMYYYY(item.Timestamp) || "",
-        enquiryNo: item["Enquiry No."] || "",
-        enquiryStatus: item["Enquiry Status"] || "",
-        customerFeedback: item["What Did Customer Say"] || "",
-        currentStage: item["Current Stage"] || "",
-        sendQuotationNo: item["Send Quotation No."] || "",
-        quotationSharedBy: item["Quotation Shared By"] || "",
-        quotationNumber: item["Quotation Number"] || "",
-        valueWithoutTax: item["Quotation Value Without Tax"] || "",
-        valueWithTax: item["Quotation Value With Tax"] || "",
-        quotationUpload: item["Quotation Upload"] || "",
-        quotationRemarks: item["Quotation Remarks"] || "",
-        validatorName: item["Quotation Validator Name"] || "",
-        sendStatus: item["Quotation Send Status"] || "",
-        validationRemark: item["Quotation Validation Remark"] || "",
-        faqVideo: item["Send Faq Video"] || "",
-        productVideo: item["Send Product Video"] || "",
-        offerVideo: item["Send Offer Video"] || "",
-        productCatalog: item["Send Product Catalog"] || "",
-        productImage: item["Send Product Image"] || "",
-        nextCallDate: formatDateToDDMMYYYY(item["Next Call Date"]) || "",
-        nextCallTime: formatTimeTo12Hour(item["Next Call Time"]) || "",
-        orderStatus: item["Is Order Received? Status"] || "",
-        acceptanceVia: item["Acceptance Via"] || "",
-        paymentMode: item["Payment Mode"] || "",
-        paymentTerms: item["Payment Terms (In Days)"] || "",
-        transportMode: item["Transport Mode"] || "",
-        registrationFrom: item["CONVEYED FOR REGISTRATION FORM"] || "",
-        offer: item["Offer"] || "",
-        acceptanceFile: item["Acceptance File Upload"] || "",
-        orderRemark: item["Remark"] || "",
-        apologyVideo: item["Order Lost Apology Video"] || "",
-        reasonStatus: item["If No Then Get Relevant Reason Status"] || "",
-        reasonRemark: item["If No Then Get Relevant Reason Remark"] || "",
-        holdReason: item["Customer Order Hold Reason Category"] || "",
-        holdingDate: formatDateToDDMMYYYY(item["Holding Date"]) || "",
-        holdRemark: item["Hold Remark"] || "",
-        sales_coordinator: item["Sales Cordinator"] || "",
-        followup_status: item["Followup Status"] || "",
-        credit_days: item["Credit Days"] || "",
-        credit_limit: item["Credit Limit"] || "",
-        calling_days: item["Calling Days"] || "",
-        order_no: item["Order No."] || "",
-        sc_name: item["Sales Cordinator"] || "",
-        destination: item["Destination"] || "",
-        po_number: item["PO Number"] || "",
-        priority: determinePriority(item["Enquiry Status"] || ""),
-      }));
+      const historyRows = data || [];
+      const ldNos = historyRows
+        .map(i => i["Enquiry No."])
+        .filter(no => no && no.toUpperCase().startsWith("LD-"));
+      const enqNos = historyRows
+        .map(i => i["Enquiry No."])
+        .filter(no => no && !no.toUpperCase().startsWith("LD-"));
+
+      let leadsMap = {};
+      let enqMap = {};
+
+      if (ldNos.length > 0) {
+        const { data: ldData } = await supabase
+          .from("leads_to_order")
+          .select("*")
+          .in("LD-Lead-No", ldNos);
+        if (ldData) {
+          ldData.forEach(row => {
+            leadsMap[row["LD-Lead-No"]] = row;
+          });
+        }
+      }
+
+      if (enqNos.length > 0) {
+        const { data: enqData } = await supabase
+          .from("enquiry_to_order")
+          .select("*")
+          .in("enquiry_no", enqNos);
+        if (enqData) {
+          enqData.forEach(row => {
+            enqMap[row.enquiry_no] = row;
+          });
+        }
+      }
+
+      const transformedData = historyRows.map((item, index) => {
+        const enqNo = item["Enquiry No."] || "";
+        const mL = leadsMap[enqNo] || {};
+        const mE = enqMap[enqNo] || {};
+
+        const companyName = mL["Company_Name"] || mE["company_name"] || "";
+        const phoneNo = mL["Phone_Number"] || mE["phone_number"] || "";
+        const salespersonName = mL["Salesperson_Name"] || mL["SC_Name"] || mE["sales_person_name"] || mE["sales_coordinator_name"] || item["Sales Cordinator"] || "";
+        const leadSource = mL["Lead_Source"] || mE["lead_source"] || "";
+        const shippingAddress = mL["Address"] || mE["shipping_address"] || "";
+        const gstNumber = mL["GST_Number"] || mE["gst_number"] || "";
+        const enquiryReceiverName = mL["Lead_Receiver_Name"] || mE["enquiry_receiver_name"] || "";
+        const enquiryAssignToProject = mL["SC_Name"] || mE["enquiry_assign_to_project"] || item["Sales Cordinator"] || "";
+        const enquiryDate = formatDateToDDMMYYYY(mL["Enquiry_Received_Date"] || mE["enquiry_date"]) || "";
+        const enquiryState = mL["Enquiry_for_State"] || mE["enquiry_for_state"] || "";
+        const projectName = mL["Project_Name"] || mE["project_name"] || "";
+        const salesType = mL["Enquiry_Type"] || mE["sales_type"] || "";
+        const enquiryApproach = mL["Enquiry_Approach"] || mE["enquiry_approach"] || "";
+        const callingDate = mL["Calling_Days"] || mE["calling_days"] || "";
+        const totalQty = mL["Total Order Qty"] || mE["total_qty"] || "";
+        const itemQty = aggregateItemsForSummary(mL.id ? mL : mE, mL.id ? "Item_Name" : "item_name", mL.id ? "Quantity" : "quantity", mL.id ? "Item/qty" : "item_qty") || "";
+
+        return {
+          id: item.id,
+          uuid: item.id,
+          serialNo: from + index + 1,
+          Timestamp: formatDateToDDMMYYYY(item.Timestamp) || "",
+          enquiryNo: enqNo,
+          leadNo: enqNo,
+          lead_no: enqNo,
+          companyName: companyName,
+          Company_Name: companyName,
+          phoneNo: phoneNo,
+          Phone_Number: phoneNo,
+          salespersonName: salespersonName,
+          salesperson_Name: salespersonName,
+          leadSource: leadSource,
+          Lead_Source: leadSource,
+          shippingAddress: shippingAddress,
+          gstNumber: gstNumber,
+          enquiryReceiverName: enquiryReceiverName,
+          enquiryAssignToProject: enquiryAssignToProject,
+          enquiryDate: enquiryDate,
+          enquiryState: enquiryState,
+          projectName: projectName,
+          salesType: salesType,
+          enquiryApproach: enquiryApproach,
+          callingDate: callingDate,
+          totalQty: totalQty,
+          itemQty: itemQty,
+          itemName1: mL["Item_Name1"] || mE["item_name1"] || "",
+          quantity1: mL["Quantity1"] || mE["quantity1"] || "",
+          itemName2: mL["Item_Name2"] || mE["item_name2"] || "",
+          quantity2: mL["Quantity2"] || mE["quantity2"] || "",
+          itemName3: mL["Item_Name3"] || mE["item_name3"] || "",
+          quantity3: mL["Quantity3"] || mE["quantity3"] || "",
+          itemName4: mL["Item_Name4"] || mE["item_name4"] || "",
+          quantity4: mL["Quantity4"] || mE["quantity4"] || "",
+          itemName5: mL["Item_Name5"] || mE["item_name5"] || "",
+          quantity5: mL["Quantity5"] || mE["quantity5"] || "",
+          enquiryStatus: item["Enquiry Status"] || "Active",
+          customerFeedback: item["What Did Customer Say"] || "",
+          currentStage: item["Current Stage"] || "",
+          sendQuotationNo: item["Send Quotation No."] || "",
+          quotationSharedBy: item["Quotation Shared By"] || "",
+          quotationNumber: item["Quotation Number"] || "",
+          valueWithoutTax: item["Quotation Value Without Tax"] || "",
+          valueWithTax: item["Quotation Value With Tax"] || "",
+          quotationUpload: item["Quotation Upload"] || "",
+          quotationRemarks: item["Quotation Remarks"] || "",
+          validatorName: item["Quotation Validator Name"] || "",
+          sendStatus: item["Quotation Send Status"] || "",
+          validationRemark: item["Quotation Validation Remark"] || "",
+          faqVideo: item["Send Faq Video"] || "",
+          productVideo: item["Send Product Video"] || "",
+          offerVideo: item["Send Offer Video"] || "",
+          productCatalog: item["Send Product Catalog"] || "",
+          productImage: item["Send Product Image"] || "",
+          nextCallDate: formatDateToDDMMYYYY(item["Next Call Date"]) || "",
+          nextCallTime: formatTimeTo12Hour(item["Next Call Time"]) || "",
+          orderStatus: item["Is Order Received? Status"] || "",
+          acceptanceVia: item["Acceptance Via"] || "",
+          paymentMode: item["Payment Mode"] || "",
+          paymentTerms: item["Payment Terms (In Days)"] || "",
+          transportMode: item["Transport Mode"] || "",
+          registrationFrom: item["CONVEYED FOR REGISTRATION FORM"] || "",
+          conveyedForRegistration: item["CONVEYED FOR REGISTRATION FORM"] || "",
+          offer: item["Offer"] || "",
+          acceptanceFile: item["Acceptance File Upload"] || "",
+          orderRemark: item["Remark"] || "",
+          apologyVideo: item["Order Lost Apology Video"] || "",
+          reasonStatus: item["If No Then Get Relevant Reason Status"] || "",
+          reasonRemark: item["If No Then Get Relevant Reason Remark"] || "",
+          holdReason: item["Customer Order Hold Reason Category"] || "",
+          holdingDate: formatDateToDDMMYYYY(item["Holding Date"]) || "",
+          holdRemark: item["Hold Remark"] || "",
+          sales_coordinator: item["Sales Cordinator"] || "",
+          followup_status: item["Followup Status"] || "",
+          credit_days: item["Credit Days"] || "",
+          credit_limit: item["Credit Limit"] || "",
+          calling_days: item["Calling Days"] || "",
+          order_no: item["Order No."] || "",
+          sc_name: item["Sales Cordinator"] || "",
+          destination: item["Destination"] || "",
+          po_number: item["PO Number"] || "",
+          poNumber: item["PO Number"] || "",
+          priority: determinePriority(item["Enquiry Status"] || ""),
+        };
+      });
 
       if (isLoadMore) {
         setHistoryData((prev) => {
@@ -3217,40 +3312,93 @@ const handleSaveClick = async (index) => {
   };
 
   // ─── Row render helpers ───────────────────────────────────────────────────
-  const renderPendingCell = (tracker, key, index) => {
-    switch (key) {
-      case "actions":
-        return (
-          <td key="actions" className="px-3 py-3 whitespace-nowrap text-sm font-medium sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200">
-            <div className="flex gap-2">
-              <Link to={`/enquiry-tracker/new?leadId=${tracker.leadNo || tracker.lead_no}`}>
-                <button className="px-2 py-1 text-xs border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md">
-                  Process <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
-                </button>
-              </Link>
-              {editingRowId === index ? (
-                <div className="flex gap-1">
-                  <button onClick={() => handleSaveClick(index)} className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Save</button>
-                  <button onClick={() => setEditingRowId(null)} className="px-2 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500">Cancel</button>
-                </div>
-              ) : (
-                <button onClick={() => handleEditClick(tracker, index)} className="px-2 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-md">Edit</button>
-              )}
-            </div>
-          </td>
+  const renderRowCells = (tracker, visibleState) => {
+    return columnsConfig.map(opt => {
+      if (!visibleState[opt.key]) return null;
+      if (opt.key === "salespersonName" && !isAdmin()) return null;
+
+      const val = tracker[opt.key] ??
+        tracker[opt.key.replace(/([A-Z])/g, '_$1').toLowerCase()] ??
+        (opt.key.startsWith("itemQty") && opt.key.length === 8 ? (tracker[`quantity${opt.key.slice(-1)}`] || tracker[`Quantity${opt.key.slice(-1)}`]) : null) ??
+        (opt.key === "leadId" ? (tracker.leadNo || tracker.lead_no || tracker.enquiryNo || tracker.enquiry_no || tracker.leadId) : null) ??
+        (opt.key === "phoneNumber" ? (tracker.phoneNo || tracker.Phone_Number || tracker.phoneNumber) : null) ??
+        (opt.key === "companyName" ? (tracker.Company_Name || tracker.company_name || tracker.companyName) : null) ??
+        (opt.key === "salespersonName" ? (tracker.salesperson_Name || tracker.sales_co_ordinator_name || tracker.salespersonName || tracker.sales_coordinator || tracker.sc_name) : null) ??
+        (opt.key === "customerFeedback" ? (tracker.customerSay || tracker.What_Did_The_Customer_say || tracker.customerFeedback) : null) ??
+        (opt.key === "nextCallDate" ? (tracker.nextCallDate1 || tracker.Calling_Days || tracker.nextCallDate) : null) ??
+        (opt.key === "nextCallTime" ? (tracker.nextCallTime1 || tracker.nextCallTime) : null) ??
+        (opt.key === "leadSource" ? (tracker.Lead_Source || tracker.lead_source || tracker.leadSource) : null) ??
+        "—";
+
+      let cellContent = val !== undefined && val !== null ? String(val) : "—";
+
+      if (opt.key === "companyName") {
+        cellContent = (
+          <div className="flex items-center">
+            <BuildingIcon className="h-4 w-4 mr-2 text-slate-400 shrink-0" />
+            <span className="truncate">{val || "—"}</span>
+          </div>
         );
-      default: {
-        const opt = pendingColumnOptions.find(o => o.key === key);
-        if (!opt || !visiblePendingColumns[key]) return null;
-        const val = tracker[key] ?? tracker[key.replace(/([A-Z])/g, '_$1').toLowerCase()] ?? "—";
-        return <td key={key} className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{val || "—"}</td>;
+      } else if (opt.key === "leadSource" || opt.key === "enquiryStatus") {
+        cellContent = val && val !== "—" ? (
+          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-800">
+            {val}
+          </span>
+        ) : "—";
+      } else if (opt.key === "shippingAddress") {
+        cellContent = (
+          <div className="max-w-[200px] truncate" title={val}>
+            {val || "—"}
+          </div>
+        );
+      } else if (opt.key === "itemQty") {
+        cellContent = (
+          <div className="min-w-[300px] break-words whitespace-normal" title={formatItemQty(val)}>
+            {formatItemQty(val) || "—"}
+          </div>
+        );
+      } else if (opt.key === "quotationUpload" || opt.key === "acceptanceFile" || opt.key === "apologyVideo") {
+        cellContent = val && val !== "—" ? (
+          <a href={val} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">
+            {opt.key === "apologyVideo" ? "View Video" : "View File"}
+          </a>
+        ) : "—";
+      } else if (opt.key === "customerFeedback" || opt.key === "quotationRemarks" || opt.key === "validationRemark" || opt.key === "reasonRemark" || opt.key === "holdRemark") {
+        cellContent = (
+          <div className="max-w-[200px] truncate" title={val}>
+            {val || "—"}
+          </div>
+        );
       }
-    }
+
+      return (
+        <td key={opt.key} className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">
+          {cellContent}
+        </td>
+      );
+    });
   };
 
   const renderPendingRow = (tracker, index) => (
     <tr key={tracker.id || index} className="hover:bg-slate-50 transition-colors group">
-      {pendingColumnOptions.filter(o => visiblePendingColumns[o.key]).map(o => renderPendingCell(tracker, o.key, index))}
+      <td className="px-3 py-3 whitespace-nowrap text-sm font-medium sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200">
+        <div className="flex gap-2">
+          <Link to={`/enquiry-tracker/new?leadId=${tracker.leadNo || tracker.lead_no || tracker.leadId || tracker.enquiryNo || tracker.enquiry_no}`}>
+            <button className="px-2 py-1 text-xs border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md">
+              Process <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
+            </button>
+          </Link>
+          {editingRowId === index ? (
+            <div className="flex gap-1">
+              <button onClick={() => handleSaveClick(index)} className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700">Save</button>
+              <button onClick={() => setEditingRowId(null)} className="px-2 py-1 text-xs bg-gray-400 text-white rounded hover:bg-gray-500">Cancel</button>
+            </div>
+          ) : (
+            <button onClick={() => handleEditClick(tracker, index)} className="px-2 py-1 text-xs border border-gray-300 text-gray-600 hover:bg-gray-50 rounded-md">Edit</button>
+          )}
+        </div>
+      </td>
+      {renderRowCells(tracker, visiblePendingColumns)}
     </tr>
   );
 
@@ -3261,10 +3409,7 @@ const handleSaveClick = async (index) => {
           View
         </button>
       </td>
-      {columnOptions.filter(o => visibleColumns[o.key]).map(o => {
-        const val = tracker[o.key];
-        return <td key={o.key} className="px-3 py-3 text-sm text-gray-500 whitespace-nowrap">{val ?? "—"}</td>;
-      })}
+      {renderRowCells(tracker, visibleColumns)}
     </tr>
   );
 
@@ -3319,13 +3464,29 @@ const handleSaveClick = async (index) => {
   // ─── Headers ─────────────────────────────────────────────────────────────
   const getHeaders = () => {
     if (activeTab === "pending") {
-      return pendingColumnOptions
-        .filter(o => visiblePendingColumns[o.key])
-        .map(o => o.key === "actions"
-          ? { label: "Actions", className: "sticky left-0 bg-gray-50 z-30 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200" }
-          : o.label);
+      const baseHeaders = [
+        { label: "Actions", className: "sticky left-0 bg-gray-50 z-30 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200" }
+      ];
+      columnsConfig.forEach(opt => {
+        if (visiblePendingColumns[opt.key]) {
+          if (opt.key === "salespersonName") {
+            if (isAdmin()) baseHeaders.push(opt.label);
+          } else {
+            baseHeaders.push(opt.label);
+          }
+        }
+      });
+      return baseHeaders;
     }
-    return ["Actions", ...columnOptions.filter(o => visibleColumns[o.key]).map(o => o.label)];
+
+    const historyHeaders = [
+      "Actions",
+      ...columnsConfig
+        .filter(opt => visibleColumns[opt.key])
+        .filter(opt => opt.key !== "salespersonName" || isAdmin())
+        .map(opt => opt.label)
+    ];
+    return historyHeaders;
   };
 
   return (
