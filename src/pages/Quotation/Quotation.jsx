@@ -135,7 +135,6 @@ function Quotation() {
           setIsFetchingMore(true);
       }
 
-      console.log(`Fetching quotations: search="${search}", offset=${currentOffset}`);
 
       let query = supabase
         .from("Make_Quotation")

@@ -1640,12 +1640,9 @@ export const generatePDFFromData = async (
   }
 
   try {
-    console.log("Starting PDF generation...");
 
     // Preload all images before generating PDF
-    console.log("Preloading images...");
     await preloadImages([logo, maniquipLogo1, qr]);
-    console.log("Images preloaded successfully");
 
     const html2pdf = await loadHtml2Pdf();
 
@@ -1695,12 +1692,10 @@ export const generatePDFFromData = async (
       },
     };
 
-    console.log("Generating PDF with html2pdf...");
     const pdfDataUri = await html2pdf()
       .set(options)
       .from(htmlString)
       .outputPdf("datauristring");
-    console.log("PDF generated successfully");
     return pdfDataUri;
   } catch (error) {
     console.error("Error generating PDF:", error);

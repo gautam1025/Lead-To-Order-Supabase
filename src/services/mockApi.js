@@ -1,4 +1,13 @@
-import { users, dropdowns, companies, fmsData as initialFmsData, quotations as initialQuotations, enquiryTracker as initialEnquiryTracker, enquiryToOrder as initialEnquiryToOrder, products, followUpHistory as initialFollowUpHistory } from '../data/dummyData';
+// dummyData was deleted; providing empty fallback arrays to satisfy Vite build
+const users = [];
+const dropdowns = { statuses: [], sources: [] };
+const companies = [];
+const initialFmsData = [];
+const initialQuotations = [];
+const initialEnquiryTracker = [];
+const initialEnquiryToOrder = [];
+const products = [];
+const initialFollowUpHistory = [];
 
 const simulateDelay = () => new Promise(resolve => setTimeout(resolve, 500));
 
@@ -339,7 +348,6 @@ export const mockApi = {
 
     submitLead: async (leadData) => {
         await simulateDelay();
-        console.log("Submitting lead to localStorage:", leadData);
         const db = getDB();
         const newLeadNumber = await mockApi.generateLeadNumber();
         const newLead = {
@@ -566,7 +574,6 @@ export const mockApi = {
 
     submitFollowUp: async (data) => {
         await simulateDelay();
-        console.log("Mock submit follow up:", data);
         const db = getDB();
 
         // Find the lead
@@ -840,7 +847,6 @@ export const mockApi = {
 
     submitCallTracker: async (data) => {
         await simulateDelay();
-        console.log("Mock submit call tracker (Enquiry):", data);
         const db = getDB();
 
         const rowData = data.rowData || [];
@@ -953,7 +959,6 @@ export const mockApi = {
 
     saveQuotation: async (data, action = "save") => {
         await simulateDelay();
-        console.log(`Mock ${action} quotation:`, data);
         const db = getDB();
         const quotationNumber = data.quotationNumber || `NBD-2526-${Date.now().toString().slice(-4)}`;
 
@@ -1095,7 +1100,6 @@ export const mockApi = {
 
     submitEnquiry: async (data, action = "insert") => {
         await simulateDelay();
-        console.log(`Mock ${action} direct enquiry:`, data);
         const db = getDB();
 
         const enquiryNo = data.trackerData?.enquiryNo || `DIR-${Date.now().toString().slice(-4)}`;

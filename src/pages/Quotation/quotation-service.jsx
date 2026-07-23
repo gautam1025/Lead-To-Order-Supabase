@@ -90,7 +90,6 @@ export const getNextQuotationNumber = async (prefix = "NBD") => {
     let maxNumber = 0; // Default to 0 if no records found
 
     if (data && data.length > 0) {
-      console.log(`Found ${data.length} quotations with prefix: "${yearPrefix}"`);
 
       data.forEach((item) => {
         const quotationNo = item.Quotation_No;
@@ -107,12 +106,10 @@ export const getNextQuotationNumber = async (prefix = "NBD") => {
           }
         }
       });
-      console.log(`Highest numeric serial found for "${yearPrefix}": ${maxNumber}`);
     }
 
     const nextNumber = (maxNumber + 1).toString().padStart(3, "0");
     const result = `${yearPrefix}-${nextNumber}`;
-    console.log(`Generated next Quotation No: ${result}`);
     return result;
 
   } catch (error) {
@@ -157,7 +154,6 @@ export const getCompanyPrefix = async (companyName) => {
       return "NBD";
     }
 
-    console.log("No company found, using default NBD prefix");
     return "NBD"; // Default fallback
   } catch (error) {
     console.error("Error getting company prefix:", error);

@@ -324,7 +324,6 @@ const handleSubmit = async (e) => {
       const totalQuantity = calculateTotalQuantity()
       insertData["Total_Qty"] = totalQuantity.toString()
     }
-    console.log("Data to be inserted:", insertData)
 
     // Insert data into Supabase leads_tracker table
     const { data, error } = await supabase
@@ -336,7 +335,6 @@ const handleSubmit = async (e) => {
       throw error
     }
 
-    console.log("Successfully inserted into leads_tracker:", data)
 
     // First, clear all the specified columns in leads_to_order table
     const clearData = {
@@ -372,7 +370,6 @@ const handleSubmit = async (e) => {
     if (clearError) {
       console.error("Error clearing leads_to_order columns:", clearError)
     } else {
-      console.log("Successfully cleared specified columns in leads_to_order")
     }
 
     // Prepare update data for leads_to_order table
@@ -444,7 +441,6 @@ const handleSubmit = async (e) => {
       console.error("Error updating leads_to_order:", updateError)
       showNotification("Follow-up recorded successfully, but there was an issue updating the order table", "warning")
     } else {
-      console.log("Successfully updated leads_to_order:", updateResult)
       showNotification("Follow-up recorded successfully", "success")
     }
 

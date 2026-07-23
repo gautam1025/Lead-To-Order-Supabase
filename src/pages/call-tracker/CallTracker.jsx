@@ -35,7 +35,18 @@ function CallTracker() {
   const isMobile = useIsMobile();
   const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("pending");
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem("callTrackerActiveTab") || "pending";
+  });
+  const setActiveTab = (tabOrFn) => {
+    setActiveTabState((prev) => {
+      const nextTab = typeof tabOrFn === "function" ? tabOrFn(prev) : tabOrFn;
+      if (typeof nextTab === "string") {
+        localStorage.setItem("callTrackerActiveTab", nextTab);
+      }
+      return nextTab;
+    });
+  };
   const [pendingFollowUps, setPendingFollowUps] = useState([]);
   const [historyFollowUps, setHistoryFollowUps] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -813,9 +824,6 @@ function CallTracker() {
   const fetchFollowUpData = useCallback(
     async (page = 1, isLoadMore = false, searchTerm = "") => {
       try {
-        console.log(
-          `Fetching data - Page: ${page}, LoadMore: ${isLoadMore}, ActiveTab: ${activeTab}`
-        );
 
         if (isLoadMore) {
           setIsLoadingMore(true);
@@ -869,10 +877,6 @@ function CallTracker() {
           const { data, error, count } = await pendingQuery;
 
           if (error) throw error;
-
-          console.log(
-            `Fetched ${data?.length || 0} pending records for page ${page}`
-          );
 
           const filteredPending = (data || []).map((row) => ({
             timestamp: row.Next_Call_Date
@@ -980,9 +984,6 @@ function CallTracker() {
           const hasMore = currentDataLength < totalCount;
           setHasMorePending(hasMore);
 
-          console.log(
-            `HasMorePending: ${hasMore}, Current: ${currentDataLength}, Total: ${totalCount}`
-          );
         } else {
           // History tab data fetching
           let historyQuery = supabase
@@ -1285,9 +1286,6 @@ function CallTracker() {
           const hasMore = currentDataLength < totalCount;
           setHasMoreHistory(hasMore);
 
-          console.log(
-            `HasMoreHistory: ${hasMore}, Current: ${currentDataLength}, Total: ${totalCount}`
-          );
         }
       } catch (error) {
         console.error("Error fetching follow-up data:", error);
@@ -1320,11 +1318,9 @@ function CallTracker() {
     if (isLoadingMore) return;
 
     if (activeTab === "pending" && hasMorePending) {
-      console.log(`Loading more pending data, page: ${pendingPage + 1}`);
       fetchFollowUpData(pendingPage + 1, true, searchTerm);
       setPendingPage((prev) => prev + 1);
     } else if (activeTab === "history" && hasMoreHistory) {
-      console.log(`Loading more history data, page: ${historyPage + 1}`);
       fetchFollowUpData(historyPage + 1, true, searchTerm);
       setHistoryPage((prev) => prev + 1);
     }
@@ -1392,7 +1388,7 @@ function CallTracker() {
   }, []);
 
   useEffect(() => {
-    console.log(`Tab or filter changed: ${activeTab}, ${dateFilter}, ${companyFilter}, ${scNameFilter}, ${filterType}`);
+
     setPendingPage(1);
     setHistoryPage(1);
     setHasMorePending(true);
@@ -1426,7 +1422,7 @@ function CallTracker() {
 
   // Reset pagination when changing tabs
   useEffect(() => {
-    console.log(`Tab changed to: ${activeTab}`);
+
     setPendingPage(1);
     setHistoryPage(1);
     setHasMorePending(true);
@@ -1441,7 +1437,7 @@ function CallTracker() {
     }
 
     const timeout = setTimeout(() => {
-      console.log(`Search term changed: ${searchTerm}`);
+
       setPendingPage(1);
       setHistoryPage(1);
       setHasMorePending(true);

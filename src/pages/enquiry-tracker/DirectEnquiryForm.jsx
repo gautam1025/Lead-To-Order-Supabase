@@ -148,7 +148,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       ].filter(error => error !== null);
 
       if (errors.length > 0) {
-        console.log("Errors fetching dropdown data:", errors);
         throw new Error("Failed to fetch some dropdown data");
       }
 
@@ -172,7 +171,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       setReceiverOptions([...new Set(receivers)]);
       setAssignToProjectOptions([...new Set(assignToProjects)]);
 
-      console.log("Dropdown data fetched successfully");
 
     } catch (error) {
       console.error("Error fetching dropdown values:", error);
@@ -327,7 +325,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       // ✅ STEP 1: Fetch the ACTUAL latest enquiry number right before submitting
       // This minimizes the chance of duplicates compared to fetching on form load
       const latestEnquiryNo = await fetchLastEnquiryNumber();
-      console.log("Using latest generated enquiry number:", latestEnquiryNo);
 
       // Prepare the first 10 items in individual columns
       const itemColumns = {};
@@ -371,7 +368,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         total_qty: calculateTotalQuantity(),
       };
 
-      console.log("Data to be submitted to Supabase:", rowData);
 
       // Insert data into Supabase directly
       const { data, error } = await supabase
@@ -382,7 +378,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         console.error("Error inserting data:", error.message);
         alert("Error saving data: " + error.message);
       } else {
-        console.log("Inserted successfully:", data);
         
         // Insert initial blank tracking log for Direct Enquiry
         const trackingData = {

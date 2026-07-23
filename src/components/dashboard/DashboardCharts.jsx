@@ -275,13 +275,6 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
 
         setLeadData(simplifiedMonthlyData)
 
-        console.log('Chart data calculated for user:', currentUser?.username, {
-          totalLeads,
-          totalEnquiries,
-          totalQuotations,
-          totalOrders
-        })
-
       } catch (error) {
         console.error("Error fetching chart data:", error)
         setError(error.message)

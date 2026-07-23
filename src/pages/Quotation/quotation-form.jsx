@@ -400,7 +400,6 @@ const QuotationForm = ({
     setIsItemsLoading(true);
 
     const leadData = leadNoData[selectedLeadNo];
-    console.log("Selected lead data:", leadData);
 
     // Fill consignee details
     const companyName = leadData.companyName;
@@ -573,7 +572,6 @@ const QuotationForm = ({
 
     // Update items if found from lead data
     if (autoItems.length > 0) {
-      console.log(`Creating ${autoItems.length} items from lead data...`);
 
       const newItems = autoItems.map((item, index) => {
         // Auto-fill product code from productData
@@ -618,7 +616,6 @@ const QuotationForm = ({
       });
 
       handleInputChange("items", newItems);
-      console.log("Items auto-filled from lead selection:", newItems);
     }
 
     setIsItemsLoading(false);
@@ -631,7 +628,6 @@ const QuotationForm = ({
     setIsItemsLoading(true);
 
     try {
-      console.log("Auto-filling items for company:", companyName);
 
       let itemsFound = false;
       const autoItems = [];
@@ -806,7 +802,6 @@ const QuotationForm = ({
           quotationData.items[0].qty === 1;
 
         if (hasOnlyDefaultItems || quotationData.items.length === 0) {
-          console.log("Auto-filling combined items:", autoItems);
 
           // Clear existing items and add new ones
           const newItems = autoItems.map((item, index) => {
@@ -834,12 +829,9 @@ const QuotationForm = ({
 
           // Update quotation data with new items
           handleInputChange("items", newItems);
-          console.log("Items auto-filled successfully:", newItems);
         } else {
-          console.log("Items already exist in quotation, skipping auto-fill to prevent data loss");
         }
       } else {
-        console.log("No matching items found for auto-fill");
       }
     } catch (error) {
       console.error("Error auto-filling items:", error);

@@ -26,12 +26,21 @@ export const AuthContext = createContext(null)
 export const DataContext = createContext(null)
 
 function App() {
-  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState(() => {
+    return localStorage.getItem("isAuthenticated") === "true"
+  })
   const [notification, setNotification] = useState(null)
-  const [currentUser, setCurrentUser] = useState(null)
-  const [userType, setUserType] = useState(null)
+  const [currentUser, setCurrentUser] = useState(() => {
+    const storedUser = localStorage.getItem("currentUser")
+    return storedUser ? JSON.parse(storedUser) : null
+  })
+  const [userType, setUserType] = useState(() => {
+    return localStorage.getItem("userType") || null
+  })
   const [userData, setUserData] = useState(null)
-  const [alternateAccess, setAlternateAccess] = useState(null)
+  const [alternateAccess, setAlternateAccess] = useState(() => {
+    return localStorage.getItem("alternateAccess") || null
+  })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   // Check if user is already logged in and fetch latest alternate_access from database

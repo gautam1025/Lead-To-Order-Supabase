@@ -239,15 +239,6 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
           pendingEnquiry: pendingEnquiry.toString()
         })
 
-        console.log('Metrics calculated for user:', currentUser?.username, {
-          totalLeads,
-          pendingFollowups,
-          quotationsSent,
-          ordersReceived,
-          totalEnquiry,
-          pendingEnquiry
-        })
-
       } catch (error) {
         console.error("Error fetching metrics:", error)
         setError(error.message)

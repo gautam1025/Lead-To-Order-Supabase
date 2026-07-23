@@ -170,7 +170,18 @@ function EnquiryTracker() {
   const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext);
   const [searchTerm, setSearchTerm] = useState("");
   const [tenDaysSearchTerm, setTenDaysSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState("pending");
+  const [activeTab, setActiveTabState] = useState(() => {
+    return localStorage.getItem("enquiryTrackerActiveTab") || "pending";
+  });
+  const setActiveTab = (tabOrFn) => {
+    setActiveTabState((prev) => {
+      const nextTab = typeof tabOrFn === "function" ? tabOrFn(prev) : tabOrFn;
+      if (typeof nextTab === "string") {
+        localStorage.setItem("enquiryTrackerActiveTab", nextTab);
+      }
+      return nextTab;
+    });
+  };
   const [pendingCallTrackers, setPendingCallTrackers] = useState([]);
   const [historyCallTrackers, setHistoryCallTrackers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -693,6 +704,10 @@ const handleSaveClick = async (index) => {
         "Next Call Time_1": convertTimeTo24Hour(editedData.nextCallTime),
       };
 
+      if (editedData.orderStatus?.toLowerCase() === "yes" || editedData.orderStatus?.toLowerCase() === "no") {
+        leadsToOrderUpdateData.Actual1 = new Date().toISOString();
+      }
+
       // Remove undefined/null values
       Object.keys(leadsToOrderUpdateData).forEach((key) => {
         if (leadsToOrderUpdateData[key] === undefined || leadsToOrderUpdateData[key] === null) {
@@ -760,6 +775,10 @@ const handleSaveClick = async (index) => {
         destination: editedData.destination || "",
         po_number: editedData.po_number || "",
       };
+
+      if (editedData.orderStatus?.toLowerCase() === "yes" || editedData.orderStatus?.toLowerCase() === "no") {
+        enquiryToOrderUpdateData.actual1 = new Date().toISOString();
+      }
 
       // Remove undefined/null values
       Object.keys(enquiryToOrderUpdateData).forEach((key) => {
@@ -1482,9 +1501,8 @@ const handleSaveClick = async (index) => {
     let leadsQuery = supabase
       .from("leads_to_order")
       .select("*", { count: "exact" })
-      .not("Enquiry_Received_Status", "is", null)
-      .neq("Enquiry_Received_Status", "")
-      .or('Current_Stage.is.null,Current_Stage.eq."",Current_Stage.eq.make-quotation,Current_Stage.eq.order-expected')
+      .not("Planned1", "is", null)
+      .is("Actual1", null)
       .order("LD-Lead-No", { ascending: true });
 
     if (dateFilters.today) {
@@ -1522,7 +1540,8 @@ const handleSaveClick = async (index) => {
     let enquiryQuery = supabase
       .from("enquiry_to_order")
       .select("*", { count: "exact" })
-      .or('current_stage.is.null,current_stage.eq."",current_stage.eq.make-quotation,current_stage.eq.order-expected')
+      .not("planned1", "is", null)
+      .is("actual1", null)
       .order("enquiry_no", { ascending: true });
 
     if (dateFilters.today) {
@@ -2790,6 +2809,7 @@ const handleSaveClick = async (index) => {
 
       // Leads to Order
       const { count: pendingToday } = await withRoleFilter("leads_to_order")
+        .not("Planned1", "is", null)
         .eq("Next Call Date_1", today)
         .is("Actual1", null);
 
@@ -3242,11 +3262,30 @@ const handleSaveClick = async (index) => {
     }
   };
 
-  // ─── Merge directEnquiry into pending (Option B) ─────────────────────────
-  const mergedPending = [
-    ...(pendingData || []).map(item => ({ ...item, enquiryType: 'Lead' })),
-    ...(directEnquiryData || []).map(item => ({ ...item, enquiryType: 'Direct Enquiry' })),
+  // ─── Merge directEnquiry into pending and Deduplicate ─────────────────────────
+  const allPendingRaw = [
+    ...(pendingData || []),
+    ...(directEnquiryData || [])
   ];
+  
+  const pendingMap = new Map();
+  allPendingRaw.forEach(item => {
+    const id = item.lead_no || item.leadNo || item.enquiry_no || item.dbId || item.id;
+    if (id && !pendingMap.has(id)) {
+      pendingMap.set(id, {
+        ...item,
+        enquiryType: item.tableSource === 'leads_to_order' ? 'Lead' : 'Direct Enquiry'
+      });
+    } else if (!id) {
+      // Fallback for items without a clear ID
+      pendingMap.set(Math.random(), {
+        ...item,
+        enquiryType: item.tableSource === 'leads_to_order' ? 'Lead' : 'Direct Enquiry'
+      });
+    }
+  });
+  
+  const mergedPending = Array.from(pendingMap.values());
 
   // ─── Filtered data (client-side search + filter) ──────────────────────────
   const applyFilters = (list, tab) => list.filter(tracker => {
@@ -3383,7 +3422,10 @@ const handleSaveClick = async (index) => {
     <tr key={tracker.id || index} className="hover:bg-slate-50 transition-colors group">
       <td className="px-3 py-3 whitespace-nowrap text-sm font-medium sticky left-0 bg-white group-hover:bg-slate-50 z-10 shadow-[1px_0_0_0_#e5e7eb] border-r border-gray-200">
         <div className="flex gap-2">
-          <Link to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no || tracker.leadId || tracker.enquiryNo || tracker.enquiry_no}`}>
+          <Link
+            to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no || tracker.leadId || tracker.enquiryNo || tracker.enquiry_no}`}
+            state={{ activeTab: "pending", sc_name: tracker.sc_name }}
+          >
             <button className="px-2 py-1 text-xs border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md">
               Process <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
             </button>
@@ -3431,7 +3473,11 @@ const handleSaveClick = async (index) => {
         <div><span className="block text-xs text-gray-400">Stage</span><p className="text-sky-600 font-medium">{tracker.currentStage || "Pending"}</p></div>
       </div>
       <div className="pt-2 border-t border-gray-100 flex justify-end">
-        <Link to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no}`} className="w-full">
+        <Link
+          to={`/enquiry-tracker/form?leadId=${tracker.leadNo || tracker.lead_no}`}
+          state={{ activeTab: "pending", sc_name: tracker.sc_name }}
+          className="w-full"
+        >
           <button className="flex items-center justify-center w-full px-3 py-2 text-sm border border-sky-200 text-sky-600 hover:bg-sky-50 rounded-md font-medium">
             Process <ArrowRightIcon className="ml-1 h-3 w-3" />
           </button>
@@ -3543,7 +3589,16 @@ const handleSaveClick = async (index) => {
 
       {/* New Enquiry Form Modal */}
       {showNewCallTrackerForm && (
-        <DirectEnquiryForm onClose={() => setShowNewCallTrackerForm(false)} />
+        <DirectEnquiryForm
+          onClose={(shouldRefresh) => {
+            setShowNewCallTrackerForm(false);
+            if (shouldRefresh) {
+              const dateFilters = getDateFiltersFromCallingDays();
+              fetchPendingData(1, searchTerm, false, dateFilters);
+              fetchDirectEnquiryData(1, searchTerm, false, dateFilters);
+            }
+          }}
+        />
       )}
 
       {/* View Popup Modal */}
@@ -3574,7 +3629,10 @@ const handleSaveClick = async (index) => {
             <div className="border-t p-4 flex justify-end gap-3">
               <button onClick={() => setShowPopup(false)} className="px-4 py-2 border border-gray-300 rounded-md text-gray-700 hover:bg-gray-50">Close</button>
               {activeTab === "pending" && (
-                <Link to={`/enquiry-tracker/form?leadId=${selectedTracker?.leadNo || selectedTracker?.lead_no}`}>
+                <Link
+                  to={`/enquiry-tracker/form?leadId=${selectedTracker?.leadNo || selectedTracker?.lead_no}`}
+                  state={{ activeTab: "pending", sc_name: selectedTracker?.sc_name }}
+                >
                   <button className="px-4 py-2 bg-gradient-to-r from-sky-600 to-blue-600 text-white font-medium rounded-md">
                     Process <ArrowRightIcon className="ml-1 h-4 w-4 inline" />
                   </button>
