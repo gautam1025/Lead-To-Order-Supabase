@@ -449,8 +449,18 @@ function Leads() {
   const [scNames, setScNames] = useState([]);
   const [searchScName, setSearchScName] = useState("");
   const [showScNameDropdown, setShowScNameDropdown] = useState(false);
+  const scDropdownRef = useRef(null);
+
+  const [activeScRules, setActiveScRules] = useState([]);
+  const [activeScCategory, setActiveScCategory] = useState(null);
+
+  const [groupNames, setGroupNames] = useState([]);
+  const [searchGroupName, setSearchGroupName] = useState(initialGroupName);
+  const [showGroupNameDropdown, setShowGroupNameDropdown] = useState(false);
+
   const [companyOptions, setCompanyOptions] = useState([]);
   const [companyDetailsMap, setCompanyDetailsMap] = useState({});
+
   const [nextLeadNumber, setNextLeadNumber] = useState("");
   const [creditDaysOptions, setCreditDaysOptions] = useState([]);
   const [creditLimitOptions, setCreditLimitOptions] = useState([]);
@@ -460,34 +470,111 @@ function Leads() {
   const [stateOptions, setStateOptions] = useState([]);
   const [salesTypeOptions] = useState(["NBD", "CRR", "NBD_CRR"]);
 
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
   useEffect(() => {
     const fetchInitialData = async () => {
+      setIsLoadingData(true);
       try {
         await fetchDropdownData();
         await fetchCompanyData();
         await generateNextLeadNumber();
+        
+        // Fetch SC Management Rules
+        const { data: scRulesData } = await supabase.from('SC_management').select('*').eq('isActive', true);
+        if (scRulesData && scRulesData.length > 0) {
+          setActiveScRules(scRulesData);
+          setActiveScCategory(scRulesData[0].category);
+        }
       } catch (error) {
         console.error("Error during initial data fetch:", error);
+      } finally {
+        setIsLoadingData(false);
       }
     };
 
     fetchInitialData();
   }, []);
 
+  // Click outside handler for SC Dropdown
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (scDropdownRef.current && !scDropdownRef.current.contains(event.target)) {
+        setShowScNameDropdown(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Auto-assign SC Name based on active category
+  useEffect(() => {
+    if (!activeScCategory || activeScRules.length === 0) return;
+
+    let currentValueToMatch = null;
+    switch (activeScCategory) {
+      case "Lead Source":
+        currentValueToMatch = formData.source;
+        break;
+      case "NOB":
+        currentValueToMatch = formData.nob;
+        break;
+      case "State":
+        currentValueToMatch = formData.state;
+        break;
+      case "Group Name":
+        currentValueToMatch = formData.groupName;
+        break;
+      case "Sales Type":
+        currentValueToMatch = formData.salesType;
+        break;
+      default:
+        break;
+    }
+
+    if (currentValueToMatch) {
+      const matchedRule = activeScRules.find(rule => rule.key === currentValueToMatch);
+      if (matchedRule) {
+        setSearchScName(matchedRule.value);
+        setFormData(prev => ({ ...prev, scName: matchedRule.value }));
+      }
+    }
+  }, [formData.source, formData.nob, formData.state, formData.groupName, formData.salesType, activeScCategory, activeScRules]);
+
   const fetchDropdownData = async () => {
     try {
-      const { data, error } = await supabase.from("dropdown").select("*");
-      if (error) throw error;
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
 
-      if (data && data.length > 0) {
-        const receivers = [...new Set(data.map((row) => row.lead_receiver_name).filter(Boolean))];
-        const sources = [...new Set(data.map((row) => row.lead_source).filter(Boolean))];
-        const scs = [...new Set(data.map((row) => row.sales_co_ordinator_name).filter(Boolean))];
-        const states = [...new Set(data.map((row) => row.state).filter(Boolean))];
-        const creditDays = [...new Set(data.map((row) => row.credit_days).filter(Boolean))];
-        const creditLimits = [...new Set(data.map((row) => row.credit_limit).filter(Boolean))];
-        const designations = [...new Set(data.map((row) => row.designation).filter(Boolean))];
-        const nobs = [...new Set(data.map((row) => row.nob).filter(Boolean))];
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from("dropdown")
+          .select("*")
+          .range(from, from + step - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      if (allData.length > 0) {
+        const receivers = [...new Set(allData.map((row) => row.lead_receiver_name).filter(Boolean))];
+        const sources = [...new Set(allData.map((row) => row.lead_source).filter(Boolean))];
+        const scs = [...new Set(allData.map((row) => row.sales_co_ordinator_name).filter(Boolean))];
+        const states = [...new Set(allData.map((row) => row.state).filter(Boolean))];
+        const creditDays = [...new Set(allData.map((row) => row.credit_days).filter(Boolean))];
+        const creditLimits = [...new Set(allData.map((row) => row.credit_limit).filter(Boolean))];
+        const designations = [...new Set(allData.map((row) => row.designation).filter(Boolean))];
+        const nobs = [...new Set(allData.map((row) => row.nob).filter(Boolean))];
+        const groups = [...new Set(allData.map((row) => row.group_name).filter(Boolean))];
 
         setReceiverNames(receivers.filter((item) => item && item.trim() !== "").sort());
         setLeadSources(sources.filter((item) => item && item.trim() !== "").sort());
@@ -497,6 +584,7 @@ function Leads() {
         setCreditLimitOptions(creditLimits.filter((item) => item && item.trim() !== "").sort());
         setDesignationOptions(designations.filter((item) => item && item.trim() !== "").sort());
         setNobOptions(nobs.filter((item) => item && item.trim() !== "").sort());
+        setGroupNames(groups.filter((item) => item && item.trim() !== "").sort());
       }
     } catch (error) {
       console.error("Error fetching dropdown values:", error);
@@ -511,18 +599,34 @@ function Leads() {
 
   const fetchCompanyData = async () => {
     try {
-      const { data, error } = await supabase
-        .from("dropdown")
-        .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
-        .not("lead_form_company_name", "is", null);
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
 
-      if (error) throw error;
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from("dropdown")
+          .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
+          .not("lead_form_company_name", "is", null)
+          .range(from, from + step - 1);
 
-      if (data && data.length > 0) {
+        if (error) throw error;
+
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      if (allData.length > 0) {
         const companies = [];
         const detailsMap = {};
 
-        data.forEach((row) => {
+        allData.forEach((row) => {
           if (row.lead_form_company_name) {
             companies.push(row.lead_form_company_name);
             detailsMap[row.lead_form_company_name] = {
@@ -603,6 +707,12 @@ function Leads() {
     setFormData((prev) => ({ ...prev, scName: name }));
     setSearchScName(name);
     setShowScNameDropdown(false);
+  };
+
+  const handleGroupNameChange = (name) => {
+    setFormData((prev) => ({ ...prev, groupName: name }));
+    setSearchGroupName(name);
+    setShowGroupNameDropdown(false);
   };
 
   const handleContactPersonChange = (index, field, value) => {
@@ -713,6 +823,19 @@ function Leads() {
   const filteredScNames = scNames.filter((name) =>
     name.toLowerCase().includes(searchScName.toLowerCase())
   );
+
+  const filteredGroupNames = groupNames.filter((name) =>
+    name.toLowerCase().includes(searchGroupName.toLowerCase())
+  );
+
+  if (isLoadingData) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
+        <div className="w-12 h-12 border-4 border-sky-200 border-t-sky-600 rounded-full animate-spin"></div>
+        <p className="text-sm font-semibold text-slate-600 animate-pulse">Loading dropdowns and form data...</p>
+      </div>
+    );
+  }
 
   return (
     <div className="container mx-auto py-10 px-4">
@@ -836,29 +959,67 @@ function Leads() {
                 </select>
               </div>
 
-              <div className="space-y-2 relative">
+              <div className="space-y-2 relative" ref={scDropdownRef}>
                 <label htmlFor="scName" className="block text-sm font-semibold text-gray-700">
                   SC Name
                 </label>
-                <input
-                  type="text"
-                  id="scName"
-                  value={searchScName}
-                  onChange={(e) => {
-                    setSearchScName(e.target.value);
-                    setShowScNameDropdown(true);
-                  }}
-                  onFocus={() => setShowScNameDropdown(true)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  placeholder="Type to search SC Name"
-                />
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="scName"
+                    value={searchScName}
+                    onChange={(e) => {
+                      setSearchScName(e.target.value);
+                      setShowScNameDropdown(true);
+                    }}
+                    onFocus={() => setShowScNameDropdown(true)}
+                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white transition-all shadow-sm"
+                    placeholder="Type to search SC Name"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
                 {showScNameDropdown && filteredScNames.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto transform opacity-100 scale-100 transition-all duration-200 origin-top">
                     {filteredScNames.map((name, index) => (
                       <div
                         key={index}
-                        className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-sm"
+                        className={`px-4 py-2.5 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${formData.scName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'}`}
                         onClick={() => handleScNameChange(name)}
+                      >
+                        {name}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="space-y-2 relative">
+                <label htmlFor="groupName" className="block text-sm font-semibold text-gray-700">
+                  Group Name
+                </label>
+                <input
+                  type="text"
+                  id="groupName"
+                  value={searchGroupName}
+                  onChange={(e) => {
+                    setSearchGroupName(e.target.value);
+                    setShowGroupNameDropdown(true);
+                  }}
+                  onFocus={() => setShowGroupNameDropdown(true)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  placeholder="Type to search Group Name"
+                />
+                {showGroupNameDropdown && filteredGroupNames.length > 0 && (
+                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                    {filteredGroupNames.map((name, index) => (
+                      <div
+                        key={index}
+                        className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-sm"
+                        onClick={() => handleGroupNameChange(name)}
                       >
                         {name}
                       </div>
@@ -1096,6 +1257,46 @@ function Leads() {
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
                   placeholder="GST number"
                 />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-2">
+                <label htmlFor="creditDays" className="block text-sm font-semibold text-gray-700">
+                  Credit Days
+                </label>
+                <select
+                  id="creditDays"
+                  value={formData.creditDays}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                >
+                  <option value="">Select credit days</option>
+                  {creditDaysOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-2">
+                <label htmlFor="creditLimit" className="block text-sm font-semibold text-gray-700">
+                  Credit Limit
+                </label>
+                <select
+                  id="creditLimit"
+                  value={formData.creditLimit}
+                  onChange={handleChange}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                >
+                  <option value="">Select credit limit</option>
+                  {creditLimitOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 

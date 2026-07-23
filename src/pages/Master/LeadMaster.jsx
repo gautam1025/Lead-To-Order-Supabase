@@ -1,80 +1,129 @@
 import { useState, useEffect } from "react";
-import { Search, Plus, Pencil, Trash2, RefreshCw, ChevronDown } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, ChevronDown, CheckCircle, Circle } from "lucide-react";
 import DataTable from "../../components/DataTable";
 import SearchableDropdown from "../../components/SearchableDropdown";
 import ModalForm from "../../components/ModalForm";
+import supabase from "../../utils/supabase";
 
-import { mockApi } from "../../services/mockApi";
-
-const GroupMasterData = [
-  { id: 1, timestamp: "2023-10-01 10:00", groupName: "Retail", personName: "Sneha Gupta" },
-  { id: 2, timestamp: "2023-10-02 11:30", groupName: "Corporate", personName: "Vikram Reddy" },
-];
-
-const StateMasterData = [
-  { id: 1, timestamp: "2023-10-01 10:00", stateName: "Maharashtra", personName: "Neha Desai" },
-  { id: 2, timestamp: "2023-10-02 11:30", stateName: "Delhi", personName: "Arjun Verma" },
+const CATEGORY_OPTIONS = [
+  { value: "Lead Source", label: "Lead Source" },
+  { value: "NOB", label: "Nature of Business" },
+  { value: "State", label: "State" },
+  { value: "Group Name", label: "Group Name" },
+  { value: "Sales Type", label: "Sales Type" }
 ];
 
 function LeadMaster() {
-  const [activeMaster, setActiveMaster] = useState("sc"); // 'sc', 'group', 'state'
+  const [activeMaster, setActiveMaster] = useState("Lead Source");
+  const [globalActiveCategory, setGlobalActiveCategory] = useState(null); // fetched from SC_active_category
   const [searchQuery, setSearchQuery] = useState("");
   
-  const [scData, setScData] = useState([]);
-  const [groupData, setGroupData] = useState(GroupMasterData);
-  const [stateData, setStateData] = useState(StateMasterData);
+  const [tableData, setTableData] = useState([]);
+  const [dropdownOptions, setDropdownOptions] = useState({});
+  const [scOptions, setScOptions] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    const loadMasters = async () => {
-      const fetchedSc = await mockApi.fetchScMaster();
-      setScData(fetchedSc);
-    };
-    loadMasters();
-  }, []);
+    loadData();
+    loadDropdowns();
+  }, [activeMaster]);
+
+  const loadData = async () => {
+    setIsLoading(true);
+    // Fetch from SC_management where category = activeMaster
+    const { data: scData, error: scError } = await supabase
+      .from("SC_management")
+      .select("*")
+      .eq("category", activeMaster)
+      .order('created_at', { ascending: false });
+    if (scData) {
+      setTableData(scData);
+    }
+    // Fetch global active category by checking which category is active in SC_management
+    try {
+      const { data: activeRows } = await supabase.from("SC_management").select("category").eq("isActive", true).limit(1);
+      if (activeRows && activeRows.length > 0) {
+        setGlobalActiveCategory(activeRows[0].category);
+      } else {
+        setGlobalActiveCategory(null);
+      }
+    } catch (error) {
+      console.warn("Could not fetch active category from SC_management", error);
+    }
+    setIsLoading(false);
+  };
+
+  const loadDropdowns = async () => {
+    let allData = [];
+    let from = 0;
+    const step = 1000;
+    let fetchMore = true;
+
+    while (fetchMore) {
+      const { data, error } = await supabase
+        .from("dropdown")
+        .select("*")
+        .range(from, from + step - 1);
+      
+      if (data && data.length > 0) {
+        allData = [...allData, ...data];
+        from += step;
+        if (data.length < step) fetchMore = false;
+      } else {
+        fetchMore = false;
+      }
+    }
+
+    if (allData.length > 0) {
+      const scs = [...new Set(allData.map((row) => row.sales_co_ordinator_name).filter(Boolean))];
+      setScOptions(scs.sort());
+      
+      const options = {
+        "Lead Source": [...new Set(allData.map((row) => row.lead_source).filter(Boolean))].sort(),
+        "NOB": [...new Set(allData.map((row) => row.nob).filter(Boolean))].sort(),
+        "State": [...new Set(allData.map((row) => row.state).filter(Boolean))].sort(),
+        "Group Name": [...new Set(allData.map((row) => row.group_name).filter(Boolean))].sort(),
+        "Sales Type": [...new Set(allData.map((row) => row.sales_type).filter(Boolean))].sort(),
+      };
+      setDropdownOptions(options);
+    }
+  };
+
+  const handleSetActiveCategory = async () => {
+    try {
+      // First, set all currently active rows to false
+      await supabase.from("SC_management").update({ isActive: false }).eq("isActive", true);
+      
+      // Then, set the rows matching the newly selected category to true
+      await supabase.from("SC_management").update({ isActive: true }).eq("category", activeMaster);
+
+      setGlobalActiveCategory(activeMaster);
+    } catch (error) {
+      alert("Error updating active category.");
+      console.error(error);
+    }
+  };
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add");
   const [currentItem, setCurrentItem] = useState(null);
-  const [formData, setFormData] = useState({ nameValue: "", personName: "" });
-  
+  const [formData, setFormData] = useState({ key: "", value: "" });
+
   // Filter States
-  const [sourceFilter, setSourceFilter] = useState([]);
-  const [groupFilter, setGroupFilter] = useState([]);
-  const [stateFilter, setStateFilter] = useState([]);
-  const [personFilter, setPersonFilter] = useState([]);
-  
+  const [keyFilter, setKeyFilter] = useState([]);
+  const [valueFilter, setValueFilter] = useState([]);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
-
-  const getHeaders = () => {
-    if (activeMaster === "sc") {
-      return ["Serial No", "Timestamp", "Source Name", "Person Name", "Actions"];
-    } else if (activeMaster === "group") {
-      return ["Serial No", "Timestamp", "Group Name", "Person Name", "Actions"];
-    } else {
-      return ["Serial No", "Timestamp", "State Name", "Person Name", "Actions"];
-    }
-  };
-
-  const getData = () => {
-    if (activeMaster === "sc") return scData;
-    if (activeMaster === "group") return groupData;
-    return stateData;
-  };
-
-  const data = getData();
 
   const handleOpenModal = (mode, item = null) => {
     setModalMode(mode);
     setCurrentItem(item);
     if (item && mode === "edit") {
-      setFormData({
-        nameValue: activeMaster === "sc" ? item.sourceName : (activeMaster === "group" ? item.groupName : item.stateName),
-        personName: item.personName
-      });
+      setFormData({ key: item.key, value: item.value });
     } else {
-      setFormData({ nameValue: "", personName: "" });
+      setFormData({ key: "", value: "" });
     }
     setIsModalOpen(true);
   };
@@ -84,73 +133,63 @@ function LeadMaster() {
     setCurrentItem(null);
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const timestamp = new Date().toISOString().slice(0,16).replace('T', ' ');
-    
-    if (activeMaster === "sc") {
-      const dataPayload = { 
-        sourceName: formData.nameValue, 
-        personName: formData.personName,
-        timestamp: timestamp
-      };
-      if (modalMode === "add") {
-        mockApi.addScMaster(dataPayload).then(() => mockApi.fetchScMaster().then(setScData));
-      } else {
-        mockApi.updateScMaster(currentItem.id, dataPayload).then(() => mockApi.fetchScMaster().then(setScData));
-      }
-    } else if (activeMaster === "group") {
-      if (modalMode === "add") {
-        setGroupData([...groupData, { id: groupData.length + 1, timestamp, groupName: formData.nameValue, personName: formData.personName }]);
-      } else {
-        setGroupData(groupData.map(d => d.id === currentItem.id ? { ...d, groupName: formData.nameValue, personName: formData.personName } : d));
-      }
-    } else if (activeMaster === "state") {
-      if (modalMode === "add") {
-        setStateData([...stateData, { id: stateData.length + 1, timestamp, stateName: formData.nameValue, personName: formData.personName }]);
-      } else {
-        setStateData(stateData.map(d => d.id === currentItem.id ? { ...d, stateName: formData.nameValue, personName: formData.personName } : d));
-      }
+    if (modalMode === "add") {
+      await supabase.from("SC_management").insert([{
+        key: formData.key,
+        value: formData.value,
+        category: activeMaster,
+        isActive: activeMaster === globalActiveCategory
+      }]);
+    } else {
+      await supabase.from("SC_management").update({
+        key: formData.key,
+        value: formData.value,
+        updated_at: new Date().toISOString()
+      }).eq("uuid", currentItem.uuid);
     }
     handleCloseModal();
+    loadData();
   };
 
-  const handleDelete = (item) => {
+  const handleDelete = async (item) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
-      if (activeMaster === "sc") {
-        mockApi.deleteScMaster(item.id).then(() => mockApi.fetchScMaster().then(setScData));
-      }
-      if (activeMaster === "group") setGroupData(groupData.filter(d => d.id !== item.id));
-      if (activeMaster === "state") setStateData(stateData.filter(d => d.id !== item.id));
+      await supabase.from("SC_management").delete().eq("uuid", item.uuid);
+      loadData();
     }
   };
 
-  const filteredData = data.filter(item => {
-    const matchesSearch = !searchQuery || 
-      Object.values(item).some(val => 
-        String(val).toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    
-    const matchesSource = sourceFilter.length === 0 || sourceFilter.includes(item.sourceName);
-    const matchesGroup = groupFilter.length === 0 || groupFilter.includes(item.groupName);
-    const matchesState = stateFilter.length === 0 || stateFilter.includes(item.stateName);
-    const matchesPerson = personFilter.length === 0 || personFilter.includes(item.personName);
+  const clearFilters = () => {
+    setSearchQuery("");
+    setKeyFilter([]);
+    setValueFilter([]);
+  };
 
-    return matchesSearch && matchesSource && matchesGroup && matchesState && matchesPerson;
+  const filteredData = tableData.filter(item => {
+    const matchesSearch = !searchQuery || 
+      String(item.key).toLowerCase().includes(searchQuery.toLowerCase()) ||
+      String(item.value).toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesKey = keyFilter.length === 0 || keyFilter.includes(item.key);
+    const matchesValue = valueFilter.length === 0 || valueFilter.includes(item.value);
+
+    return matchesSearch && matchesKey && matchesValue;
   });
+
+  const getHeaders = () => {
+    return ["Serial No", "Timestamp", activeMaster + " Name", "Assign Name (SC)", "Actions"];
+  };
 
   const renderRow = (row, index) => {
     return (
-      <tr key={index} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">{row.id}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-sky-600">{row.timestamp}</td>
-        
-        {/* Dynamic Column */}
-        {activeMaster === "sc" && <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">{row.sourceName}</td>}
-        {activeMaster === "group" && <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">{row.groupName}</td>}
-        {activeMaster === "state" && <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">{row.stateName}</td>}
-        
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">{row.personName}</td>
+      <tr key={row.uuid} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">{index + 1}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center font-medium text-sky-600">
+          {new Date(row.created_at).toLocaleString()}
+        </td>
+        <td className="px-6 py-4 whitespace-nowrap text-center text-sm text-gray-600">{row.key}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center text-gray-600">{row.value}</td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
           <div className="flex items-center justify-center gap-3">
             <button onClick={() => handleOpenModal("edit", row)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
@@ -166,15 +205,17 @@ function LeadMaster() {
   };
 
   const renderCard = (item, index) => {
-    // Basic mobile card view to satisfy DataTable component requirements
     return (
-      <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div key={item.uuid} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="flex justify-between items-start mb-2">
-          <span className="font-semibold text-gray-800">#{item.id}</span>
-          <span className="text-xs font-medium text-sky-600">{item.timestamp}</span>
+          <span className="font-semibold text-gray-800">#{index + 1}</span>
+          <span className="text-xs font-medium text-sky-600">{new Date(item.created_at).toLocaleDateString()}</span>
+        </div>
+        <div className="text-sm text-gray-600 mb-2">
+          <span className="font-medium text-gray-800">{activeMaster}:</span> {item.key}
         </div>
         <div className="text-sm text-gray-600 mb-4">
-          <span className="font-medium text-gray-800">Name:</span> {item.personName}
+          <span className="font-medium text-gray-800">SC Name:</span> {item.value}
         </div>
         <div className="flex justify-end gap-4 mt-2 pt-2 border-t border-gray-100">
           <button onClick={() => handleOpenModal("edit", item)} className="text-blue-500" title="Edit"><Pencil size={16} /></button>
@@ -184,168 +225,168 @@ function LeadMaster() {
     );
   };
 
-  const clearFilters = () => {
-    setSearchQuery("");
-    setSourceFilter([]);
-    setGroupFilter([]);
-    setStateFilter([]);
-    setPersonFilter([]);
-  };
-
   return (
     <div className="flex-1 flex flex-col h-full min-h-0">
+      {/* Top Controls Bar */}
+      <div className="flex flex-col gap-3 mb-3 bg-white shrink-0 p-3 shadow-sm rounded-lg border border-gray-100">
         
-        {/* Top Controls Bar */}
-        <div className="flex flex-col gap-3 mb-3 bg-white shrink-0 p-1">
-          <div className="flex flex-wrap items-center gap-2 shrink-0 pb-1 w-full">
-            
-            {/* Master Selector Dropdown */}
-            <div className="relative shrink-0 z-[70] min-w-[160px]">
-              <select 
-                value={activeMaster}
-                onChange={(e) => {
-                  setActiveMaster(e.target.value);
-                  clearFilters(); // Clear filters on tab change
-                }}
-                className="appearance-none w-full bg-white border border-sky-500 text-sky-600 font-semibold py-1.5 pl-3 pr-8 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 h-9 cursor-pointer"
-              >
-                <option value="sc">SC Master</option>
-                <option value="group">Group Master</option>
-                <option value="state">State Master</option>
-              </select>
-              <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-sky-600">
-                <ChevronDown size={16} />
-              </div>
-            </div>
-
-            {/* Search Bar */}
-            <div className="relative flex-1 min-w-[120px] max-w-[200px]">
-              <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Search className="h-4 w-4 text-gray-400" />
-              </div>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 block pl-10 h-9"
-              />
-            </div>
-
-            {/* Dynamic Filter Dropdowns based on active master */}
-            {activeMaster === "sc" && (
-              <div className="flex-1 min-w-[120px] max-w-[200px] z-[60]">
-                <SearchableDropdown
-                  isMulti={true}
-                  value={sourceFilter}
-                  onChange={(val) => setSourceFilter(val)}
-                  options={Array.from(new Set(scData.map(c => c.sourceName))).map(l => ({ value: l, label: l, count: scData.filter(d => d.sourceName === l).length }))}
-                  placeholder="All Sources"
-                  height="h-9"
-                  rounded="rounded-md"
-                  className="dropdown-container"
-                />
-              </div>
-            )}
-
-            {activeMaster === "group" && (
-              <div className="flex-1 min-w-[120px] max-w-[200px] z-[60]">
-                <SearchableDropdown
-                  isMulti={true}
-                  value={groupFilter}
-                  onChange={(val) => setGroupFilter(val)}
-                  options={Array.from(new Set(groupData.map(c => c.groupName))).map(l => ({ value: l, label: l, count: groupData.filter(d => d.groupName === l).length }))}
-                  placeholder="All Groups"
-                  height="h-9"
-                  rounded="rounded-md"
-                  className="dropdown-container"
-                />
-              </div>
-            )}
-
-            {activeMaster === "state" && (
-              <div className="flex-1 min-w-[120px] max-w-[200px] z-[60]">
-                <SearchableDropdown
-                  isMulti={true}
-                  value={stateFilter}
-                  onChange={(val) => setStateFilter(val)}
-                  options={Array.from(new Set(stateData.map(c => c.stateName))).map(l => ({ value: l, label: l, count: stateData.filter(d => d.stateName === l).length }))}
-                  placeholder="All States"
-                  height="h-9"
-                  rounded="rounded-md"
-                  className="dropdown-container"
-                />
-              </div>
-            )}
-
-            <div className="flex-1 min-w-[120px] max-w-[200px] z-[50]">
-              <SearchableDropdown
-                isMulti={true}
-                value={personFilter}
-                onChange={(val) => setPersonFilter(val)}
-                options={Array.from(new Set(data.map(c => c.personName))).map(l => ({ value: l, label: l, count: data.filter(d => d.personName === l).length }))}
-                placeholder="All Persons"
-                height="h-9"
-                rounded="rounded-md"
-                className="dropdown-container"
-              />
-            </div>
-
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 shrink-0 ml-auto">
-              {((sourceFilter.length > 0) || (groupFilter.length > 0) || (stateFilter.length > 0) || (personFilter.length > 0) || searchQuery) && (
-                <button
-                  className="px-3 h-9 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors shrink-0"
-                  onClick={clearFilters}
+        {/* Active Rule Banner */}
+        <div className="flex justify-between items-center bg-sky-50 p-3 rounded-md border border-sky-100">
+          <div className="flex items-center gap-2">
+             <span className="text-sky-800 font-medium">Currently Viewing:</span>
+             <span className="text-sky-900 font-bold px-2 py-1 bg-white rounded shadow-sm">{activeMaster}</span>
+          </div>
+          <div className="flex items-center gap-4">
+             {globalActiveCategory === activeMaster ? (
+                <div className="flex items-center gap-1.5 text-emerald-600 bg-emerald-50 px-3 py-1.5 rounded-md font-medium border border-emerald-200">
+                  <CheckCircle size={18} /> Active SC Rule
+                </div>
+             ) : (
+                <button 
+                  onClick={handleSetActiveCategory}
+                  className="flex items-center gap-1.5 text-gray-500 hover:text-emerald-600 bg-white hover:bg-emerald-50 px-3 py-1.5 rounded-md font-medium border border-gray-300 hover:border-emerald-300 transition-colors"
                 >
-                  Clear Filters
+                  <Circle size={18} /> Set as Active Rule
                 </button>
-              )}
-              <button className="px-3 h-9 bg-white border border-gray-300 rounded-md shadow-sm text-gray-600 hover:bg-gray-50 hover:text-sky-600 transition-colors">
-                <RefreshCw size={16} />
-              </button>
-              <button onClick={() => handleOpenModal("add")} className="px-3 h-9 bg-sky-600 hover:bg-sky-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-2">
-                <Plus size={16} />
-                <span className="font-medium text-sm hidden sm:inline">Add New</span>
-              </button>
-            </div>
+             )}
           </div>
         </div>
 
-        {/* Main Table Area (flex-1 to take remaining height) */}
-        <div className="flex-1 min-h-0 overflow-hidden relative">
-          <DataTable 
-            headers={getHeaders()}
-            data={filteredData}
-            renderRow={renderRow}
-            renderCard={renderCard}
-            minWidth="1000px"
-            currentPage={currentPage}
-            totalPages={Math.ceil(filteredData.length / itemsPerPage) || 1}
-            itemsPerPage={itemsPerPage}
-            onPageChange={setCurrentPage}
-            onItemsPerPageChange={setItemsPerPage}
-            totalResults={filteredData.length}
-            itemsPerPageOptions={[10, 15, 20, 50, 100]}
-          />
+        <div className="flex flex-wrap items-center gap-3 shrink-0 w-full">
+          {/* Master Selector Dropdown */}
+          <div className="relative shrink-0 z-[70] min-w-[200px]">
+            <select 
+              value={activeMaster}
+              onChange={(e) => {
+                setActiveMaster(e.target.value);
+                clearFilters(); // Clear filters on tab change
+              }}
+              className="appearance-none w-full bg-white border border-sky-500 text-sky-600 font-semibold py-2 pl-3 pr-8 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 cursor-pointer"
+            >
+              {CATEGORY_OPTIONS.map(opt => (
+                 <option key={opt.value} value={opt.value}>{opt.label}</option>
+              ))}
+            </select>
+            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-sky-600">
+              <ChevronDown size={16} />
+            </div>
+          </div>
+
+          {/* Search Bar */}
+          <div className="relative flex-1 min-w-[120px] max-w-[200px]">
+            <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+              <Search className="h-4 w-4 text-gray-400" />
+            </div>
+            <input
+              type="text"
+              placeholder="Search..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 block pl-10 h-10"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[120px] max-w-[200px] z-[60]">
+            <SearchableDropdown
+              isMulti={true}
+              value={keyFilter}
+              onChange={(val) => setKeyFilter(val)}
+              options={Array.from(new Set(tableData.map(c => c.key))).map(l => ({ value: l, label: l, count: tableData.filter(d => d.key === l).length }))}
+              placeholder={`All ${activeMaster}`}
+              height="h-10"
+              rounded="rounded-md"
+              className="dropdown-container"
+            />
+          </div>
+
+          <div className="flex-1 min-w-[120px] max-w-[200px] z-[50]">
+            <SearchableDropdown
+              isMulti={true}
+              value={valueFilter}
+              onChange={(val) => setValueFilter(val)}
+              options={Array.from(new Set(tableData.map(c => c.value))).map(l => ({ value: l, label: l, count: tableData.filter(d => d.value === l).length }))}
+              placeholder="All SC Names"
+              height="h-10"
+              rounded="rounded-md"
+              className="dropdown-container"
+            />
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            {((keyFilter.length > 0) || (valueFilter.length > 0) || searchQuery) && (
+              <button
+                className="px-3 h-10 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors shrink-0"
+                onClick={clearFilters}
+              >
+                Clear Filters
+              </button>
+            )}
+            <button onClick={loadData} className="px-3 h-10 bg-white border border-gray-300 rounded-md shadow-sm text-gray-600 hover:bg-gray-50 hover:text-sky-600 transition-colors">
+              <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
+            </button>
+            <button onClick={() => handleOpenModal("add")} className="px-4 h-10 bg-sky-600 hover:bg-sky-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-2">
+              <Plus size={18} />
+              <span className="font-medium text-sm hidden sm:inline">Add New</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Table Area */}
+      <div className="flex-1 min-h-0 overflow-hidden relative">
+        <DataTable 
+          headers={getHeaders()}
+          data={filteredData}
+          renderRow={renderRow}
+          renderCard={renderCard}
+          minWidth="1000px"
+          currentPage={currentPage}
+          totalPages={Math.ceil(filteredData.length / itemsPerPage) || 1}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={setItemsPerPage}
+          totalResults={filteredData.length}
+          itemsPerPageOptions={[10, 15, 20, 50, 100]}
+        />
       </div>
 
       <ModalForm
         isOpen={isModalOpen}
         onClose={handleCloseModal}
-        title={modalMode === "add" ? `Add New ${activeMaster.toUpperCase()}` : `Edit ${activeMaster.toUpperCase()}`}
+        title={modalMode === "add" ? `Add New ${activeMaster}` : `Edit ${activeMaster}`}
         onSubmit={handleSubmit}
       >
-        <div className="space-y-4">
+        <div className="space-y-5 py-2">
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">
-              {activeMaster === "sc" ? "Source Name" : (activeMaster === "group" ? "Group Name" : "State Name")}
+            <label className="block text-sm font-semibold text-gray-700">
+              {activeMaster}
             </label>
-            <input required value={formData.nameValue} onChange={e => setFormData({...formData, nameValue: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            <select
+              required
+              value={formData.key}
+              onChange={e => setFormData({...formData, key: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+            >
+              <option value="">Select {activeMaster}</option>
+              {dropdownOptions[activeMaster]?.map((opt, i) => (
+                <option key={i} value={opt}>{opt}</option>
+              ))}
+            </select>
           </div>
           <div className="space-y-2">
-            <label className="block text-sm font-medium text-gray-700">Assign Name (SC Name)</label>
-            <input required value={formData.personName} onChange={e => setFormData({...formData, personName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            <label className="block text-sm font-semibold text-gray-700">Assign SC Name</label>
+            <select
+              required
+              value={formData.value}
+              onChange={e => setFormData({...formData, value: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+            >
+              <option value="">Select SC Name</option>
+              {scOptions.map((opt, i) => (
+                <option key={i} value={opt}>{opt}</option>
+              ))}
+            </select>
           </div>
         </div>
       </ModalForm>
