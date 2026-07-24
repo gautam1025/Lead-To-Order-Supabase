@@ -1,14 +1,13 @@
-import { useState, useEffect, useContext } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Search, Plus, Pencil, Trash2, RefreshCw } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, Eye } from "lucide-react";
 import DataTable from "../../components/DataTable";
 import SearchableDropdown from "../../components/SearchableDropdown";
 import supabase from "../../utils/supabase";
 import ModalForm from "../../components/ModalForm";
-import { AuthContext } from "../../App";
 
 function ClientMaster() {
-  const { currentUser, isAdmin } = useContext(AuthContext);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [clientData, setClientData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -17,6 +16,22 @@ function ClientMaster() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("add");
   const [currentClient, setCurrentClient] = useState(null);
+
+  // Column Visibility State
+  const [showColumnToggle, setShowColumnToggle] = useState(false);
+  const columnToggleRef = useRef(null);
+  const [hiddenColumns, setHiddenColumns] = useState([]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (columnToggleRef.current && !columnToggleRef.current.contains(event.target)) {
+        setShowColumnToggle(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   const [formData, setFormData] = useState({
     companyName: "",
     clientName: "",
@@ -90,6 +105,7 @@ function ClientMaster() {
           id: i + 1,
           uuid: c.uuid,
           companyName: c.company_name || "",
+          clientCode: c.client_code || "",
           clientName: c.client_name || "",
           clientMobileNumber: c.client_mobile_number || "",
           state: c.state || "",
@@ -227,24 +243,28 @@ function ClientMaster() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
-  const headers = [
-    "Actions",
-    "Action 2",
-    "Company Name", 
-    "Relevance",
-    "Already In Tracker",
-    "Client Name", 
-    "Mobile Number", 
-    "Company Group",
-    "SC Name", 
-    "CRM Name", 
-    "State", 
-    "State Code",
-    "GST Number",
-    "Billing Address", 
-    "Credit Days",
-    "Credit Limit"
+  const allHeaders = [
+    { key: "actions", label: "Actions" },
+    { key: "action2", label: "Action 2" },
+    { key: "companyName", label: "Company Name" },
+    { key: "clientCode", label: "Client Code" }, // Added at index 3!
+    { key: "relevance", label: "Relevance" },
+    { key: "trackerStatus", label: "Already In Tracker" },
+    { key: "clientName", label: "Client Name" },
+    { key: "clientMobileNumber", label: "Mobile Number" },
+    { key: "companyGroupName", label: "Company Group" },
+    { key: "scName", label: "SC Name" },
+    { key: "crmName", label: "CRM Name" },
+    { key: "state", label: "State" },
+    { key: "stateCode", label: "State Code" },
+    { key: "gstNumber", label: "GST Number" },
+    { key: "billingAddress", label: "Billing Address" },
+    { key: "creditDays", label: "Credit Days" },
+    { key: "creditLimit", label: "Credit Limit" }
   ];
+
+  const visibleHeaders = allHeaders.filter(col => !hiddenColumns.includes(col.key));
+  const headers = visibleHeaders.map(col => col.label);
 
   const filteredData = clientData.filter(item => {
     const matchesSearch = !searchQuery || 
@@ -274,9 +294,9 @@ function ClientMaster() {
       crmName: row.crmName || ""
     }).toString();
 
-    return (
-      <tr key={row.uuid || index} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+    const columnCells = {
+      actions: (
+        <td key="actions" className="px-6 py-4 whitespace-nowrap text-sm text-center">
           <div className="flex items-center justify-center gap-3">
             <button onClick={() => handleOpenModal("edit", row)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
               <Pencil size={16} />
@@ -286,7 +306,9 @@ function ClientMaster() {
             </button>
           </div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+      ),
+      action2: (
+        <td key="action2" className="px-6 py-4 whitespace-nowrap text-sm text-center">
           <div className="flex items-center justify-center gap-2">
             <button 
               onClick={() => navigate(`/leads?${urlParams}`)}
@@ -302,8 +324,23 @@ function ClientMaster() {
             </button>
           </div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">{row.companyName}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+      ),
+      companyName: (
+        <td key="companyName" className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">{row.companyName}</td>
+      ),
+      clientCode: (
+        <td key="clientCode" className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-sky-700 text-center">
+          {row.clientCode ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded border border-sky-200 bg-sky-50 text-sky-800 text-xs font-semibold">
+              {row.clientCode}
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </td>
+      ),
+      relevance: (
+        <td key="relevance" className="px-6 py-4 whitespace-nowrap text-sm text-center">
           {row.isRelevant ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
               Relevant
@@ -314,7 +351,9 @@ function ClientMaster() {
             </span>
           )}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+      ),
+      trackerStatus: (
+        <td key="trackerStatus" className="px-6 py-4 whitespace-nowrap text-sm text-center">
           {row.trackerStatus === "Lead" ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
               Lead
@@ -331,10 +370,18 @@ function ClientMaster() {
             <span className="text-gray-400">-</span>
           )}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.clientName || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-sky-600 font-medium text-center">{row.clientMobileNumber || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.companyGroupName || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
+      ),
+      clientName: (
+        <td key="clientName" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.clientName || "-"}</td>
+      ),
+      clientMobileNumber: (
+        <td key="clientMobileNumber" className="px-6 py-4 whitespace-nowrap text-sm text-sky-600 font-medium text-center">{row.clientMobileNumber || "-"}</td>
+      ),
+      companyGroupName: (
+        <td key="companyGroupName" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.companyGroupName || "-"}</td>
+      ),
+      scName: (
+        <td key="scName" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
           {row.scName ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
               {row.scName}
@@ -343,13 +390,33 @@ function ClientMaster() {
             <span className="text-gray-400">-</span>
           )}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.crmName || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.state || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.stateCode || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.gstNumber || "-"}</td>
-        <td className="px-6 py-4 text-sm text-gray-600 min-w-[200px] truncate max-w-xs text-center" title={row.billingAddress}>{row.billingAddress || "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditDays !== "" ? row.creditDays : "-"}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditLimit !== "" ? row.creditLimit : "-"}</td>
+      ),
+      crmName: (
+        <td key="crmName" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.crmName || "-"}</td>
+      ),
+      state: (
+        <td key="state" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.state || "-"}</td>
+      ),
+      stateCode: (
+        <td key="stateCode" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.stateCode || "-"}</td>
+      ),
+      gstNumber: (
+        <td key="gstNumber" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.gstNumber || "-"}</td>
+      ),
+      billingAddress: (
+        <td key="billingAddress" className="px-6 py-4 text-sm text-gray-600 min-w-[200px] truncate max-w-xs text-center" title={row.billingAddress}>{row.billingAddress || "-"}</td>
+      ),
+      creditDays: (
+        <td key="creditDays" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditDays !== "" ? row.creditDays : "-"}</td>
+      ),
+      creditLimit: (
+        <td key="creditLimit" className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditLimit !== "" ? row.creditLimit : "-"}</td>
+      )
+    };
+
+    return (
+      <tr key={row.uuid || index} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
+        {visibleHeaders.map(col => columnCells[col.key])}
       </tr>
     );
   };
@@ -360,6 +427,11 @@ function ClientMaster() {
         <div className="flex justify-between items-start mb-2">
           <div className="flex flex-col">
             <span className="font-semibold text-gray-800">{item.companyName}</span>
+            {item.clientCode && (
+              <span className="text-xs font-semibold text-sky-700 mt-0.5">
+                Code: {item.clientCode}
+              </span>
+            )}
             {item.trackerStatus !== "-" && (
               <span className={`inline-flex items-center w-fit mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${
                 item.trackerStatus === "Lead" ? "bg-blue-100 text-blue-800" :
@@ -475,6 +547,51 @@ function ClientMaster() {
               <button onClick={fetchClients} className="px-3 h-9 bg-white border border-gray-300 rounded-md shadow-sm text-gray-600 hover:bg-gray-50 hover:text-sky-600 transition-colors" title="Refresh">
                 <RefreshCw size={16} className={isLoading ? "animate-spin" : ""} />
               </button>
+
+              {/* Column Visibility Toggle Button & Popover */}
+              <div className="relative" ref={columnToggleRef}>
+                <button
+                  type="button"
+                  onClick={() => setShowColumnToggle(prev => !prev)}
+                  className="px-3 h-9 bg-white border border-gray-300 rounded-md shadow-sm text-gray-700 hover:bg-gray-50 font-medium text-sm transition-colors flex items-center gap-2"
+                  title="Toggle Column Visibility"
+                >
+                  <Eye size={16} />
+                  <span>Columns</span>
+                </button>
+
+                {showColumnToggle && (
+                  <div className="absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-xl z-50 p-2 max-h-80 overflow-y-auto">
+                    <div className="text-xs font-bold text-gray-500 uppercase px-2 py-1 border-b border-gray-100 flex justify-between items-center mb-1">
+                      <span>Visible Columns</span>
+                      <button 
+                        onClick={() => setHiddenColumns([])}
+                        className="text-[11px] text-sky-600 hover:underline capitalize font-normal"
+                      >
+                        Show All
+                      </button>
+                    </div>
+                    {allHeaders.map(col => (
+                      <label key={col.key} className="flex items-center gap-2 px-2 py-1.5 hover:bg-gray-50 rounded text-xs font-medium text-gray-700 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={!hiddenColumns.includes(col.key)}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setHiddenColumns(hiddenColumns.filter(k => k !== col.key));
+                            } else {
+                              setHiddenColumns([...hiddenColumns, col.key]);
+                            }
+                          }}
+                          className="rounded text-sky-600 focus:ring-sky-500 h-3.5 w-3.5"
+                        />
+                        {col.label}
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <button onClick={() => handleOpenModal("add")} className="px-3 h-9 bg-sky-600 hover:bg-sky-700 text-white rounded-md shadow-sm transition-colors flex items-center gap-2">
                 <Plus size={16} />
                 <span className="font-medium text-sm">Add Client</span>

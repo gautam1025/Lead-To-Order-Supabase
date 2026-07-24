@@ -669,6 +669,7 @@ function Leads() {
         setNextLeadNumber("LD-001");
       }
     } catch (error) {
+      console.error("Error fetching next lead number:", error);
       setNextLeadNumber("LD-001");
     }
   };
@@ -915,7 +916,7 @@ function Leads() {
   }
 
   return (
-    <div className="container mx-auto py-6 px-4">
+    <div className="container mx-auto py-1 px-2">
       {showImportModal && (
         <ExcelImportModal
           onClose={() => setShowImportModal(false)}
@@ -928,13 +929,13 @@ function Leads() {
         />
       )}
 
-      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md border border-slate-100">
-        <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
+      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-sm border border-slate-200">
+        <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between flex-wrap gap-2">
           <div>
-            <h2 className="text-lg font-bold text-slate-800">New Lead</h2>
-            <p className="text-xs text-slate-500">Fill in the lead information below</p>
+            <h2 className="text-base font-bold text-slate-800">New Lead</h2>
+            <p className="text-[11px] text-slate-500">Fill in the lead information below</p>
             {nextLeadNumber && (
-              <p className="text-xs font-semibold text-sky-600 mt-0.5">
+              <p className="text-[11px] font-semibold text-sky-600 mt-0.5">
                 Next Lead Number: {nextLeadNumber}
               </p>
             )}
@@ -974,7 +975,7 @@ function Leads() {
                 XLSX.utils.book_append_sheet(wb, ws, "Lead Import Template");
                 XLSX.writeFile(wb, "Lead_Import_Template.xlsx");
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-white border border-emerald-400 hover:bg-emerald-50 rounded-lg transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 bg-white border border-emerald-400 hover:bg-emerald-50 rounded-md transition-all shadow-xs"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
@@ -984,7 +985,7 @@ function Leads() {
             <button
               type="button"
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-lg shadow transition-all"
+              className="flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-md shadow-xs transition-all"
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
@@ -995,7 +996,7 @@ function Leads() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-4 space-y-4">
+          <div className="p-2 space-y-2.5">
             
             {/* Row 1: 3 Fields */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

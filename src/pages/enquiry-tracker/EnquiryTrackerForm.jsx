@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useContext, useEffect, useCallback } from "react"
+import { useState, useContext, useEffect } from "react"
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { AuthContext } from "../../App"
 import MakeQuotationForm from "../../components/enquiry-tracker/MakeQuotationFrom"
@@ -33,7 +33,6 @@ function NewEnquiryTracker() {
 
 
   const [enquiryStatusOptions, setEnquiryStatusOptions] = useState([])
-  const [isLoadingDropdown, setIsLoadingDropdown] = useState(false)
 
   // State for MakeQuotationForm data
   const [quotationData, setQuotationData] = useState({
@@ -138,7 +137,6 @@ function NewEnquiryTracker() {
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
-        setIsLoadingDropdown(true)
 
         // Fetch non-null values from supabase table
         const { data, error } = await supabase
@@ -176,7 +174,6 @@ function NewEnquiryTracker() {
         setEnquiryStatusOptions(["hot", "warm", "cold"])
         setCustomerFeedbackOptions(["Feedback 1", "Feedback 2", "Feedback 3"])
       } finally {
-        setIsLoadingDropdown(false)
       }
     }
 
@@ -288,13 +285,6 @@ function NewEnquiryTracker() {
     }))
   }
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      onFieldChange('quotationFile', file);
-    }
-  };
-
   // Handler for quotation form data updates
   const handleQuotationChange = async (field, value) => {
     if (field === "quotationFile" && value) {
@@ -358,69 +348,6 @@ function NewEnquiryTracker() {
     const month = String(date.getMonth() + 1).padStart(2, '0')
     const year = date.getFullYear()
     return `${day}/${month}/${year}`
-  }
-
-  // Function to upload image/video to Google Drive
-  const uploadFileToDrive = async (file, fileType = "image") => {
-    try {
-      // Convert file to base64
-      const reader = new FileReader()
-
-      return new Promise((resolve, reject) => {
-        reader.onload = async () => {
-          try {
-            const base64Data = reader.result.split(',')[1] // Remove the data:image/...;base64, prefix
-
-            const scriptUrl = "https://script.google.com/macros/s/AKfycbzTPj_x_0Sh6uCNnMDi-KlwVzkGV3nC4tRF6kGUNA1vXG0Ykx4Lq6ccR9kYv6Cst108aQ/exec"
-
-            const params = {
-              action: fileType === "pdf" ? "uploadPDF" : "uploadImage",
-              fileName: file.name,
-              mimeType: file.type
-            }
-
-            // Add the appropriate data parameter based on file type
-            if (fileType === "pdf") {
-              params.pdfData = base64Data;
-            } else {
-              params.imageData = base64Data;
-            }
-
-            const urlParams = new URLSearchParams()
-            for (const key in params) {
-              urlParams.append(key, params[key])
-            }
-
-            const response = await fetch(scriptUrl, {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded"
-              },
-              body: urlParams
-            })
-
-            const result = await response.json()
-
-            if (result.success) {
-              resolve(result.fileUrl)
-            } else {
-              reject(new Error(result.error || "Failed to upload file"))
-            }
-          } catch (error) {
-            reject(error)
-          }
-        }
-
-        reader.onerror = () => {
-          reject(new Error("Failed to read file"))
-        }
-
-        reader.readAsDataURL(file)
-      })
-    } catch (error) {
-      console.error("Error uploading file:", error)
-      throw error
-    }
   }
 
 
@@ -845,21 +772,6 @@ function NewEnquiryTracker() {
   };
 
 
-  const checkItemFieldsPopulated = (data) => {
-    const itemFields = [
-      'Item_Name1', 'Quantity1', 'Item_Name2', 'Quantity2',
-      'Item_Name3', 'Quantity3', 'Item_Name4', 'Quantity4',
-      'Item_Name5', 'Quantity5', 'Total Order Qty'
-    ];
-
-    for (const field of itemFields) {
-      if (data[field] && data[field] !== '' && data[field] !== null) {
-        return true;
-      }
-    }
-
-    return false;
-  };
   // const updateEnquiryToOrderTable = async (enquiryNo, formData, currentStage) => {
   //   try {
   //     // Helper function to safely convert to boolean
@@ -1615,17 +1527,17 @@ function NewEnquiryTracker() {
   // };
 
   return (
-    <div className="container mx-auto py-10 px-4">
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-md">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold">Call Tracker</h2>
-          <p className="text-sm text-slate-500">
+    <div className="container mx-auto py-1 px-2">
+      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm border border-slate-200">
+        <div className="px-3 py-2 border-b border-slate-100">
+          <h2 className="text-base font-bold text-slate-800">Call Tracker</h2>
+          <p className="text-[11px] text-slate-500">
             Track the progress of the enquiry
-            {formData.enquiryNo && <span className="font-medium"> for Enquiry #{formData.enquiryNo}</span>}
+            {formData.enquiryNo && <span className="font-medium text-purple-600"> for Enquiry #{formData.enquiryNo}</span>}
           </p>
         </div>
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-6">
+          <div className="p-2 space-y-3">
             <div className="space-y-2">
               <label htmlFor="enquiryNo" className="block text-sm font-medium text-gray-700">
                 Enquiry No.
