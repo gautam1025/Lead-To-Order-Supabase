@@ -4,7 +4,7 @@ import { useState, useEffect, useContext, useCallback } from "react";
 import { AuthContext } from "../../App";
 import supabase from "../../utils/supabase";
 import { BarChartIcon, PhoneCallIcon, FileTextIcon, ShoppingCartIcon, UsersIcon } from "../../components/Icons";
-import { MapPin } from "lucide-react";
+import { MapPin, ArrowDownLeft, ArrowUpRight, CheckCircle2 } from "lucide-react";
 
 // import { supabaseVisit } from "../supabaseClientVisit";
 
@@ -34,6 +34,9 @@ function Report() {
         orders: 0,
         quotationValue: 0,
         orderQuotationValue: 0,
+        incoming: 0,
+        outgoing: 0,
+        conversion: 0,
     });
     const [filters, setFilters] = useState({
         scName: "all",
@@ -170,7 +173,7 @@ function Report() {
             // 2, 3, 4 & 5. Fetch Total Leads, Enquiries, Quotations & Orders (leads_to_order)
             let leadsQuery = supabase
                 .from("leads_to_order")
-                .select("Planned1, Actual1, SC_Name, Quotation_Number, Timestamp, Quotation_Value_Without_Tax, \"Is_Order_Received?_Status\"")
+                .select("Planned1, Actual1, SC_Name, Quotation_Number, Timestamp, Quotation_Value_Without_Tax, \"Is_Order_Received?_Status\", \"Enquiry_Approach\"");
 
             if (filters.scName !== "all") {
                 leadsQuery = leadsQuery.eq("SC_Name", filters.scName);
@@ -178,12 +181,24 @@ function Report() {
 
             const { data: leadsData, error: leadsError } = await leadsQuery;
 
+            // Fetch Enquiries from enquiry_to_order table for Incoming, Outgoing, and Conversion
+            let enquiryQuery = supabase
+                .from("enquiry_to_order")
+                .select("enquiry_approach, is_order_received_status, timestamp, created_at, sc_name, enquiry_assign_to_project");
+
+            const { data: enquiryData, error: enquiryError } = await enquiryQuery;
+
             let totalLeadCount = 0;
             let enquiryCount = 0;
             let orderCount = 0;
             let quotationCount = 0;
             let totalQuotationValue = 0;
             let totalOrderQuotationValue = 0; // The quotation value of ONLY converted orders
+            let incomingCount = 0;
+            let outgoingCount = 0;
+            let conversionCount = 0;
+
+            const firstWord = (str) => String(str || '').trim().toLowerCase().split(/\s+/)[0];
 
             if (leadsError) {
                 console.error("Error fetching leads_to_order:", leadsError);
@@ -192,6 +207,7 @@ function Report() {
                     const pDate = parseDate(row.Planned1);
                     const aDate = row.Actual1 ? parseDate(row.Actual1) : null;
                     const tDate = parseDate(row.Timestamp);
+                    const recordDate = tDate || aDate || pDate;
 
                     // Total Leads
                     if (tDate) {
@@ -208,12 +224,10 @@ function Report() {
                     }
 
                     // Orders
-                    if (row.Actual1) {
-                        // if (row.Planned1 && row.Actual1) {
-                        // Check if Is_Order_Received?_Status is Yes (case-insensitive for safety)
-                        const isOrderReceived = row["Is_Order_Received?_Status"] &&
-                            String(row["Is_Order_Received?_Status"]).toLowerCase() === "yes";
+                    const isOrderReceived = row["Is_Order_Received?_Status"] &&
+                        String(row["Is_Order_Received?_Status"]).trim().toLowerCase() === "yes";
 
+                    if (row.Actual1) {
                         if (isOrderReceived && isDateInRange(aDate, filters.startDate, filters.endDate)) {
                             orderCount++;
                             // Track the quotation value for this converted order (Status=Yes)
@@ -239,6 +253,47 @@ function Report() {
                             }
                         }
                     }
+
+                    // Incoming & Outgoing from leads_to_order
+                    const approach = row["Enquiry_Approach"] ? String(row["Enquiry_Approach"]).trim().toLowerCase() : "";
+                    if (recordDate && isDateInRange(recordDate, filters.startDate, filters.endDate)) {
+                        if (approach === "incoming") incomingCount++;
+                        if (approach === "outgoing") outgoingCount++;
+                    }
+
+                    // Conversion from leads_to_order
+                    if (isOrderReceived && recordDate && isDateInRange(recordDate, filters.startDate, filters.endDate)) {
+                        conversionCount++;
+                    }
+                });
+            }
+
+            if (enquiryError) {
+                console.error("Error fetching enquiry_to_order:", enquiryError);
+            } else if (enquiryData) {
+                const selectedFirstWord = filters.scName !== "all" ? firstWord(filters.scName) : null;
+
+                enquiryData.forEach(row => {
+                    // SC Filter check for enquiry_to_order
+                    const matchesSC = selectedFirstWord === null ||
+                        (row.sc_name && firstWord(row.sc_name) === selectedFirstWord) ||
+                        (row.enquiry_assign_to_project && firstWord(row.enquiry_assign_to_project) === selectedFirstWord);
+
+                    if (!matchesSC) return;
+
+                    const eDate = parseDate(row.timestamp || row.created_at);
+
+                    if (isDateInRange(eDate, filters.startDate, filters.endDate)) {
+                        const approach = row.enquiry_approach ? String(row.enquiry_approach).trim().toLowerCase() : "";
+                        if (approach === "incoming") incomingCount++;
+                        if (approach === "outgoing") outgoingCount++;
+
+                        const isOrderReceived = row.is_order_received_status &&
+                            String(row.is_order_received_status).trim().toLowerCase() === "yes";
+                        if (isOrderReceived) {
+                            conversionCount++;
+                        }
+                    }
                 });
             }
 
@@ -250,6 +305,9 @@ function Report() {
                 orders: orderCount,
                 quotationValue: totalQuotationValue,
                 orderQuotationValue: totalOrderQuotationValue,
+                incoming: incomingCount,
+                outgoing: outgoingCount,
+                conversion: conversionCount,
             });
 
         } catch (error) {
@@ -742,7 +800,7 @@ function Report() {
                         </div>
 
                         {/* Metrics Grid */}
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-6">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
                             {/* Card 0: Total Leads */}
                             <div className="bg-white rounded-lg shadow px-4 py-6 flex items-center">
                                 <div className="p-3 rounded-full bg-indigo-100 text-indigo-600 mr-3">
@@ -798,7 +856,40 @@ function Report() {
                                 </div>
                             </div>
 
-                            {/* Card 5: Total Quotation Value */}
+                            {/* Card 5: Incoming */}
+                            <div className="bg-white rounded-lg shadow px-6 py-6 flex items-center">
+                                <div className="p-3 rounded-full bg-sky-100 text-sky-600 mr-4">
+                                    <ArrowDownLeft className="h-8 w-8" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Incoming</p>
+                                    <p className="text-2xl font-semibold text-gray-900">{isLoading ? "..." : metrics.incoming}</p>
+                                </div>
+                            </div>
+
+                            {/* Card 6: Outgoing */}
+                            <div className="bg-white rounded-lg shadow px-6 py-6 flex items-center">
+                                <div className="p-3 rounded-full bg-rose-100 text-rose-600 mr-4">
+                                    <ArrowUpRight className="h-8 w-8" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Outgoing</p>
+                                    <p className="text-2xl font-semibold text-gray-900">{isLoading ? "..." : metrics.outgoing}</p>
+                                </div>
+                            </div>
+
+                            {/* Card 7: Conversion */}
+                            <div className="bg-white rounded-lg shadow px-6 py-6 flex items-center">
+                                <div className="p-3 rounded-full bg-emerald-100 text-emerald-600 mr-4">
+                                    <CheckCircle2 className="h-8 w-8" />
+                                </div>
+                                <div>
+                                    <p className="text-sm font-medium text-gray-500">Conversion</p>
+                                    <p className="text-2xl font-semibold text-gray-900">{isLoading ? "..." : metrics.conversion}</p>
+                                </div>
+                            </div>
+
+                            {/* Card 8: Total Quotation Value */}
                             <div className="bg-white rounded-lg shadow px-6 py-6 flex items-center">
                                 <div className="p-3 rounded-full bg-teal-100 text-teal-600 mr-4">
                                     <span className="text-2xl font-bold">₹</span>
@@ -811,7 +902,7 @@ function Report() {
                                 </div>
                             </div>
 
-                            {/* Card 6: Total Order Quotation Value */}
+                            {/* Card 9: Total Order Quotation Value */}
                             <div className="bg-white rounded-lg shadow px-6 py-6 flex items-center">
                                 <div className="p-3 rounded-full bg-orange-100 text-orange-600 mr-4">
                                     <span className="text-2xl font-bold">₹</span>
