@@ -23,6 +23,7 @@ function NewCallTracker() {
     nextCallDate: "",
     nextCallTime: "",
     customerFeedback: "",
+    otherRemarks: "",
     enquiryApproach: "",
   })
 
@@ -68,13 +69,29 @@ function NewCallTracker() {
   // Function to fetch dropdown data from Supabase
   const fetchDropdownData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('dropdown')
-        .select('*')
-      
-      if (error) throw error
+      let data = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
 
-      if (data) {
+      while (fetchMore) {
+        const { data: pageData, error } = await supabase
+          .from('dropdown')
+          .select('*')
+          .range(from, from + step - 1);
+        
+        if (error) throw error;
+        
+        if (pageData && pageData.length > 0) {
+          data = [...data, ...pageData];
+          from += step;
+          if (pageData.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+
+      if (data && data.length > 0) {
         const uniqueStates = [...new Set(data.map(item => item.state))].filter(Boolean)
         const uniqueSalesTypes = [...new Set(data.map(item => item.sales_type))].filter(Boolean)
         const uniqueProductCategories = [...new Set(data.map(item => item.item_name))].filter(Boolean)
@@ -114,12 +131,28 @@ function NewCallTracker() {
   // Fetch company options and details
   const fetchCompanyData = async () => {
     try {
-      const { data, error } = await supabase
-        .from("dropdown")
-        .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
-        .not("lead_form_company_name", "is", null)
+      let data = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
 
-      if (error) throw error
+      while (fetchMore) {
+        const { data: pageData, error } = await supabase
+          .from("dropdown")
+          .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
+          .not("lead_form_company_name", "is", null)
+          .range(from, from + step - 1);
+
+        if (error) throw error;
+
+        if (pageData && pageData.length > 0) {
+          data = [...data, ...pageData];
+          from += step;
+          if (pageData.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
 
       if (data && data.length > 0) {
         const companies = []
@@ -271,6 +304,7 @@ const handleSubmit = async (e) => {
       "Timestamp": new Date().toISOString().split('T')[0],
       "LD-Lead-No": formData.leadNo,
       "What_Did_The_Customer_say?": formData.customerFeedback,
+      "other_remarks": formData.customerFeedback === "Other" ? formData.otherRemarks : null,
       "SC_Name": scName,
       "Company_Name": companyName,
       "Enquiry_Received_Status": enquiryStatus === "yes" ? "yes" : 
@@ -542,6 +576,23 @@ const handleSubmit = async (e) => {
     ))}
   </select>
 </div>
+
+{formData.customerFeedback === "Other" && (
+  <div className="space-y-2">
+    <label htmlFor="otherRemarks" className="block text-sm font-medium text-gray-700">
+      Other Remarks
+    </label>
+    <input
+      type="text"
+      id="otherRemarks"
+      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+      placeholder="Enter remarks for Other"
+      value={formData.otherRemarks || ""}
+      onChange={handleChange}
+      required
+    />
+  </div>
+)}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Lead Status</label>

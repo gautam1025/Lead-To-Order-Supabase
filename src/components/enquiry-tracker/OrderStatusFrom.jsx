@@ -107,7 +107,8 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
     }
 
     fetchQuotationNumbers();
-  }, [enquiryNo, formData.orderStatusQuotationNumber, onFieldChange, activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [enquiryNo, activeTab]);
 
   const stableOnFieldChange = useCallback(onFieldChange, [onFieldChange])
 
@@ -133,7 +134,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         .from("Make_Quotation")
         .select("Items")
         .eq("Quotation_No", quotationNumber)
-        .single()
+        .maybeSingle()
 
       if (error) {
         console.error("Error fetching from Make_Quotation:", error)

@@ -162,7 +162,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       ] = await Promise.all([
         supabase.from("dropdown").select("lead_source").not("lead_source", "is", null),
         supabase.from("dropdown").select("sales_co_ordinator_name").not("sales_co_ordinator_name", "is", null),
-        supabase.from("dropdown").select("direct_enquiry_state").not("direct_enquiry_state", "is", null),
+        supabase.from("dropdown").select("state").not("state", "is", null),
         supabase.from("dropdown").select("nob").not("nob", "is", null),
         supabase.from("dropdown").select("sales_type").not("sales_type", "is", null),
         supabase.from("dropdown").select("enquiry_approach").not("enquiry_approach", "is", null),
@@ -182,7 +182,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
       const sources = leadSourcesData.map(item => item.lead_source);
       const scNames = scNamesData.map(item => item.sales_co_ordinator_name);
-      const states = statesData.map(item => item.direct_enquiry_state);
+      const states = statesData.map(item => item.state);
       const nobItems = nobData.map(item => item.nob);
       const salesTypeOptions = salesTypeData.map(item => item.sales_type);
       const approachOptions = approachData.map(item => item.enquiry_approach);
@@ -219,36 +219,51 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   // Function to fetch company data
   const fetchCompanyData = async () => {
     try {
-      const { data, error } = await supabase
-        .from("dropdown")
-        .select("direct_enquiry_company_name, direct_enquiry_client_name, direct_enquiry_client_contact_no, direct_enquiry_state, direct_enquiry_gstin_uin, direct_enquiry_billing_address")
-        .order("direct_enquiry_company_name", { ascending: true });
+      let allData = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
 
-      if (error) {
-        console.error("Error fetching company data:", error);
-        return;
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from("client_master")
+          .select("*")
+          .range(from, from + step - 1);
+        
+        if (error) throw error;
+        
+        if (data && data.length > 0) {
+          allData = [...allData, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
       }
 
-      if (data) {
+      const relevantRecords = allData.filter((c) => c.isRelevant !== false);
+      
+      if (relevantRecords && relevantRecords.length > 0) {
         const companies = [];
         const detailsMap = {};
 
-        data.forEach(company => {
-          if (company.direct_enquiry_company_name) {
-            companies.push(company.direct_enquiry_company_name);
+        relevantRecords.forEach(company => {
+          if (company.company_name) {
+            companies.push(company.company_name);
 
-            detailsMap[company.direct_enquiry_company_name] = {
-              phoneNumber: company.direct_enquiry_client_contact_no || "",
-              salesPersonName: company.direct_enquiry_client_name || "",
-              location: company.direct_enquiry_billing_address || "",
-              gstNumber: company.direct_enquiry_gstin_uin || "",
-              enquiryState: company.direct_enquiry_state || ""
+            detailsMap[company.company_name] = {
+              phoneNumber: company.client_mobile_number || "",
+              salesPersonName: company.client_name || "",
+              location: company.billing_address || "",
+              gstNumber: company.gst_number || "",
+              enquiryState: company.state || ""
             };
           }
         });
 
-        setCompanyOptions(companies);
-        setFilteredCompanies(companies);
+        const uniqueCompanies = [...new Set(companies)].sort();
+        setCompanyOptions(uniqueCompanies);
+        setFilteredCompanies(uniqueCompanies);
         setCompanyDetailsMap(detailsMap);
       }
     } catch (error) {
@@ -257,7 +272,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       setFilteredCompanies([]);
       setCompanyDetailsMap({});
     }
-  }
+  };
 
   // Handle company name change and auto-fill other fields
   const handleCompanyChange = (companyName) => {

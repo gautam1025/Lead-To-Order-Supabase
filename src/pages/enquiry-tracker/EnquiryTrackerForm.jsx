@@ -8,6 +8,7 @@ import QuotationValidationForm from "../../components/enquiry-tracker/QuotationV
 import OrderExpectedForm from "../../components/enquiry-tracker/OrderExpectedForm"
 import OrderStatusForm from "../../components/enquiry-tracker/OrderStatusFrom"
 import supabase from "../../utils/supabase"
+import { generateAndAssignClientCode } from "../Master/ClientCodeGen"
 
 function NewEnquiryTracker() {
   const navigate = useNavigate()
@@ -788,6 +789,11 @@ function NewEnquiryTracker() {
         return false;
       }
 
+      // ✅ Generate client code if order status is yes
+      if (currentStage === "order-status" && orderStatusData.orderStatus?.toLowerCase() === "yes" && data?.Company_Name) {
+        await generateAndAssignClientCode(data.Company_Name);
+      }
+
       // ✅ Wait a moment for triggers to fire
       await new Promise(resolve => setTimeout(resolve, 500));
 
@@ -819,7 +825,7 @@ function NewEnquiryTracker() {
       const response = await fetch(webhookUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Content-Type': 'text/plain;charset=utf-8',
         },
         body: JSON.stringify({
           table: tableName,
@@ -1186,6 +1192,11 @@ function NewEnquiryTracker() {
       if (error) {
         console.error("Error updating enquiry_to_order:", error);
         return false;
+      }
+
+      // ✅ Generate client code if order status is yes
+      if (currentStage === "order-status" && allFormData.orderStatus?.toLowerCase() === "yes" && data?.company_name) {
+        await generateAndAssignClientCode(data.company_name);
       }
 
       return true;
