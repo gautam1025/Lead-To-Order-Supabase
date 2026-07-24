@@ -437,6 +437,20 @@ const handleSubmit = async (e) => {
       .eq('LD-Lead-No', formData.leadNo)
       .select()
 
+    if (leadStatus === "Not Relevant" && companyName) {
+      try {
+        const { error: cmErr } = await supabase
+          .from("client_master")
+          .update({ "isRelevant": false, updated_at: new Date().toISOString() })
+          .eq("company_name", companyName.trim());
+        if (cmErr) {
+          console.error("Error updating client_master relevance:", cmErr);
+        }
+      } catch (err) {
+        console.error("Failed to mark company as not relevant:", err);
+      }
+    }
+
     if (updateError) {
       console.error("Error updating leads_to_order:", updateError)
       showNotification("Follow-up recorded successfully, but there was an issue updating the order table", "warning")

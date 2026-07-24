@@ -1,13 +1,79 @@
 import { Link, useLocation } from "react-router-dom"
 import { HomeIcon, UsersIcon, PhoneCallIcon, BarChartIcon, FileTextIcon, ShieldIcon, LogoutIcon, DatabaseIcon, ChevronDownIcon, ChevronUpIcon, SettingsIcon } from "./Icons"
-import { useContext, useState } from "react"
+import { useContext, useState, useEffect } from "react"
 import { AuthContext } from "../App"
+import supabase from "../utils/supabase"
 import logoSvg from "../assests/logo.jpeg"
 
 function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     const location = useLocation()
     const { userType, isAdmin, logout } = useContext(AuthContext)
     const [isMasterOpen, setIsMasterOpen] = useState(false)
+    const [counts, setCounts] = useState({
+        callTracker: null,
+        enquiryTracker: null,
+        clientMaster: null
+    })
+
+    useEffect(() => {
+        const fetchCounts = async () => {
+            try {
+                const [
+                    callRes, 
+                    enquiryLeadsRes, 
+                    enquiryDirectRes, 
+                    clientTotalRes, 
+                    clientNotRelevantRes
+                ] = await Promise.all([
+                    // Call Tracker Pending Follow-ups
+                    supabase
+                        .from("leads_to_order")
+                        .select("*", { count: "exact", head: true })
+                        .not("Planned", "is", null)
+                        .is("Actual", null),
+
+                    // Enquiry Tracker Pending (leads_to_order)
+                    supabase
+                        .from("leads_to_order")
+                        .select("*", { count: "exact", head: true })
+                        .not("Planned1", "is", null)
+                        .is("Actual1", null),
+
+                    // Enquiry Tracker Pending (enquiry_to_order)
+                    supabase
+                        .from("enquiry_to_order")
+                        .select("*", { count: "exact", head: true })
+                        .not("planned1", "is", null)
+                        .is("actual1", null),
+
+                    // Client Master total clients count
+                    supabase
+                        .from("client_master")
+                        .select("*", { count: "exact", head: true }),
+
+                    // Client Master non-relevant clients count
+                    supabase
+                        .from("client_master")
+                        .select("*", { count: "exact", head: true })
+                        .eq("isRelevant", false)
+                ]);
+
+                const callCount = callRes.count || 0;
+                const enquiryCount = (enquiryLeadsRes.count || 0) + (enquiryDirectRes.count || 0);
+                const relevantClientCount = Math.max(0, (clientTotalRes.count || 0) - (clientNotRelevantRes.count || 0));
+
+                setCounts({
+                    callTracker: callCount,
+                    enquiryTracker: enquiryCount,
+                    clientMaster: relevantClientCount
+                });
+            } catch (err) {
+                console.error("Error fetching sidebar counts:", err);
+            }
+        };
+
+        fetchCounts();
+    }, [location.pathname]);
 
     // Base routes available to all users
     const routes = [
@@ -87,13 +153,25 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                             key={route.href}
                             to={route.href}
                             onClick={() => setMobileMenuOpen(false)}
-                            className={`flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${route.active
+                            className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${route.active
                                 ? "bg-sky-500 text-white shadow-md shadow-sky-200 hover:bg-sky-600"
                                 : "text-slate-600 hover:bg-sky-50 hover:text-sky-600"
                                 }`}
                         >
-                            {route.icon}
-                            {route.label}
+                            <div className="flex items-center">
+                                {route.icon}
+                                {route.label}
+                            </div>
+                            {route.href === "/call-tracker" && counts.callTracker !== null && (
+                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
+                                    {counts.callTracker}
+                                </span>
+                            )}
+                            {route.href === "/enquiry-tracker" && counts.enquiryTracker !== null && (
+                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
+                                    {counts.enquiryTracker}
+                                </span>
+                            )}
                         </Link>
                     ))}
 
@@ -134,13 +212,18 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                 <Link
                                     to="/master/client"
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
                                         location.pathname === "/master/client"
                                             ? "bg-sky-50 text-sky-600 font-semibold"
                                             : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
                                     }`}
                                 >
-                                    Client Master
+                                    <span>Client Master</span>
+                                    {counts.clientMaster !== null && (
+                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700">
+                                            {counts.clientMaster}
+                                        </span>
+                                    )}
                                 </Link>
                             </div>
                         )}

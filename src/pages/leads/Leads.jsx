@@ -211,7 +211,6 @@ function ExcelImportModal({ onClose, onSaved }) {
         NOB: row.nob || "",
         GST_Number: row.gstNumber || "",
         Sales_Type: row.salesType || "",
-        Group_Name: row.groupName || "",
         Additional_Notes: row.additionalNotes || "",
         "Customer_Registration Form": "",
         "Credit _Access": "",
@@ -418,6 +417,9 @@ function Leads() {
   const initialEmail = searchParams.get("email") || "";
   const initialState = searchParams.get("state") || "";
   const initialGroupName = searchParams.get("groupName") || "";
+  const initialGst = searchParams.get("gstNumber") || "";
+  const initialAddress = searchParams.get("billingAddress") || "";
+  const initialScName = searchParams.get("scName") || "";
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
@@ -429,14 +431,14 @@ function Leads() {
     salespersonName: initialPersonName,
     location: initialLocation,
     email: initialEmail,
-    contactPersons: [{ name: "", designation: "", number: "" }],
+    contactPersons: [{ name: initialPersonName, designation: "", number: initialPhoneNumber }],
     state: initialState,
-    address: "",
+    address: initialAddress,
     nob: "",
     salesType: "",
-    gst: "",
+    gst: initialGst,
     notes: "",
-    scName: "",
+    scName: initialScName,
     groupName: initialGroupName,
     customerRegistrationForm: "",
     creditAccess: "",
@@ -454,12 +456,16 @@ function Leads() {
   const [activeScRules, setActiveScRules] = useState([]);
   const [activeScCategory, setActiveScCategory] = useState(null);
 
-  const [groupNames, setGroupNames] = useState([]);
+  // Client Master records state & Dropdown refs
+  const [clientMasterRecords, setClientMasterRecords] = useState([]);
+  
   const [searchGroupName, setSearchGroupName] = useState(initialGroupName);
   const [showGroupNameDropdown, setShowGroupNameDropdown] = useState(false);
+  const groupDropdownRef = useRef(null);
 
-  const [companyOptions, setCompanyOptions] = useState([]);
-  const [companyDetailsMap, setCompanyDetailsMap] = useState({});
+  const [searchCompanyName, setSearchCompanyName] = useState(initialCompanyName);
+  const [showCompanyDropdown, setShowCompanyDropdown] = useState(false);
+  const companyDropdownRef = useRef(null);
 
   const [nextLeadNumber, setNextLeadNumber] = useState("");
   const [creditDaysOptions, setCreditDaysOptions] = useState([]);
@@ -477,7 +483,7 @@ function Leads() {
       setIsLoadingData(true);
       try {
         await fetchDropdownData();
-        await fetchCompanyData();
+        await fetchClientMasterData();
         await generateNextLeadNumber();
         
         // Fetch SC Management Rules
@@ -496,11 +502,17 @@ function Leads() {
     fetchInitialData();
   }, []);
 
-  // Click outside handler for SC Dropdown
+  // Click outside handlers for Dropdowns
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (scDropdownRef.current && !scDropdownRef.current.contains(event.target)) {
         setShowScNameDropdown(false);
+      }
+      if (groupDropdownRef.current && !groupDropdownRef.current.contains(event.target)) {
+        setShowGroupNameDropdown(false);
+      }
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(event.target)) {
+        setShowCompanyDropdown(false);
       }
     };
     document.addEventListener("mousedown", handleClickOutside);
@@ -574,7 +586,6 @@ function Leads() {
         const creditLimits = [...new Set(allData.map((row) => row.credit_limit).filter(Boolean))];
         const designations = [...new Set(allData.map((row) => row.designation).filter(Boolean))];
         const nobs = [...new Set(allData.map((row) => row.nob).filter(Boolean))];
-        const groups = [...new Set(allData.map((row) => row.group_name).filter(Boolean))];
 
         setReceiverNames(receivers.filter((item) => item && item.trim() !== "").sort());
         setLeadSources(sources.filter((item) => item && item.trim() !== "").sort());
@@ -584,7 +595,6 @@ function Leads() {
         setCreditLimitOptions(creditLimits.filter((item) => item && item.trim() !== "").sort());
         setDesignationOptions(designations.filter((item) => item && item.trim() !== "").sort());
         setNobOptions(nobs.filter((item) => item && item.trim() !== "").sort());
-        setGroupNames(groups.filter((item) => item && item.trim() !== "").sort());
       }
     } catch (error) {
       console.error("Error fetching dropdown values:", error);
@@ -597,7 +607,7 @@ function Leads() {
     }
   };
 
-  const fetchCompanyData = async () => {
+  const fetchClientMasterData = async () => {
     try {
       let allData = [];
       let from = 0;
@@ -606,13 +616,12 @@ function Leads() {
 
       while (fetchMore) {
         const { data, error } = await supabase
-          .from("dropdown")
-          .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
-          .not("lead_form_company_name", "is", null)
+          .from("client_master")
+          .select("*")
           .range(from, from + step - 1);
-
+        
         if (error) throw error;
-
+        
         if (data && data.length > 0) {
           allData = [...allData, ...data];
           from += step;
@@ -622,28 +631,10 @@ function Leads() {
         }
       }
 
-      if (allData.length > 0) {
-        const companies = [];
-        const detailsMap = {};
-
-        allData.forEach((row) => {
-          if (row.lead_form_company_name) {
-            companies.push(row.lead_form_company_name);
-            detailsMap[row.lead_form_company_name] = {
-              salesPerson: row.lead_form_person_name || "",
-              phoneNumber: row.lead_form_mobile_no || "",
-              email: row.lead_form_email || "",
-              location: "",
-              address: row.lead_form_address || "",
-            };
-          }
-        });
-
-        setCompanyOptions([...new Set(companies)]);
-        setCompanyDetailsMap(detailsMap);
-      }
+      const relevantRecords = allData.filter((c) => c.isRelevant !== false);
+      setClientMasterRecords(relevantRecords);
     } catch (error) {
-      console.error("Error fetching company data:", error);
+      console.error("Error fetching client_master records:", error);
     }
   };
 
@@ -688,19 +679,6 @@ function Leads() {
       ...prevData,
       [id]: value,
     }));
-
-    if (id === "companyName" && value) {
-      const companyDetails = companyDetailsMap[value] || {};
-      setFormData((prevData) => ({
-        ...prevData,
-        companyName: value,
-        phoneNumber: companyDetails.phoneNumber || "",
-        salespersonName: companyDetails.salesPerson || "",
-        location: companyDetails.location || "",
-        email: companyDetails.email || "",
-        address: companyDetails.address || prevData.address,
-      }));
-    }
   };
 
   const handleScNameChange = (name) => {
@@ -709,10 +687,75 @@ function Leads() {
     setShowScNameDropdown(false);
   };
 
-  const handleGroupNameChange = (name) => {
-    setFormData((prev) => ({ ...prev, groupName: name }));
-    setSearchGroupName(name);
+  // Group Names extracted from client_master (where isRelevant = true)
+  const availableGroupNames = Array.from(
+    new Set(
+      clientMasterRecords
+        .map((c) => c.company_group_name)
+        .filter(Boolean)
+        .map((g) => g.trim())
+    )
+  ).sort();
+
+  const filteredGroupNames = availableGroupNames.filter((name) =>
+    name.toLowerCase().includes(searchGroupName.toLowerCase())
+  );
+
+  // Companies matching selected group from client_master (or all relevant companies if no group selected)
+  const availableCompanyRecords = formData.groupName
+    ? clientMasterRecords.filter(
+        (c) =>
+          c.company_group_name &&
+          c.company_group_name.toLowerCase().trim() === formData.groupName.toLowerCase().trim()
+      )
+    : clientMasterRecords;
+
+  const availableCompanyNames = Array.from(
+    new Set(
+      availableCompanyRecords
+        .map((c) => c.company_name)
+        .filter(Boolean)
+        .map((cn) => cn.trim())
+    )
+  ).sort();
+
+  const filteredCompanyNames = availableCompanyNames.filter((name) =>
+    name.toLowerCase().includes(searchCompanyName.toLowerCase())
+  );
+
+  const handleSelectGroup = (groupName) => {
+    setFormData((prev) => ({ ...prev, groupName, companyName: "" }));
+    setSearchGroupName(groupName);
+    setSearchCompanyName("");
     setShowGroupNameDropdown(false);
+  };
+
+  const handleSelectCompany = (compName) => {
+    setSearchCompanyName(compName);
+    setShowCompanyDropdown(false);
+
+    // Auto populate details from client_master if available
+    const matchedRecord = availableCompanyRecords.find(
+      (c) => (c.company_name || "").toLowerCase().trim() === compName.toLowerCase().trim()
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      companyName: compName,
+      groupName: matchedRecord?.company_group_name || prev.groupName,
+      salespersonName: matchedRecord?.client_name || prev.salespersonName,
+      phoneNumber: matchedRecord?.client_mobile_number || prev.phoneNumber,
+      state: matchedRecord?.state || prev.state,
+      address: matchedRecord?.billing_address || prev.address,
+      gst: matchedRecord?.gst_number || prev.gst,
+      scName: matchedRecord?.sc_name || prev.scName,
+      creditDays: matchedRecord?.credit_days ? String(matchedRecord.credit_days) : prev.creditDays,
+      creditLimit: matchedRecord?.credit_limit ? String(matchedRecord.credit_limit) : prev.creditLimit,
+    }));
+
+    if (matchedRecord?.company_group_name) {
+      setSearchGroupName(matchedRecord.company_group_name);
+    }
   };
 
   const handleContactPersonChange = (index, field, value) => {
@@ -750,6 +793,42 @@ function Leads() {
     setIsSubmitting(true);
 
     try {
+      // 1. Check if company exists in client_master
+      const compNameTrimmed = (formData.companyName || "").trim();
+      if (compNameTrimmed) {
+        const { data: existingClient, error: clientCheckErr } = await supabase
+          .from("client_master")
+          .select("uuid, company_name")
+          .ilike("company_name", compNameTrimmed)
+          .maybeSingle();
+
+        if (!clientCheckErr && !existingClient) {
+          // Insert new row into client_master
+          const newClientPayload = {
+            company_name: compNameTrimmed,
+            company_group_name: formData.groupName ? formData.groupName.trim() : null,
+            client_name: formData.salespersonName ? formData.salespersonName.trim() : null,
+            client_mobile_number: formData.phoneNumber ? formData.phoneNumber.trim() : null,
+            state: formData.state ? formData.state.trim() : null,
+            billing_address: formData.address ? formData.address.trim() : null,
+            gst_number: formData.gst ? formData.gst.trim() : null,
+            sc_name: formData.scName ? formData.scName.trim() : null,
+            credit_days: formData.creditDays ? parseInt(formData.creditDays, 10) : null,
+            credit_limit: formData.creditLimit ? parseFloat(formData.creditLimit) : null,
+            "isRelevant": true
+          };
+
+          const { error: cmInsertErr } = await supabase
+            .from("client_master")
+            .insert([newClientPayload]);
+
+          if (cmInsertErr) {
+            console.error("Error inserting into client_master:", cmInsertErr);
+          }
+        }
+      }
+
+      // 2. Insert into leads_to_order
       const leadData = {
         Timestamp: formatDate(new Date()),
         "LD-Lead-No": nextLeadNumber,
@@ -775,7 +854,6 @@ function Leads() {
         NOB: formData.nob,
         GST_Number: formData.gst,
         Sales_Type: formData.salesType,
-        Group_Name: formData.groupName || "",
         Additional_Notes: formData.notes,
         "Customer_Registration Form": formData.customerRegistrationForm,
         "Credit _Access": formData.creditAccess,
@@ -810,7 +888,10 @@ function Leads() {
         groupName: "",
       });
       setSearchScName("");
+      setSearchGroupName("");
+      setSearchCompanyName("");
 
+      await fetchClientMasterData();
       await generateNextLeadNumber();
     } catch (error) {
       console.error("Error submitting lead:", error);
@@ -824,10 +905,6 @@ function Leads() {
     name.toLowerCase().includes(searchScName.toLowerCase())
   );
 
-  const filteredGroupNames = groupNames.filter((name) =>
-    name.toLowerCase().includes(searchGroupName.toLowerCase())
-  );
-
   if (isLoadingData) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -838,25 +915,26 @@ function Leads() {
   }
 
   return (
-    <div className="container mx-auto py-10 px-4">
+    <div className="container mx-auto py-6 px-4">
       {showImportModal && (
         <ExcelImportModal
           onClose={() => setShowImportModal(false)}
           onSaved={(gName) => {
             if (gName) {
               setFormData((prev) => ({ ...prev, groupName: gName }));
+              setSearchGroupName(gName);
             }
           }}
         />
       )}
 
-      <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-md border border-slate-100">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between flex-wrap gap-4">
+      <div className="max-w-5xl mx-auto bg-white rounded-lg shadow-md border border-slate-100">
+        <div className="p-4 border-b border-slate-100 flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h2 className="text-xl font-bold text-slate-800">New Lead</h2>
-            <p className="text-sm text-slate-500">Fill in the lead information below</p>
+            <h2 className="text-lg font-bold text-slate-800">New Lead</h2>
+            <p className="text-xs text-slate-500">Fill in the lead information below</p>
             {nextLeadNumber && (
-              <p className="text-sm font-semibold text-sky-600 mt-1">
+              <p className="text-xs font-semibold text-sky-600 mt-0.5">
                 Next Lead Number: {nextLeadNumber}
               </p>
             )}
@@ -896,9 +974,9 @@ function Leads() {
                 XLSX.utils.book_append_sheet(wb, ws, "Lead Import Template");
                 XLSX.writeFile(wb, "Lead_Import_Template.xlsx");
               }}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-emerald-700 bg-white border-2 border-emerald-400 hover:bg-emerald-50 rounded-xl transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-emerald-700 bg-white border border-emerald-400 hover:bg-emerald-50 rounded-lg transition-all"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
               </svg>
               Download Template
@@ -906,9 +984,9 @@ function Leads() {
             <button
               type="button"
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-xl shadow-md hover:shadow-lg transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 rounded-lg shadow transition-all"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M9 19l3 3m0 0l3-3m-3 3V10" />
               </svg>
               Import Excel
@@ -917,17 +995,19 @@ function Leads() {
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div className="p-6 space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="receiverName" className="block text-sm font-semibold text-gray-700">
+          <div className="p-4 space-y-4">
+            
+            {/* Row 1: 3 Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="receiverName" className="block text-xs font-semibold text-gray-700">
                   Lead Receiver Name <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="receiverName"
                   value={formData.receiverName}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   required
                 >
                   <option value="">Select receiver</option>
@@ -939,15 +1019,15 @@ function Leads() {
                 </select>
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="source" className="block text-sm font-semibold text-gray-700">
+              <div className="space-y-1">
+                <label htmlFor="source" className="block text-xs font-semibold text-gray-700">
                   Lead Source <span className="text-red-500">*</span>
                 </label>
                 <select
                   id="source"
                   value={formData.source}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   required
                 >
                   <option value="">Select source</option>
@@ -959,8 +1039,8 @@ function Leads() {
                 </select>
               </div>
 
-              <div className="space-y-2 relative" ref={scDropdownRef}>
-                <label htmlFor="scName" className="block text-sm font-semibold text-gray-700">
+              <div className="space-y-1 relative" ref={scDropdownRef}>
+                <label htmlFor="scName" className="block text-xs font-semibold text-gray-700">
                   SC Name
                 </label>
                 <div className="relative">
@@ -973,21 +1053,21 @@ function Leads() {
                       setShowScNameDropdown(true);
                     }}
                     onFocus={() => setShowScNameDropdown(true)}
-                    className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white transition-all shadow-sm"
+                    className="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                     placeholder="Type to search SC Name"
                   />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-gray-400">
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
                     </svg>
                   </div>
                 </div>
                 {showScNameDropdown && filteredScNames.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-60 overflow-y-auto transform opacity-100 scale-100 transition-all duration-200 origin-top">
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
                     {filteredScNames.map((name, index) => (
                       <div
                         key={index}
-                        className={`px-4 py-2.5 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${formData.scName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'}`}
+                        className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${formData.scName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'}`}
                         onClick={() => handleScNameChange(name)}
                       >
                         {name}
@@ -996,101 +1076,155 @@ function Leads() {
                   </div>
                 )}
               </div>
+            </div>
 
-              <div className="space-y-2 relative">
-                <label htmlFor="groupName" className="block text-sm font-semibold text-gray-700">
-                  Group Name
+            {/* Row 2: Group Name, Company Name, Person Number */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              
+              {/* Group Name (Input search dropdown - select from client_master existing relevant groups) */}
+              <div className="space-y-1 relative" ref={groupDropdownRef}>
+                <label htmlFor="groupName" className="block text-xs font-semibold text-gray-700">
+                  Group Name <span className="text-xs text-gray-400">(Optional)</span>
                 </label>
-                <input
-                  type="text"
-                  id="groupName"
-                  value={searchGroupName}
-                  onChange={(e) => {
-                    setSearchGroupName(e.target.value);
-                    setShowGroupNameDropdown(true);
-                  }}
-                  onFocus={() => setShowGroupNameDropdown(true)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  placeholder="Type to search Group Name"
-                />
-                {showGroupNameDropdown && filteredGroupNames.length > 0 && (
-                  <div className="absolute z-10 w-full mt-1 bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                    {filteredGroupNames.map((name, index) => (
-                      <div
-                        key={index}
-                        className="px-4 py-2 cursor-pointer hover:bg-slate-100 text-sm"
-                        onClick={() => handleGroupNameChange(name)}
-                      >
-                        {name}
-                      </div>
-                    ))}
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="groupName"
+                    value={searchGroupName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearchGroupName(val);
+                      setFormData((prev) => ({ ...prev, groupName: val }));
+                      setShowGroupNameDropdown(true);
+                    }}
+                    onFocus={() => setShowGroupNameDropdown(true)}
+                    className="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                    placeholder="Search or select Group"
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                {showGroupNameDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                    {filteredGroupNames.length > 0 ? (
+                      filteredGroupNames.map((name, index) => (
+                        <div
+                          key={index}
+                          className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${
+                            formData.groupName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'
+                          }`}
+                          onClick={() => handleSelectGroup(name)}
+                        >
+                          {name}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-gray-400 italic">No matching relevant group found</div>
+                    )}
                   </div>
                 )}
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="companyName" className="block text-sm font-semibold text-gray-700">
+              {/* Company Name (Options matching selected group, allow entering new company) */}
+              <div className="space-y-1 relative" ref={companyDropdownRef}>
+                <label htmlFor="companyName" className="block text-xs font-semibold text-gray-700">
                   Company Name <span className="text-red-500">*</span>
                 </label>
-                <input
-                  list="companyOptions"
-                  id="companyName"
-                  value={formData.companyName}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  placeholder="Enter or select Company Name"
-                  required
-                />
-                <datalist id="companyOptions">
-                  {companyOptions.map((company, index) => (
-                    <option key={index} value={company} />
-                  ))}
-                </datalist>
+                <div className="relative">
+                  <input
+                    type="text"
+                    id="companyName"
+                    value={searchCompanyName}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSearchCompanyName(val);
+                      setFormData((prev) => ({ ...prev, companyName: val }));
+                      setShowCompanyDropdown(true);
+                    }}
+                    onFocus={() => setShowCompanyDropdown(true)}
+                    className="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                    placeholder="Enter or select Company Name"
+                    required
+                  />
+                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-gray-400">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+                </div>
+                {showCompanyDropdown && (
+                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
+                    {filteredCompanyNames.length > 0 ? (
+                      filteredCompanyNames.map((company, index) => (
+                        <div
+                          key={index}
+                          className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${
+                            formData.companyName === company ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'
+                          }`}
+                          onClick={() => handleSelectCompany(company)}
+                        >
+                          {company}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="px-3 py-2 text-xs text-amber-600 font-medium bg-amber-50">
+                        No company found for group. Type new company to add.
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="phoneNumber" className="block text-sm font-semibold text-gray-700">
+              <div className="space-y-1">
+                <label htmlFor="phoneNumber" className="block text-xs font-semibold text-gray-700">
                   Person Number <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="phoneNumber"
                   value={formData.phoneNumber}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   placeholder="Enter phone number"
                   required
                 />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="salespersonName" className="block text-sm font-semibold text-gray-700">
+            </div>
+
+            {/* Row 3: 3 Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="salespersonName" className="block text-xs font-semibold text-gray-700">
                   Person Name <span className="text-red-500">*</span>
                 </label>
                 <input
                   id="salespersonName"
                   value={formData.salespersonName}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   placeholder="Enter person name"
                   required
                 />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="location" className="block text-sm font-semibold text-gray-700">
+              <div className="space-y-1">
+                <label htmlFor="location" className="block text-xs font-semibold text-gray-700">
                   Location
                 </label>
                 <input
                   id="location"
                   value={formData.location}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   placeholder="Enter location"
                 />
               </div>
 
-              <div className="space-y-2">
-                <label htmlFor="email" className="block text-sm font-semibold text-gray-700">
+              <div className="space-y-1">
+                <label htmlFor="email" className="block text-xs font-semibold text-gray-700">
                   Email Address <span className="text-xs text-gray-400">(Optional)</span>
                 </label>
                 <input
@@ -1098,20 +1232,23 @@ function Leads() {
                   type="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                   placeholder="Enter email address"
                 />
               </div>
+            </div>
 
-              <div className="space-y-2">
-                <label htmlFor="state" className="block text-sm font-semibold text-gray-700">
+            {/* Row 4: 3 Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="state" className="block text-xs font-semibold text-gray-700">
                   State
                 </label>
                 <select
                   id="state"
                   value={formData.state}
                   onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                 >
                   <option value="">Select state</option>
                   {stateOptions.map((state, index) => (
@@ -1122,30 +1259,141 @@ function Leads() {
                 </select>
               </div>
 
+              <div className="space-y-1">
+                <label htmlFor="gst" className="block text-xs font-semibold text-gray-700">
+                  GST Number
+                </label>
+                <input
+                  id="gst"
+                  value={formData.gst}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                  placeholder="GST number"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="salesType" className="block text-xs font-semibold text-gray-700">
+                  Sales Type <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="salesType"
+                  value={formData.salesType}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                  required
+                >
+                  <option value="">Select sales type</option>
+                  {salesTypeOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="space-y-2">
-              <label htmlFor="address" className="block text-sm font-semibold text-gray-700">
-                Address
-              </label>
-              <textarea
-                id="address"
-                value={formData.address}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white resize-none"
-                placeholder="Enter complete address"
-                rows="2"
-              />
+            {/* Row 5: 3 Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="nob" className="block text-xs font-semibold text-gray-700">
+                  Nature of Business (NOB) <span className="text-red-500">*</span>
+                </label>
+                <select
+                  id="nob"
+                  value={formData.nob}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                  required
+                >
+                  <option value="">Select nature of business</option>
+                  {nobOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="creditDays" className="block text-xs font-semibold text-gray-700">
+                  Credit Days
+                </label>
+                <select
+                  id="creditDays"
+                  value={formData.creditDays}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                >
+                  <option value="">Select credit days</option>
+                  {creditDaysOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="creditLimit" className="block text-xs font-semibold text-gray-700">
+                  Credit Limit
+                </label>
+                <select
+                  id="creditLimit"
+                  value={formData.creditLimit}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
+                >
+                  <option value="">Select credit limit</option>
+                  {creditLimitOptions.map((option, index) => (
+                    <option key={index} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center border-b border-slate-100 pb-2">
-                <h3 className="text-md font-semibold text-slate-800">Contact Person Details</h3>
+            {/* Row 6: Address & Additional Notes */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label htmlFor="address" className="block text-xs font-semibold text-gray-700">
+                  Address
+                </label>
+                <textarea
+                  id="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white resize-none text-sm"
+                  placeholder="Enter complete address"
+                  rows="2"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label htmlFor="notes" className="block text-xs font-semibold text-gray-700">
+                  Additional Notes
+                </label>
+                <textarea
+                  id="notes"
+                  value={formData.notes}
+                  onChange={handleChange}
+                  className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white resize-none text-sm"
+                  placeholder="Enter any additional information"
+                  rows="2"
+                />
+              </div>
+            </div>
+
+            {/* Contact Person Details Section */}
+            <div className="space-y-3 pt-2">
+              <div className="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                <h3 className="text-sm font-semibold text-slate-800">Contact Person Details</h3>
                 {formData.contactPersons.length < 3 && (
                   <button
                     type="button"
                     onClick={addContactPerson}
-                    className="px-3 py-1.5 bg-sky-500 text-white rounded-md text-xs font-semibold hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
+                    className="px-2.5 py-1 bg-sky-500 text-white rounded-md text-xs font-semibold hover:bg-sky-600 focus:outline-none focus:ring-2 focus:ring-sky-500 transition-colors"
                   >
                     Add Person
                   </button>
@@ -1153,9 +1401,9 @@ function Leads() {
               </div>
 
               {formData.contactPersons.map((person, index) => (
-                <div key={index} className="border border-slate-100 rounded-lg p-4 bg-slate-50/50">
-                  <div className="flex justify-between items-center mb-3">
-                    <h4 className="text-sm font-semibold text-slate-700">Person {index + 1}</h4>
+                <div key={index} className="border border-slate-100 rounded-lg p-3 bg-slate-50/50">
+                  <div className="flex justify-between items-center mb-2">
+                    <h4 className="text-xs font-semibold text-slate-700">Person {index + 1}</h4>
                     {index > 0 && (
                       <button
                         type="button"
@@ -1166,13 +1414,13 @@ function Leads() {
                       </button>
                     )}
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div className="space-y-1">
                       <label className="block text-xs font-semibold text-gray-500">Name</label>
                       <input
                         value={person.name}
                         onChange={(e) => handleContactPersonChange(index, "name", e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+                        className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs"
                         placeholder="Contact name"
                       />
                     </div>
@@ -1181,7 +1429,7 @@ function Leads() {
                       <select
                         value={person.designation}
                         onChange={(e) => handleContactPersonChange(index, "designation", e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+                        className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs"
                       >
                         <option value="">Select designation</option>
                         {designationOptions.map((designation, idx) => (
@@ -1196,7 +1444,7 @@ function Leads() {
                       <input
                         value={person.number}
                         onChange={(e) => handleContactPersonChange(index, "number", e.target.value)}
-                        className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-sm"
+                        className="w-full px-2.5 py-1.5 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 text-xs"
                         placeholder="Contact number"
                       />
                     </div>
@@ -1205,119 +1453,12 @@ function Leads() {
               ))}
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="nob" className="block text-sm font-semibold text-gray-700">
-                  Nature of Business (NOB) <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="nob"
-                  value={formData.nob}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  required
-                >
-                  <option value="">Select nature of business</option>
-                  {nobOptions.map((option, index) => (
-                    <option key={index} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="salesType" className="block text-sm font-semibold text-gray-700">
-                  Sales Type <span className="text-red-500">*</span>
-                </label>
-                <select
-                  id="salesType"
-                  value={formData.salesType}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  required
-                >
-                  <option value="">Select sales type</option>
-                  {salesTypeOptions.map((option, index) => (
-                    <option key={index} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="gst" className="block text-sm font-semibold text-gray-700">
-                  GST Number
-                </label>
-                <input
-                  id="gst"
-                  value={formData.gst}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                  placeholder="GST number"
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <label htmlFor="creditDays" className="block text-sm font-semibold text-gray-700">
-                  Credit Days
-                </label>
-                <select
-                  id="creditDays"
-                  value={formData.creditDays}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                >
-                  <option value="">Select credit days</option>
-                  {creditDaysOptions.map((option, index) => (
-                    <option key={index} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="space-y-2">
-                <label htmlFor="creditLimit" className="block text-sm font-semibold text-gray-700">
-                  Credit Limit
-                </label>
-                <select
-                  id="creditLimit"
-                  value={formData.creditLimit}
-                  onChange={handleChange}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                >
-                  <option value="">Select credit limit</option>
-                  {creditLimitOptions.map((option, index) => (
-                    <option key={index} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="notes" className="block text-sm font-semibold text-gray-700">
-                Additional Notes
-              </label>
-              <input
-                id="notes"
-                value={formData.notes}
-                onChange={handleChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white"
-                placeholder="Enter any additional information"
-              />
-            </div>
           </div>
-          <div className="p-6 border-t border-slate-100 flex justify-end">
+          <div className="p-4 border-t border-slate-100 flex justify-end">
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2.5 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all shadow-md hover:shadow-lg"
+              className="px-5 py-2 bg-gradient-to-r from-sky-600 to-blue-600 hover:from-sky-700 hover:to-blue-700 text-white font-bold text-sm rounded-lg focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-sky-500 transition-all shadow hover:shadow-md"
             >
               {isSubmitting ? "Saving..." : "Save Lead"}
             </button>

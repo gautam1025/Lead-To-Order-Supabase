@@ -19,28 +19,58 @@ function ClientMaster() {
   const [currentClient, setCurrentClient] = useState(null);
   const [formData, setFormData] = useState({
     companyName: "",
-    personName: "",
-    personNumber: "",
-    location: "",
-    emailAddress: "",
+    clientName: "",
+    clientMobileNumber: "",
     state: "",
-    gst: "",
-    address: ""
+    billingAddress: "",
+    gstNumber: "",
+    companyGroupName: "",
+    scName: "",
+    crmName: "",
+    stateCode: "",
+    creditDays: "",
+    creditLimit: ""
   });
   
   const fetchClients = async () => {
     setIsLoading(true);
     try {
-      // Fetch clients from Supabase
-      const { data: clientsData, error: clientErr } = await supabase.from("client_master").select("*").order('created_at', { ascending: false });
-      if (clientErr) throw clientErr;
+      // Fetch ALL clients from Supabase using range pagination
+      let clientsData = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const { data, error: clientErr } = await supabase
+          .from("client_master")
+          .select("*")
+          .order('company_name', { ascending: true })
+          .range(from, from + step - 1);
+
+        if (clientErr) throw clientErr;
+
+        if (data && data.length > 0) {
+          clientsData = [...clientsData, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
 
       // Fetch active tracking leads
-      const { data: leadsData } = await supabase.from("leads_to_order").select("Company_Name, Leads_Tracking_Status").eq("Leads_Tracking_Status", "Pending");
-      const { data: enquiryData } = await supabase.from("enquiry_tracker").select("companyName, currentStage").eq("currentStage", "pending");
+      const { data: leadsData } = await supabase
+        .from("leads_to_order")
+        .select("Company_Name, Leads_Tracking_Status")
+        .eq("Leads_Tracking_Status", "Pending");
+      const { data: enquiryData } = await supabase
+        .from("enquiry_to_order")
+        .select("company_name, current_stage")
+        .ilike("current_stage", "pending");
 
       const leadCompanies = new Set((leadsData || []).map(l => (l.Company_Name || "").toLowerCase().trim()).filter(Boolean));
-      const enquiryCompanies = new Set((enquiryData || []).map(e => (e.companyName || "").toLowerCase().trim()).filter(Boolean));
+      const enquiryCompanies = new Set((enquiryData || []).map(e => (e.company_name || "").toLowerCase().trim()).filter(Boolean));
 
       const formattedData = (clientsData || []).map((c, i) => {
         const nameLower = (c.company_name || "").toLowerCase().trim();
@@ -58,19 +88,23 @@ function ClientMaster() {
 
         return {
           id: i + 1,
-          dbId: c.id, // For precise operations if needed
+          uuid: c.uuid,
           companyName: c.company_name || "",
-          personName: c.person_name || "",
-          handlePerson: c.handle_person || "-",
-          personNumber: c.person_number || "",
-          location: c.location || "",
-          emailAddress: c.email_address || "",
+          clientName: c.client_name || "",
+          clientMobileNumber: c.client_mobile_number || "",
           state: c.state || "",
-          address: c.address || "",
-          gst: c.gst || "",
+          billingAddress: c.billing_address || "",
+          gstNumber: c.gst_number || "",
+          companyGroupName: c.company_group_name || "",
+          scName: c.sc_name || "",
+          crmName: c.crm_name || "",
+          stateCode: c.state_code || "",
+          creditDays: c.credit_days ?? "",
+          creditLimit: c.credit_limit ?? "",
+          isRelevant: c.isRelevant !== false,
           trackerStatus
         };
-      });
+      }).sort((a, b) => a.companyName.localeCompare(b.companyName, undefined, { sensitivity: 'base' }));
 
       setClientData(formattedData);
     } catch (error) {
@@ -90,24 +124,32 @@ function ClientMaster() {
     if (client && mode === "edit") {
       setFormData({
         companyName: client.companyName || "",
-        personName: client.personName || "",
-        personNumber: client.personNumber || "",
-        location: client.location || "",
-        emailAddress: client.emailAddress || "",
+        clientName: client.clientName || "",
+        clientMobileNumber: client.clientMobileNumber || "",
         state: client.state || "",
-        gst: client.gst || "",
-        address: client.address || ""
+        billingAddress: client.billingAddress || "",
+        gstNumber: client.gstNumber || "",
+        companyGroupName: client.companyGroupName || "",
+        scName: client.scName || "",
+        crmName: client.crmName || "",
+        stateCode: client.stateCode || "",
+        creditDays: client.creditDays !== "" ? String(client.creditDays) : "",
+        creditLimit: client.creditLimit !== "" ? String(client.creditLimit) : ""
       });
     } else {
       setFormData({
         companyName: "",
-        personName: "",
-        personNumber: "",
-        location: "",
-        emailAddress: "",
+        clientName: "",
+        clientMobileNumber: "",
         state: "",
-        gst: "",
-        address: ""
+        billingAddress: "",
+        gstNumber: "",
+        companyGroupName: "",
+        scName: "",
+        crmName: "",
+        stateCode: "",
+        creditDays: "",
+        creditLimit: ""
       });
     }
     setIsModalOpen(true);
@@ -123,28 +165,37 @@ function ClientMaster() {
     setIsLoading(true);
     const supabaseData = {
       company_name: formData.companyName,
-      person_name: formData.personName,
-      person_number: formData.personNumber,
-      location: formData.location,
-      email_address: formData.emailAddress,
-      state: formData.state,
-      gst: formData.gst,
-      address: formData.address
+      client_name: formData.clientName || null,
+      client_mobile_number: formData.clientMobileNumber || null,
+      state: formData.state || null,
+      billing_address: formData.billingAddress || null,
+      gst_number: formData.gstNumber || null,
+      company_group_name: formData.companyGroupName || null,
+      sc_name: formData.scName || null,
+      crm_name: formData.crmName || null,
+      state_code: formData.stateCode || null,
+      credit_days: formData.creditDays !== "" && formData.creditDays !== null ? parseInt(formData.creditDays, 10) : null,
+      credit_limit: formData.creditLimit !== "" && formData.creditLimit !== null ? parseFloat(formData.creditLimit) : null,
+      updated_at: new Date().toISOString()
     };
 
     try {
       if (modalMode === "add") {
-        await supabase.from("client_master").insert([supabaseData]);
+        const { error } = await supabase.from("client_master").insert([supabaseData]);
+        if (error) throw error;
       } else {
-        await supabase.from("client_master")
+        const { error } = await supabase
+          .from("client_master")
           .update(supabaseData)
-          .eq("company_name", currentClient.companyName);
+          .eq("uuid", currentClient.uuid);
+        if (error) throw error;
       }
       
       await fetchClients();
       handleCloseModal();
     } catch (err) {
       console.error("Error saving client:", err);
+      alert("Failed to save client: " + (err.message || err));
       setIsLoading(false);
     }
   };
@@ -153,10 +204,15 @@ function ClientMaster() {
     if (window.confirm(`Are you sure you want to delete ${client.companyName}?`)) {
       setIsLoading(true);
       try {
-        await supabase.from("client_master").delete().eq("company_name", client.companyName);
+        const { error } = await supabase
+          .from("client_master")
+          .delete()
+          .eq("uuid", client.uuid);
+        if (error) throw error;
         await fetchClients();
       } catch (err) {
         console.error("Error deleting client:", err);
+        alert("Failed to delete client: " + (err.message || err));
         setIsLoading(false);
       }
     }
@@ -164,26 +220,30 @@ function ClientMaster() {
   
   // Filter States
   const [companyFilter, setCompanyFilter] = useState([]);
-  const [locationFilter, setLocationFilter] = useState([]);
   const [stateFilter, setStateFilter] = useState([]);
+  const [relevanceFilter, setRelevanceFilter] = useState("all");
   
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const headers = [
+    "Actions",
     "Action 2",
     "Company Name", 
+    "Relevance",
     "Already In Tracker",
-    "Person Name", 
-    "Handle Person",
-    "Person Number", 
-    "Location", 
-    "Email Address", 
+    "Client Name", 
+    "Mobile Number", 
+    "Company Group",
+    "SC Name", 
+    "CRM Name", 
     "State", 
-    "GST",
+    "State Code",
+    "GST Number",
     "Billing Address", 
-    "Actions"
+    "Credit Days",
+    "Credit Limit"
   ];
 
   const filteredData = clientData.filter(item => {
@@ -193,24 +253,39 @@ function ClientMaster() {
       );
     
     const matchesCompany = companyFilter.length === 0 || companyFilter.includes(item.companyName);
-    const matchesLocation = locationFilter.length === 0 || locationFilter.includes(item.location);
     const matchesState = stateFilter.length === 0 || stateFilter.includes(item.state);
+    const matchesRelevance = relevanceFilter === "all" || 
+      (relevanceFilter === "relevant" && item.isRelevant) ||
+      (relevanceFilter === "not_relevant" && !item.isRelevant);
 
-    return matchesSearch && matchesCompany && matchesLocation && matchesState;
+    return matchesSearch && matchesCompany && matchesState && matchesRelevance;
   });
 
   const renderRow = (row, index) => {
     const urlParams = new URLSearchParams({
       companyName: row.companyName || "",
-      phoneNumber: row.personNumber || "",
-      personName: row.personName || "",
-      location: row.location || "",
-      email: row.emailAddress || "",
-      state: row.state || ""
+      phoneNumber: row.clientMobileNumber || "",
+      personName: row.clientName || "",
+      state: row.state || "",
+      groupName: row.companyGroupName || "",
+      gstNumber: row.gstNumber || "",
+      billingAddress: row.billingAddress || "",
+      scName: row.scName || "",
+      crmName: row.crmName || ""
     }).toString();
 
     return (
-      <tr key={index} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
+      <tr key={row.uuid || index} className="hover:bg-sky-50/30 transition-colors border-b border-gray-100 last:border-0">
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+          <div className="flex items-center justify-center gap-3">
+            <button onClick={() => handleOpenModal("edit", row)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
+              <Pencil size={16} />
+            </button>
+            <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 transition-colors" title="Delete">
+              <Trash2 size={16} />
+            </button>
+          </div>
+        </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
           <div className="flex items-center justify-center gap-2">
             <button 
@@ -227,7 +302,18 @@ function ClientMaster() {
             </button>
           </div>
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{row.companyName}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-center">{row.companyName}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
+          {row.isRelevant ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+              Relevant
+            </span>
+          ) : (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-800">
+              Not Relevant
+            </span>
+          )}
+        </td>
         <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
           {row.trackerStatus === "Lead" ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
@@ -245,40 +331,32 @@ function ClientMaster() {
             <span className="text-gray-400">-</span>
           )}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.personName}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
-          {row.handlePerson !== "-" ? (
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.clientName || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-sky-600 font-medium text-center">{row.clientMobileNumber || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.companyGroupName || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">
+          {row.scName ? (
             <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700">
-              {row.handlePerson}
+              {row.scName}
             </span>
           ) : (
             <span className="text-gray-400">-</span>
           )}
         </td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-sky-600 font-medium">{row.personNumber}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.location}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.emailAddress}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.state}</td>
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">{row.gst}</td>
-        <td className="px-6 py-4 text-sm text-gray-600 min-w-[200px] truncate max-w-xs" title={row.address}>{row.address}</td>
-        
-        <td className="px-6 py-4 whitespace-nowrap text-sm text-center">
-          <div className="flex items-center justify-center gap-3">
-            <button onClick={() => handleOpenModal("edit", row)} className="text-blue-500 hover:text-blue-700 transition-colors" title="Edit">
-              <Pencil size={16} />
-            </button>
-            <button onClick={() => handleDelete(row)} className="text-red-500 hover:text-red-700 transition-colors" title="Delete">
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.crmName || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.state || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.stateCode || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.gstNumber || "-"}</td>
+        <td className="px-6 py-4 text-sm text-gray-600 min-w-[200px] truncate max-w-xs text-center" title={row.billingAddress}>{row.billingAddress || "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditDays !== "" ? row.creditDays : "-"}</td>
+        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 text-center">{row.creditLimit !== "" ? row.creditLimit : "-"}</td>
       </tr>
     );
   };
 
   const renderCard = (item, index) => {
     return (
-      <div key={index} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+      <div key={item.uuid || index} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="flex justify-between items-start mb-2">
           <div className="flex flex-col">
             <span className="font-semibold text-gray-800">{item.companyName}</span>
@@ -292,16 +370,19 @@ function ClientMaster() {
               </span>
             )}
           </div>
-          <span className="text-xs font-medium text-sky-600">{item.personNumber}</span>
+          <span className="text-xs font-medium text-sky-600">{item.clientMobileNumber}</span>
         </div>
         <div className="text-sm text-gray-600 mb-1">
-          <span className="font-medium text-gray-800">Contact:</span> {item.personName}
+          <span className="font-medium text-gray-800">Client Name:</span> {item.clientName || "-"}
         </div>
         <div className="text-sm text-gray-600 mb-1">
-          <span className="font-medium text-gray-800">Handle Person:</span> {item.handlePerson}
+          <span className="font-medium text-gray-800">SC Name:</span> {item.scName || "-"}
+        </div>
+        <div className="text-sm text-gray-600 mb-1">
+          <span className="font-medium text-gray-800">CRM Name:</span> {item.crmName || "-"}
         </div>
         <div className="text-sm text-gray-600 mb-4">
-          <span className="font-medium text-gray-800">Email:</span> {item.emailAddress}
+          <span className="font-medium text-gray-800">GST:</span> {item.gstNumber || "-"}
         </div>
         <div className="flex justify-end gap-4 mt-2 pt-2 border-t border-gray-100">
           <button onClick={() => handleOpenModal("edit", item)} className="text-blue-500" title="Edit"><Pencil size={16} /></button>
@@ -351,19 +432,6 @@ function ClientMaster() {
               />
             </div>
 
-            <div className="flex-1 min-w-[120px] max-w-[200px] z-[50]">
-              <SearchableDropdown
-                isMulti={true}
-                value={locationFilter}
-                onChange={(val) => setLocationFilter(val)}
-                options={Array.from(new Set(clientData.map(c => c.location).filter(Boolean))).map(l => ({ value: l, label: l, count: 1 }))}
-                placeholder="All Locations"
-                height="h-9"
-                rounded="rounded-md"
-                className="dropdown-container"
-              />
-            </div>
-
             <div className="flex-1 min-w-[120px] max-w-[200px] z-[40]">
               <SearchableDropdown
                 isMulti={true}
@@ -377,15 +445,27 @@ function ClientMaster() {
               />
             </div>
 
+            <div className="flex-1 min-w-[120px] max-w-[200px] z-[30]">
+              <select
+                value={relevanceFilter}
+                onChange={(e) => setRelevanceFilter(e.target.value)}
+                className="w-full h-9 px-3 bg-white border border-gray-300 text-gray-900 text-sm rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500"
+              >
+                <option value="all">All Relevance</option>
+                <option value="relevant">Relevant Only</option>
+                <option value="not_relevant">Not Relevant Only</option>
+              </select>
+            </div>
+
             {/* Action Buttons */}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
-              {((companyFilter.length > 0) || (locationFilter.length > 0) || (stateFilter.length > 0) || searchQuery) && (
+              {((companyFilter.length > 0) || (stateFilter.length > 0) || relevanceFilter !== "all" || searchQuery) && (
                 <button
                   className="px-3 h-9 text-sm text-red-600 hover:bg-red-50 border border-red-200 rounded-md transition-colors shrink-0"
                   onClick={() => {
                     setCompanyFilter([])
-                    setLocationFilter([])
                     setStateFilter([])
+                    setRelevanceFilter("all")
                     setSearchQuery("")
                   }}
                 >
@@ -410,7 +490,7 @@ function ClientMaster() {
             data={filteredData}
             renderRow={renderRow}
             renderCard={renderCard}
-            minWidth="1200px"
+            minWidth="1600px"
             currentPage={currentPage}
             totalPages={Math.ceil(filteredData.length / itemsPerPage) || 1}
             itemsPerPage={itemsPerPage}
@@ -429,36 +509,52 @@ function ClientMaster() {
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Company Name</label>
+              <label className="block text-sm font-medium text-gray-700">Company Name *</label>
               <input required value={formData.companyName} onChange={e => setFormData({...formData, companyName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Person Name</label>
-              <input required value={formData.personName} onChange={e => setFormData({...formData, personName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+              <label className="block text-sm font-medium text-gray-700">Client Name</label>
+              <input value={formData.clientName} onChange={e => setFormData({...formData, clientName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Person Number</label>
-              <input required value={formData.personNumber} onChange={e => setFormData({...formData, personNumber: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+              <label className="block text-sm font-medium text-gray-700">Client Mobile Number</label>
+              <input value={formData.clientMobileNumber} onChange={e => setFormData({...formData, clientMobileNumber: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Email Address</label>
-              <input type="email" value={formData.emailAddress} onChange={e => setFormData({...formData, emailAddress: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+              <label className="block text-sm font-medium text-gray-700">Company Group Name</label>
+              <input value={formData.companyGroupName} onChange={e => setFormData({...formData, companyGroupName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Location</label>
-              <input value={formData.location} onChange={e => setFormData({...formData, location: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+              <label className="block text-sm font-medium text-gray-700">SC Name</label>
+              <input value={formData.scName} onChange={e => setFormData({...formData, scName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">CRM Name</label>
+              <input value={formData.crmName} onChange={e => setFormData({...formData, crmName: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">State</label>
               <input value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">GST</label>
-              <input value={formData.gst} onChange={e => setFormData({...formData, gst: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+              <label className="block text-sm font-medium text-gray-700">State Code</label>
+              <input value={formData.stateCode} onChange={e => setFormData({...formData, stateCode: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
             </div>
             <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">GST Number</label>
+              <input value={formData.gstNumber} onChange={e => setFormData({...formData, gstNumber: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Credit Days</label>
+              <input type="number" value={formData.creditDays} onChange={e => setFormData({...formData, creditDays: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Credit Limit</label>
+              <input type="number" step="0.01" value={formData.creditLimit} onChange={e => setFormData({...formData, creditLimit: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div className="space-y-2 md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Billing Address</label>
-              <textarea value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-3 py-2 border rounded-md" rows="2" />
+              <textarea value={formData.billingAddress} onChange={e => setFormData({...formData, billingAddress: e.target.value})} className="w-full px-3 py-2 border rounded-md" rows="2" />
             </div>
           </div>
         </ModalForm>

@@ -60,10 +60,39 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
   // Fetch dropdown data, company data, and last enquiry number when component mounts
   useEffect(() => {
-    fetchDropdownData()
-    fetchCompanyData()
-    fetchLastEnquiryNumber()
-  }, [])
+    fetchDropdownData();
+    fetchCompanyData();
+    fetchLastEnquiryNumber();
+
+    const params = new URLSearchParams(window.location.search);
+    const company = params.get("companyName");
+    const phone = params.get("phoneNumber");
+    const person = params.get("personName");
+    const stateVal = params.get("state");
+    const gstVal = params.get("gstNumber");
+    const addressVal = params.get("billingAddress");
+    const scVal = params.get("scName");
+
+    if (company || phone || person || stateVal || gstVal || addressVal || scVal) {
+      setNewCallTrackerData(prev => ({
+        ...prev,
+        companyName: company || prev.companyName,
+        phoneNumber: phone || prev.phoneNumber,
+        salesPersonName: person || prev.salesPersonName,
+        shippingAddress: addressVal || prev.shippingAddress,
+        gstNumber: gstVal || prev.gstNumber,
+        scName: scVal || prev.scName,
+        isCompanyAutoFilled: !!company
+      }));
+
+      if (stateVal) {
+        setEnquiryFormData(prev => ({
+          ...prev,
+          enquiryState: stateVal
+        }));
+      }
+    }
+  }, []);
 
   // Function to fetch the last enquiry number from Supabase (Used for initial display only)
   const fetchLastEnquiryNumber = async () => {

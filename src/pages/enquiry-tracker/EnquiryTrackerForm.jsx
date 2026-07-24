@@ -729,6 +729,7 @@ function NewEnquiryTracker() {
               Actual1: new Date().toISOString().slice(0, 10),
               Acceptance_Via: orderStatusData.acceptanceVia,
               Payment_Mode: orderStatusData.paymentMode,
+              approved_by: orderStatusData.approvedBy || null,
               Destination: orderStatusData.destination,
               "Po Number": orderStatusData.poNumber,
               "Payment_Terms _In_Days": orderStatusData.paymentTerms,
@@ -1128,6 +1129,7 @@ function NewEnquiryTracker() {
               actual1: new Date().toISOString(),
               acceptance_via: allFormData.acceptanceVia,
               payment_mode: allFormData.paymentMode,
+              approved_by: allFormData.approvedBy || null,
               destination: allFormData.destination,
               po_number: allFormData.poNumber,
               payment_terms_days: allFormData.paymentTerms,
@@ -1411,19 +1413,17 @@ function NewEnquiryTracker() {
           if (compName) {
             const clientPayload = {
               company_name: compName,
-              person_name: clientName,
-              handle_person: resolvedHandlePerson,
-              person_number: leadData?.Phone_Number || enqData?.phone_number || enqData?.phoneNumber || "",
-              email_address: leadData?.Email_Address || enqData?.email || enqData?.emailAddress || "",
-              location: leadData?.Location || enqData?.location || "",
+              client_name: clientName,
+              sc_name: resolvedHandlePerson,
+              client_mobile_number: leadData?.Phone_Number || enqData?.phone_number || enqData?.phoneNumber || "",
               state: leadData?.State || enqData?.enquiry_for_state || enqData?.enquiryState || "",
-              address: leadData?.Address || enqData?.shipping_address || enqData?.shippingAddress || "",
-              gst: leadData?.GST_Number || enqData?.gst_number || enqData?.gstNumber || ""
+              billing_address: leadData?.Address || enqData?.shipping_address || enqData?.shippingAddress || "",
+              gst_number: leadData?.GST_Number || enqData?.gst_number || enqData?.gstNumber || ""
             };
 
             const { data: existingClient } = await supabase
               .from("client_master")
-              .select("id, company_name")
+              .select("uuid, company_name")
               .eq("company_name", compName)
               .maybeSingle();
 

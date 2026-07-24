@@ -16,10 +16,31 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(false)
   const [creditDaysOptions, setCreditDaysOptions] = useState(["30", "45", "60", "90"])
   const [creditLimitOptions, setCreditLimitOptions] = useState(["10000", "25000", "50000", "100000"])
+  const [approvedByOptions, setApprovedByOptions] = useState([])
 
   // State for items fetched from Make_Quotation table
   const [quotationItems, setQuotationItems] = useState([])
   const [isLoadingItems, setIsLoadingItems] = useState(false)
+
+  // Fetch approved_by options from dropdown table
+  useEffect(() => {
+    const fetchApprovedBy = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("dropdown")
+          .select("approved_by")
+          .not("approved_by", "is", null);
+
+        if (!error && data) {
+          const unique = [...new Set(data.map(item => item.approved_by).filter(Boolean))].sort();
+          setApprovedByOptions(unique);
+        }
+      } catch (err) {
+        console.error("Error fetching approved_by dropdown:", err);
+      }
+    };
+    fetchApprovedBy();
+  }, []);
 
   // Standard options matching Lead-System strictly
   useEffect(() => {
@@ -340,6 +361,24 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <label htmlFor="approvedBy" className="block text-sm font-medium text-gray-700">
+                Approve By
+              </label>
+              <select
+                id="approvedBy"
+                name="approvedBy"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={formData.approvedBy || ""}
+                onChange={handleChange}
+              >
+                <option value="">Select approver</option>
+                {approvedByOptions.map((option, index) => (
+                  <option key={index} value={option}>{option}</option>
+                ))}
+              </select>
+            </div>
+
             <div className="space-y-2">
               <label htmlFor="acceptanceVia" className="block text-sm font-medium text-gray-700">
                 Acceptance Via

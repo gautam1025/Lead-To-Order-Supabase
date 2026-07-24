@@ -253,6 +253,13 @@ function EnquiryTracker() {
   const [visibleDirectEnquiryColumns, setVisibleDirectEnquiryColumns] = useState(defaultVisibility);
   const [showDirectEnquiryColumnDropdown, setShowDirectEnquiryColumnDropdown] = useState(false);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("action") === "new-enquiry") {
+      setShowNewCallTrackerForm(true);
+    }
+  }, []);
+
   // Refs for observer
   const observer = useRef();
   const lastElementRef = useCallback(
