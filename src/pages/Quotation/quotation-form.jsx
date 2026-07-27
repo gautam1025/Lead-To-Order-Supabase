@@ -90,18 +90,13 @@ const QuotationForm = ({
           .from("items")
           .select("item_code, item_name, description, rate, item_category");
 
-        // 4. Fetch prepared_by and reference (sp) info from dropdown table (category/value schema)
+        // 4. Fetch prepared_by from dropdown table (category/value schema)
         const { data: preparedByData, error: preparedByError } = await supabase
           .from("dropdown")
           .select("value")
           .eq("category", "prepared_by");
 
-        const { data: spRefData, error: spRefError } = await supabase
-          .from("dropdown")
-          .select("value, category")
-          .in("category", ["sp_details_reference_name", "sp_contact_no"]);
-
-        const dropdownError = preparedByError || spRefError;
+        const dropdownError = preparedByError;
         const dropdownData = null; // replaced by separate queries above
 
 
@@ -166,18 +161,13 @@ const QuotationForm = ({
           });
         }
 
-        // Build reference options from sp_details_reference_name category
-        // Note: sp_contact_no is stored as separate rows with category="sp_contact_no"
-        // We use sp_details_reference_name rows as the reference list
-        if (spRefData && spRefData.length > 0) {
-          const refRows = spRefData.filter(r => r.category === "sp_details_reference_name");
-          const contactRows = spRefData.filter(r => r.category === "sp_contact_no");
-
-          refRows.forEach((row, idx) => {
-            if (row.value && !referenceOptionsData.includes(row.value)) {
-              referenceOptionsData.push(row.value);
-              referenceDetailsMap[row.value] = {
-                mobile: contactRows[idx]?.value || "",
+        // Build reference options from consignor_details
+        if (consignorData && consignorData.length > 0) {
+          consignorData.forEach((row) => {
+            if (row.reference_name && !referenceOptionsData.includes(row.reference_name)) {
+              referenceOptionsData.push(row.reference_name);
+              referenceDetailsMap[row.reference_name] = {
+                mobile: row.contact_num ? String(row.contact_num) : "",
                 // reference_phone_no is hardcoded (see REFERENCE_PHONE_NO constant above)
                 phone: REFERENCE_PHONE_NO,
               };

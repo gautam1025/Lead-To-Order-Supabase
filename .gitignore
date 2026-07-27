@@ -26,5 +26,6 @@ dist-ssr
 *.sw?
 
 schema.txt
+schema2.txt
 Login.jsx
 task.txt
