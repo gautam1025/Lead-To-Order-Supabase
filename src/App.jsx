@@ -17,6 +17,8 @@ import Notification from "./components/Notification"
 import Sidebar from "./components/Sidebar"
 import LeadMaster from "./pages/Master/LeadMaster"
 import ClientMaster from "./pages/Master/ClientMaster"
+import Dropdowns from "./pages/Master/Dropdowns"
+import Consignors from "./pages/Master/Consignors"
 import Setting from "./pages/Setting/Setting"
 import supabase from "./utils/supabase"
 
@@ -399,6 +401,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ClientMaster />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/dropdowns"
+                    element={
+                      <ProtectedRoute>
+                        <Dropdowns />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/consignors"
+                    element={
+                      <ProtectedRoute>
+                        <Consignors />
                       </ProtectedRoute>
                     }
                   />

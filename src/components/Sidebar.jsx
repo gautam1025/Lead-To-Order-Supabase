@@ -232,6 +232,28 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                         </span>
                                     )}
                                 </Link>
+                                <Link
+                                    to="/master/dropdowns"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                        location.pathname === "/master/dropdowns"
+                                            ? "bg-sky-50 text-sky-600 font-semibold"
+                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                                    }`}
+                                >
+                                    Dropdowns
+                                </Link>
+                                <Link
+                                    to="/master/consignors"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                        location.pathname === "/master/consignors"
+                                            ? "bg-sky-50 text-sky-600 font-semibold"
+                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                                    }`}
+                                >
+                                    Consignors
+                                </Link>
                             </div>
                         )}
                         
