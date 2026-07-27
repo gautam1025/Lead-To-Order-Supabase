@@ -113,7 +113,7 @@ const defaultVisibility = {
   customerFeedback: true,
   nextCallDate: true,
   nextCallTime: true,
-  currentStage: false,
+  currentStage: true,
   callingDate: false,
   itemQty: false,
   totalQty: false,
@@ -455,7 +455,7 @@ const handleSaveClick = async (index) => {
         "Phone_Number": editedData.Phone_Number,
         "Salesperson_Name": editedData.salesperson_Name,
         "Company_Name": editedData.Company_Name,
-        "Current_Stage": editedData.Current_Stage,
+        "Current_Stage": editedData.Current_Stage || editedData.currentStage,
         "Calling_Days": editedData.Calling_Days,
         "SC_Name": editedData.sc_name,
         "What_Did_The_Customer say?": editedData.What_Did_The_Customer_Say,
@@ -3363,7 +3363,7 @@ const handleSaveClick = async (index) => {
   };
 
   // ─── Row render helpers ───────────────────────────────────────────────────
-  const renderRowCells = (tracker, visibleState) => {
+  const renderRowCells = (tracker, visibleState, isEditing = false) => {
     return columnsConfig.map(opt => {
       if (!visibleState[opt.key]) return null;
       if (opt.key === "salespersonName" && !isAdmin()) return null;
@@ -3379,11 +3379,30 @@ const handleSaveClick = async (index) => {
         (opt.key === "nextCallDate" ? (tracker.nextCallDate1 || tracker.Calling_Days || tracker.nextCallDate) : null) ??
         (opt.key === "nextCallTime" ? (tracker.nextCallTime1 || tracker.nextCallTime) : null) ??
         (opt.key === "leadSource" ? (tracker.Lead_Source || tracker.lead_source || tracker.leadSource) : null) ??
+        (opt.key === "currentStage" ? (tracker.Current_Stage || tracker.current_stage || tracker.currentStage) : null) ??
         "—";
 
       let cellContent = val !== undefined && val !== null ? String(val) : "—";
 
-      if (opt.key === "companyName") {
+      if (isEditing && opt.key === "currentStage") {
+        const currentVal = editedData.Current_Stage || editedData.currentStage || val || "";
+        cellContent = (
+          <select
+            value={currentVal}
+            onChange={(e) => {
+              handleFieldChange("Current_Stage", e.target.value);
+              handleFieldChange("currentStage", e.target.value);
+            }}
+            className="p-1 border border-slate-300 rounded text-xs font-medium bg-white text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
+          >
+            <option value="">Select Stage</option>
+            <option value="make-quotation">make-quotation</option>
+            <option value="quotation-validation">quotation-validation</option>
+            <option value="order-expected">order-expected</option>
+            <option value="order-status">order-status</option>
+          </select>
+        );
+      } else if (opt.key === "companyName") {
         cellContent = (
           <div className="flex items-center">
             <BuildingIcon className="h-4 w-4 mr-2 text-slate-400 shrink-0" />
@@ -3452,7 +3471,7 @@ const handleSaveClick = async (index) => {
           )}
         </div>
       </td>
-      {renderRowCells(tracker, visiblePendingColumns)}
+      {renderRowCells(tracker, visiblePendingColumns, editingRowId === index)}
     </tr>
   );
 

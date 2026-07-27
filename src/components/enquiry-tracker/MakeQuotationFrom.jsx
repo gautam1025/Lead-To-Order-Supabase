@@ -5,12 +5,30 @@ import supabase from "../../utils/supabase"
 function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   const location = useLocation()
   const params = useParams()
-  const [sharedByOptions, setSharedByOptions] = useState(["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
+  const [sharedByOptions, setSharedByOptions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [fileError, setFileError] = useState(null)
   
   useEffect(() => {
-    setSharedByOptions(["Rahul Sharma", "Priya Patel", "Amit Singh", "Neha Gupta"])
+    const fetchSharedByOptions = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("dropdown")
+          .select("value")
+          .eq("category", "quotation_shared_by");
+
+        if (error) throw error;
+        
+        if (data) {
+          const uniqueOptions = [...new Set(data.map(item => item.value).filter(Boolean))].sort();
+          setSharedByOptions(uniqueOptions);
+        }
+      } catch (err) {
+        console.error("Error fetching quotation_shared_by options:", err);
+      }
+    };
+    
+    fetchSharedByOptions();
   }, [])
 
   // Add this new useEffect after the existing sharedByOptions useEffect

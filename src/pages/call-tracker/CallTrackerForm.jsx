@@ -406,19 +406,17 @@ const handleSubmit = async (e) => {
     updateData["What_Did_The_Customer say?"] = insertData["What_Did_The_Customer_say?"]
     updateData["Enquiry_Received_Status"] = insertData["Enquiry_Received_Status"]
     updateData["Status"] = insertData["lead_status"]
-    if (leadStatus === "Not Relevant") {
-      const now = new Date();
-      const pad = (n) => n.toString().padStart(2, "0");
-      const formatted =
-        pad(now.getDate()) + "/" +
-        pad(now.getMonth() + 1) + "/" +
-        now.getFullYear() + " " +
-        pad(now.getHours()) + ":" +
-        pad(now.getMinutes()) + ":" +
-        pad(now.getSeconds());
+    const now = new Date();
+    const pad = (n) => n.toString().padStart(2, "0");
+    const formatted =
+      pad(now.getDate()) + "/" +
+      pad(now.getMonth() + 1) + "/" +
+      now.getFullYear() + " " +
+      pad(now.getHours()) + ":" +
+      pad(now.getMinutes()) + ":" +
+      pad(now.getSeconds());
 
-      updateData["Actual"] = formatted;
-    }
+    updateData["Actual"] = formatted;
 
     if (enquiryStatus === "expected") {
       updateData["Next_Action"] = insertData["Next_Action"]
