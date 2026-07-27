@@ -3,11 +3,16 @@
 import { useState, useEffect, useContext } from "react"
 import { Shield, User, ShieldAlert, Check, Plus, Pencil, Trash2, X } from "lucide-react"
 import { AuthContext } from "../../App"
-import { mockApi } from "../../services/mockApi"
+import supabase from "../../utils/supabase"
 import LoadingSpinner from "../../components/LoadingSpinner"
 
 function Setting() {
-  const { currentUser, isAdmin, showNotification } = useContext(AuthContext)
+  const authContext = useContext(AuthContext) || {}
+  const {
+    currentUser = null,
+    isAdmin = () => false,
+    showNotification = () => {}
+  } = authContext
   const [users, setUsers] = useState([])
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
@@ -29,8 +34,17 @@ function Setting() {
   const fetchUsers = async () => {
     setIsLoading(true)
     try {
-      const data = await mockApi.fetchUsers()
-      setUsers(data)
+      const { data, error } = await supabase
+        .from('login')
+        .select('*')
+        .order('username', { ascending: true })
+
+      if (error) throw error
+      const normalizedUsers = (data || []).map(u => ({
+        ...u,
+        userType: u.usertype || u.userType || 'user'
+      }))
+      setUsers(normalizedUsers)
     } catch (error) {
       console.error("Error fetching users:", error)
       showNotification("Failed to fetch users", "error")
@@ -47,13 +61,14 @@ function Setting() {
 
     setIsUpdating(true)
     try {
-      const result = await mockApi.updateUserRole(username, newRole)
-      if (result.success) {
-        showNotification(`Updated ${username} to ${newRole}`, "success")
-        await fetchUsers()
-      } else {
-        showNotification(result.message || "Failed to update role", "error")
-      }
+      const { error } = await supabase
+        .from('login')
+        .update({ usertype: newRole })
+        .eq('username', username)
+
+      if (error) throw error
+      showNotification(`Updated ${username} to ${newRole}`, "success")
+      await fetchUsers()
     } catch (error) {
       console.error("Error updating role:", error)
       showNotification("Failed to update user role", "error")
@@ -69,18 +84,19 @@ function Setting() {
     }
 
     if (!window.confirm(`Are you sure you want to delete user '${username}'?`)) {
-        return;
+      return
     }
 
     setIsUpdating(true)
     try {
-      const result = await mockApi.deleteUser(username)
-      if (result.success) {
-        showNotification(`Deleted user ${username}`, "success")
-        await fetchUsers()
-      } else {
-        showNotification(result.message || "Failed to delete user", "error")
-      }
+      const { error } = await supabase
+        .from('login')
+        .delete()
+        .eq('username', username)
+
+      if (error) throw error
+      showNotification(`Deleted user ${username}`, "success")
+      await fetchUsers()
     } catch (error) {
       console.error("Error deleting user:", error)
       showNotification("Failed to delete user", "error")
@@ -98,40 +114,54 @@ function Setting() {
   const openEditModal = (user) => {
     setModalMode('edit')
     setEditingUsername(user.username)
-    setFormData({ username: user.username, password: user.password || '', userType: user.userType })
+    setFormData({ username: user.username, password: user.password || '', userType: user.userType || user.usertype || 'user' })
     setIsModalOpen(true)
   }
 
   const handleFormSubmit = async (e) => {
     e.preventDefault()
     if (!formData.username) {
-        showNotification("Username is required", "error");
-        return;
+      showNotification("Username is required", "error")
+      return
     }
     if (modalMode === 'add' && !formData.password) {
-        showNotification("Password is required for new users", "error");
-        return;
+      showNotification("Password is required for new users", "error")
+      return
     }
 
     setIsUpdating(true)
     try {
-        let result;
-        if (modalMode === 'add') {
-            result = await mockApi.addUser(formData);
-        } else {
-            result = await mockApi.updateUser(editingUsername, formData);
+      if (modalMode === 'add') {
+        const { error } = await supabase
+          .from('login')
+          .insert([{
+            username: formData.username,
+            password: formData.password,
+            usertype: formData.userType
+          }])
+        if (error) throw error
+        showNotification("User added successfully", "success")
+      } else {
+        const updatePayload = {
+          username: formData.username,
+          usertype: formData.userType
         }
+        if (formData.password) {
+          updatePayload.password = formData.password
+        }
+        const { error } = await supabase
+          .from('login')
+          .update(updatePayload)
+          .eq('username', editingUsername)
+        if (error) throw error
+        showNotification("User updated successfully", "success")
+      }
 
-        if (result.success) {
-            showNotification(result.message, "success")
-            setIsModalOpen(false)
-            await fetchUsers()
-        } else {
-            showNotification(result.message || "Failed to save user", "error")
-        }
+      setIsModalOpen(false)
+      await fetchUsers()
     } catch (error) {
       console.error("Error saving user:", error)
-      showNotification("Failed to save user", "error")
+      showNotification(error.message || "Failed to save user", "error")
     } finally {
       setIsUpdating(false)
     }

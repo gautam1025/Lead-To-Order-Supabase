@@ -22,18 +22,17 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
   const [quotationItems, setQuotationItems] = useState([])
   const [isLoadingItems, setIsLoadingItems] = useState(false)
 
+  // Helper for normalized dropdown table: fetch values for a given category
+  const fetchCategory = (category) =>
+    supabase.from("dropdown").select("value").eq("category", category);
+
   // Fetch approved_by options from dropdown table
   useEffect(() => {
     const fetchApprovedBy = async () => {
       try {
-        const { data, error } = await supabase
-          .from("dropdown")
-          .select("approved_by")
-          .not("approved_by", "is", null);
-
+        const { data, error } = await fetchCategory("approved_by");
         if (!error && data) {
-          const unique = [...new Set(data.map(item => item.approved_by).filter(Boolean))].sort();
-          setApprovedByOptions(unique);
+          setApprovedByOptions([...new Set(data.map(item => item.value).filter(Boolean))].sort());
         }
       } catch (err) {
         console.error("Error fetching approved_by dropdown:", err);
@@ -42,18 +41,61 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
     fetchApprovedBy();
   }, []);
 
-  // Standard options matching Lead-System strictly
+  // Fetch dynamic dropdown options from dropdown table (normalized category/value schema)
+  // conveyd_for_registration_form stays hardcoded Yes/No per task.txt
   useEffect(() => {
-    setAcceptanceViaOptions(["email", "phone", "in-person", "other"])
-    setPaymentModeOptions(["cash", "check", "bank-transfer", "credit-card"])
-    setReasonStatusOptions(["price", "competitor", "timeline", "specifications", "other"])
-    setHoldReasonOptions(["budget", "approval", "project-delay", "reconsideration", "other"])
-    setPaymentTermsOptions(["30", "45", "60", "90"])
-    setConveyedOptions(["Yes", "No"])
-    setTransportModeOptions(["Road", "Air", "Sea", "Rail"])
-    setCreditDaysOptions(["30", "45", "60", "90"])
-    setCreditLimitOptions(["10000", "25000", "50000", "100000"])
+    setConveyedOptions(["Yes", "No"]); // hardcoded per task.txt
+
+    const fetchOrderStatusDropdowns = async () => {
+      try {
+        const [
+          { data: avData, error: avErr },
+          { data: pmData, error: pmErr },
+          { data: rsData, error: rsErr },
+          { data: hrData, error: hrErr },
+          { data: ptData, error: ptErr },
+          { data: tmData, error: tmErr },
+          { data: cdData, error: cdErr },
+          { data: clData, error: clErr },
+        ] = await Promise.all([
+          fetchCategory("acceptance_via"),
+          fetchCategory("payment_mode"),
+          fetchCategory("if_no_then_get_relavant_status"),
+          fetchCategory("customer_order_hold_reason_category"),
+          fetchCategory("payment_terms"),
+          fetchCategory("transport_mode"),
+          fetchCategory("credit_days"),
+          fetchCategory("credit_limit"),
+        ]);
+
+        const toValues = (arr) =>
+          [...new Set((arr || []).map(r => r.value).filter(Boolean))].sort();
+
+        if (avData?.length) setAcceptanceViaOptions(toValues(avData));
+        if (pmData?.length) setPaymentModeOptions(toValues(pmData));
+        if (rsData?.length) setReasonStatusOptions(toValues(rsData));
+        if (hrData?.length) setHoldReasonOptions(toValues(hrData));
+        if (ptData?.length) setPaymentTermsOptions(toValues(ptData));
+        if (tmData?.length) setTransportModeOptions(toValues(tmData));
+        if (cdData?.length) setCreditDaysOptions(toValues(cdData));
+        if (clData?.length) setCreditLimitOptions(toValues(clData));
+
+      } catch (err) {
+        console.error("Error fetching order status dropdowns:", err);
+        setAcceptanceViaOptions(["email", "phone", "in-person", "other"]);
+        setPaymentModeOptions(["cash", "check", "bank-transfer", "credit-card"]);
+        setReasonStatusOptions(["price", "competitor", "timeline", "specifications", "other"]);
+        setHoldReasonOptions(["budget", "approval", "project-delay", "reconsideration", "other"]);
+        setPaymentTermsOptions(["30", "45", "60", "90"]);
+        setTransportModeOptions(["Road", "Air", "Sea", "Rail"]);
+        setCreditDaysOptions(["30", "45", "60", "90"]);
+        setCreditLimitOptions(["10000", "25000", "50000", "100000"]);
+      }
+    };
+
+    fetchOrderStatusDropdowns();
   }, [])
+
 
   // Fetch quotation numbers for the given enquiry number
   useEffect(() => {

@@ -7,39 +7,27 @@ function OrderExpectedForm({ formData, onFieldChange }) {
   
   // Fetch dropdown options from DROPDOWN sheet column 81
   useEffect(() => {
+    const fetchFollowupStatusOptions = async () => {
+      try {
+        setIsLoading(true);
+        // Fetch from normalized dropdown table using category/value schema
+        const { data, error } = await supabase
+          .from("dropdown")
+          .select("value")
+          .eq("category", "followup_status");
 
-const fetchFollowupStatusOptions = async () => {
-  try {
-    setIsLoading(true);
+        if (error) throw error;
 
-    // Fetch distinct values from dropdown table where followup_status is not null
-    const { data, error } = await supabase
-      .from("dropdown")
-      .select("followup_status")
-      .not("followup_status", "is", null);
+        setFollowupStatusOptions((data || []).map(row => row.value).filter(Boolean));
+      } catch (error) {
+        console.error("Error fetching followup status options:", error);
+        setFollowupStatusOptions(["Pending", "In Progress", "Completed", "Cancelled"]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
 
-    if (error) throw error;
-
-    // Extract values into array
-    const options = data.map(row => row.followup_status);
-
-    setFollowupStatusOptions(options);
-  } catch (error) {
-    console.error("Error fetching followup status options:", error);
-    // fallback options
-    setFollowupStatusOptions([
-      "Pending",
-      "In Progress",
-      "Completed",
-      "Cancelled"
-    ]);
-  } finally {
-    setIsLoading(false);
-  }
-};
-
-    
-    fetchFollowupStatusOptions()
+    fetchFollowupStatusOptions();
   }, [])
 
   const handleChange = (e) => {

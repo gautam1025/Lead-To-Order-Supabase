@@ -32,8 +32,13 @@ const useIsMobile = () => {
 };
 
 function CallTracker() {
-  const isMobile = useIsMobile();
-  const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext);
+  const authContext = useContext(AuthContext) || {};
+  const {
+    currentUser = null,
+    userType = null,
+    isAdmin = () => false,
+    getUsernamesToFilter = () => []
+  } = authContext;
   const [searchTerm, setSearchTerm] = useState("");
   const [activeTab, setActiveTabState] = useState(() => {
     return localStorage.getItem("callTrackerActiveTab") || "pending";

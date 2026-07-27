@@ -43,7 +43,13 @@ const fallbackSourceData = [
 ]
 
 function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
-  const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext) // Get user info and admin function
+  const authContext = useContext(AuthContext) || {}
+  const {
+    currentUser = null,
+    userType = null,
+    isAdmin = () => false,
+    getUsernamesToFilter = () => []
+  } = authContext
   const [activeTab, setActiveTab] = useState("overview")
   const [leadData, setLeadData] = useState(fallbackLeadData)
   const [conversionData, setConversionData] = useState(fallbackConversionData)

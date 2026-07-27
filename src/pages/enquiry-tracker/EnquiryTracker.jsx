@@ -166,8 +166,13 @@ const defaultVisibility = {
 };
 
 function EnquiryTracker() {
-  const isMobile = useIsMobile();
-  const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext);
+  const authContext = useContext(AuthContext) || {};
+  const {
+    currentUser = null,
+    userType = null,
+    isAdmin = () => false,
+    getUsernamesToFilter = () => []
+  } = authContext;
   const [searchTerm, setSearchTerm] = useState("");
   const [tenDaysSearchTerm, setTenDaysSearchTerm] = useState("");
   const [activeTab, setActiveTabState] = useState(() => {

@@ -66,65 +66,58 @@ function NewCallTracker() {
   const [companyOptions, setCompanyOptions] = useState([])
   const [companyDetailsMap, setCompanyDetailsMap] = useState({})
 
-  // Function to fetch dropdown data from Supabase
+  // Function to fetch dropdown data from Supabase (normalized category/value schema)
   const fetchDropdownData = async () => {
+    // Helper: fetch all values for a given category
+    const fetchCategory = (category) =>
+      supabase.from('dropdown').select('value').eq('category', category);
+
     try {
-      let data = [];
-      let from = 0;
-      const step = 1000;
-      let fetchMore = true;
+      const [
+        { data: statesData, error: statesError },
+        { data: salesTypesData, error: salesTypesError },
+        { data: productCatData, error: productCatError },
+        { data: nobData, error: nobError },
+        { data: approachData, error: approachError },
+        { data: feedbackData, error: feedbackError },
+        { data: sourcesData, error: sourcesError },
+        { data: receiversData, error: receiversError },
+        { data: scData, error: scError },
+      ] = await Promise.all([
+        fetchCategory('state'),
+        fetchCategory('sales_type'),
+        fetchCategory('item_name'),
+        fetchCategory('nob'),
+        fetchCategory('enquiry_approach'),
+        fetchCategory('what_did_customer_say'),
+        fetchCategory('lead_source'),
+        fetchCategory('lead_receiver_name'),
+        fetchCategory('sc_name'),
+      ]);
 
-      while (fetchMore) {
-        const { data: pageData, error } = await supabase
-          .from('dropdown')
-          .select('*')
-          .range(from, from + step - 1);
-        
-        if (error) throw error;
-        
-        if (pageData && pageData.length > 0) {
-          data = [...data, ...pageData];
-          from += step;
-          if (pageData.length < step) fetchMore = false;
-        } else {
-          fetchMore = false;
-        }
-      }
+      const toValues = (arr) => [...new Set((arr || []).map(i => i.value).filter(Boolean))].sort();
 
-      if (data && data.length > 0) {
-        const uniqueStates = [...new Set(data.map(item => item.state))].filter(Boolean)
-        const uniqueSalesTypes = [...new Set(data.map(item => item.sales_type))].filter(Boolean)
-        const uniqueProductCategories = [...new Set(data.map(item => item.item_name))].filter(Boolean)
-        const uniqueNobOptions = [...new Set(data.map(item => item.nob))].filter(Boolean)
-        const uniqueEnquiryApproachOptions = [...new Set(data.map(item => item.enquiry_approach))].filter(Boolean)
-        const uniqueCustomerFeedbackOptions = [...new Set(data.map(item => item.what_did_customer_say))].filter(Boolean)
-        
-        const uniqueSources = [...new Set(data.map(item => item.lead_source))].filter(Boolean)
-        const uniqueReceivers = [...new Set(data.map(item => item.lead_receiver_name))].filter(Boolean)
-        const uniqueScs = [...new Set(data.map(item => item.sales_co_ordinator_name))].filter(Boolean)
+      setEnquiryStates(toValues(statesData))
+      setSalesTypes(toValues(salesTypesData))
+      setProductCategories(toValues(productCatData))
+      setNobOptions(toValues(nobData))
+      setEnquiryApproachOptions(toValues(approachData).length > 0 ? toValues(approachData) : ['Incoming', 'Outgoing'])
+      setCustomerFeedbackOptions(toValues(feedbackData))
+      setLeadSources(toValues(sourcesData))
+      setReceiverOptions(toValues(receiversData))
+      setAssignToProjectOptions(toValues(scData))
 
-        setEnquiryStates(uniqueStates.sort())
-        setSalesTypes(uniqueSalesTypes.sort())
-        setProductCategories(uniqueProductCategories.sort())
-        setNobOptions(uniqueNobOptions.sort())
-        setEnquiryApproachOptions(uniqueEnquiryApproachOptions.length > 0 ? uniqueEnquiryApproachOptions.sort() : ["Incoming", "Outgoing"])
-        setCustomerFeedbackOptions(uniqueCustomerFeedbackOptions.sort())
-        
-        setLeadSources(uniqueSources.sort())
-        setReceiverOptions(uniqueReceivers.sort())
-        setAssignToProjectOptions(uniqueScs.sort())
-      }
     } catch (error) {
-      console.error("Error fetching dropdown values:", error)
-      setEnquiryStates(["Maharashtra", "Gujarat", "Karnataka", "Tamil Nadu", "Delhi"])
-      setSalesTypes(["NBD", "CRR", "NBD_CRR"])
-      setProductCategories(["Product 1", "Product 2", "Product 3"])
-      setNobOptions(["NOB 1", "NOB 2", "NOB 3"])
-      setEnquiryApproachOptions(["Incoming", "Outgoing"])
-      setCustomerFeedbackOptions(["Feedback 1", "Feedback 2", "Feedback 3"])
-      setLeadSources(["Indiamart", "Justdial", "Social Media", "Website", "Referral", "Other"])
-      setReceiverOptions(["Receiver 1", "Receiver 2"])
-      setAssignToProjectOptions(["Person 1", "Person 2"])
+      console.error('Error fetching dropdown values:', error)
+      setEnquiryStates(['Maharashtra', 'Gujarat', 'Karnataka', 'Tamil Nadu', 'Delhi'])
+      setSalesTypes(['NBD', 'CRR', 'NBD_CRR'])
+      setProductCategories(['Product 1', 'Product 2', 'Product 3'])
+      setNobOptions(['NOB 1', 'NOB 2', 'NOB 3'])
+      setEnquiryApproachOptions(['Incoming', 'Outgoing'])
+      setCustomerFeedbackOptions(['Feedback 1', 'Feedback 2', 'Feedback 3'])
+      setLeadSources(['Indiamart', 'Justdial', 'Social Media', 'Website', 'Referral', 'Other'])
+      setReceiverOptions(['Receiver 1', 'Receiver 2'])
+      setAssignToProjectOptions(['Person 1', 'Person 2'])
     }
   }
 

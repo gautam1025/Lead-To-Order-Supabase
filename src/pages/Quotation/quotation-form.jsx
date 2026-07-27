@@ -61,183 +61,185 @@ const QuotationForm = ({
   const [leadNoOptions, setLeadNoOptions] = useState(["Select Lead No."]);
   const [leadNoData, setLeadNoData] = useState({});
 
+  // ─── HARDCODED REFERENCE PHONE NUMBER ────────────────────────────────────────
+  // TODO: Replace this value when the actual number is confirmed
+  const REFERENCE_PHONE_NO = "";
+  // ─────────────────────────────────────────────────────────────────────────────
 
-  // Fetch dropdown data and product data from Supabase dropdown table
+  // Fetch data from dedicated tables:
+  // - consignor_details → state/consignor info
+  // - client_master     → consignee companies
+  // - items             → product codes, names, rates
+  // - dropdown          → prepared_by names + reference (sp) info
   useEffect(() => {
     const fetchDropdownData = async () => {
       try {
-        const columns = [
-          "prepared_by",
-          "quotation_consignor_state",
-          "quotation_consignor_data",
-          "quotation_consignor_address",
-          "quotation_consignor_state_code",
-          "quotation_consignor_gstin",
-          "sp_pan",
-          "quotation_consignor_msmeno",
-          "consignee_company_name",
-          "consignee_billing_address",
-          "consignee_state",
-          "consignee_client_name",
-          "consignee_client_contact_no",
-          "consignee_gstin",
-          "consignee_state_code",
-          "sp_details_reference_name",
-          "sp_contact_no",
-          "reference_phone_no",
-          "item_code",
-          "item_name",
-          "description",
-          "rate",
-        ].join(",");
+        // 1. Fetch consignor details from consignor_details table
+        const { data: consignorData, error: consignorError } = await supabase
+          .from("consignor_details")
+          .select("state, state_code, data, address, gstin, msme_num, pan_num, reference_name, contact_num");
 
-        const { data: dropdownData, error } = await supabase
+        // 2. Fetch consignee companies from client_master table
+        const { data: clientMasterData, error: clientMasterError } = await supabase
+          .from("client_master")
+          .select("company_name, billing_address, state, client_name, client_mobile_number, gst_number, state_code")
+          .eq("isRelevant", true);
+
+        // 3. Fetch items from items table
+        const { data: itemsData, error: itemsError } = await supabase
+          .from("items")
+          .select("item_code, item_name, description, rate, item_category");
+
+        // 4. Fetch prepared_by and reference (sp) info from dropdown table (category/value schema)
+        const { data: preparedByData, error: preparedByError } = await supabase
           .from("dropdown")
-          .select(columns);
+          .select("value")
+          .eq("category", "prepared_by");
 
-        if (error) {
-          console.error("Error fetching dropdown data:", error);
-          // Use fallback data
-          setStateOptions([""]);
-          setCompanyOptions([""]);
-          setReferenceOptions([""]);
-          setPreparedByOptions([""]);
-          setProductCodes(["Select Code"]);
-          setProductNames(["Select Product"]);
+        const { data: spRefData, error: spRefError } = await supabase
+          .from("dropdown")
+          .select("value, category")
+          .in("category", ["sp_details_reference_name", "sp_contact_no"]);
 
-          setDropdownData({
-            states: {
-              Chhattisgarh: {
-                bankDetails:
-                  "Account No.: 438605000447\nBank Name: ICICI BANK\nBank Address: FAFADIH, RAIPUR\nIFSC CODE: ICIC0004386\nEmail: Support@thedivineempire.com\nWebsite: www.thedivineempire.com",
-                consignerAddress:
-                  "Divine Empire Private Limited, Raipur, Chhattisgarh",
-                stateCode: "22",
-                gstin: "22AAKCD1234M1Z5",
-              },
-            },
+        const dropdownError = preparedByError || spRefError;
+        const dropdownData = null; // replaced by separate queries above
+
+
+        if (consignorError) console.error("Error fetching consignor_details:", consignorError);
+        if (clientMasterError) console.error("Error fetching client_master:", clientMasterError);
+        if (itemsError) console.error("Error fetching items:", itemsError);
+        if (dropdownError) console.error("Error fetching dropdown (prepared_by):", dropdownError);
+
+        // ── Build state options from consignor_details ──────────────────────────
+        const stateOptionsData = ["Select State"];
+        const stateDetailsMap = {};
+
+        if (consignorData && consignorData.length > 0) {
+          consignorData.forEach((row) => {
+            if (row.state && !stateOptionsData.includes(row.state)) {
+              stateOptionsData.push(row.state);
+              stateDetailsMap[row.state] = {
+                bankDetails: (row.data && typeof row.data === "object"
+                  ? Object.entries(row.data).map(([k, v]) => `${k}: ${v}`).join("\n")
+                  : row.data) || "",
+                consignerAddress: row.address || "",
+                stateCode: row.state_code || "",
+                gstin: row.gstin || "",
+                pan: row.pan_num || "",
+                msmeNumber: row.msme_num || "",
+              };
+            }
           });
-          return;
         }
 
-        if (dropdownData && dropdownData.length > 0) {
-          const stateOptionsData = ["Select State"];
-          const stateDetailsMap = {};
-          const preparedByOptionsData = [""];
-          const companyOptionsData = ["Select Company"];
-          const companyDetailsMap = {};
-          const referenceOptionsData = ["Select Reference"];
-          const referenceDetailsMap = {};
-          const codes = ["Select Code"];
-          const names = ["Select Product"];
-          const productDataMap = {};
+        // ── Build company options from client_master ────────────────────────────
+        const companyOptionsData = ["Select Company"];
+        const companyDetailsMap = {};
 
-          dropdownData.forEach((row) => {
-            // Extract prepared by names
-            if (row.prepared_by) {
-              if (!preparedByOptionsData.includes(row.prepared_by)) {
-                preparedByOptionsData.push(row.prepared_by);
-              }
+        if (clientMasterData && clientMasterData.length > 0) {
+          clientMasterData.forEach((row) => {
+            if (row.company_name && !companyOptionsData.includes(row.company_name)) {
+              companyOptionsData.push(row.company_name);
+              companyDetailsMap[row.company_name] = {
+                address: row.billing_address || "",
+                state: row.state || "",
+                contactName: row.client_name || "",
+                contactNo: row.client_mobile_number || "",
+                gstin: row.gst_number || "",
+                stateCode: row.state_code || "",
+              };
             }
+          });
+        }
 
-            // Extract state information
-            if (row.quotation_consignor_state) {
-              if (!stateOptionsData.includes(row.quotation_consignor_state)) {
-                stateOptionsData.push(row.quotation_consignor_state);
+        // ── Build reference options from dropdown (sp_details) ──────────────────
+        const referenceOptionsData = ["Select Reference"];
+        const referenceDetailsMap = {};
+        const preparedByOptionsData = [""];
 
-                stateDetailsMap[row.quotation_consignor_state] = {
-                  bankDetails: row.quotation_consignor_data || "",
-                  consignerAddress: row.quotation_consignor_address || "",
-                  stateCode: row.quotation_consignor_state_code || "",
-                  gstin: row.quotation_consignor_gstin || "",
-                  pan: row.sp_pan || "",
-                  msmeNumber: row.quotation_consignor_msmeno || "",
-                };
-              }
+        // Build prepared_by options from category/value query
+        if (preparedByData && preparedByData.length > 0) {
+          preparedByData.forEach((row) => {
+            if (row.value && !preparedByOptionsData.includes(row.value)) {
+              preparedByOptionsData.push(row.value);
             }
+          });
+        }
 
-            // Extract company information
-            if (row.consignee_company_name) {
-              if (!companyOptionsData.includes(row.consignee_company_name)) {
-                companyOptionsData.push(row.consignee_company_name);
+        // Build reference options from sp_details_reference_name category
+        // Note: sp_contact_no is stored as separate rows with category="sp_contact_no"
+        // We use sp_details_reference_name rows as the reference list
+        if (spRefData && spRefData.length > 0) {
+          const refRows = spRefData.filter(r => r.category === "sp_details_reference_name");
+          const contactRows = spRefData.filter(r => r.category === "sp_contact_no");
 
-                companyDetailsMap[row.consignee_company_name] = {
-                  address: row.consignee_billing_address || "",
-                  state: row.consignee_state || "",
-                  contactName: row.consignee_client_name || "",
-                  contactNo: row.consignee_client_contact_no || "",
-                  gstin: row.consignee_gstin || "",
-                  stateCode: row.consignee_state_code || "",
-                };
-              }
+          refRows.forEach((row, idx) => {
+            if (row.value && !referenceOptionsData.includes(row.value)) {
+              referenceOptionsData.push(row.value);
+              referenceDetailsMap[row.value] = {
+                mobile: contactRows[idx]?.value || "",
+                // reference_phone_no is hardcoded (see REFERENCE_PHONE_NO constant above)
+                phone: REFERENCE_PHONE_NO,
+              };
             }
+          });
+        }
 
-            // Extract reference information
-            if (row.sp_details_reference_name) {
-              if (
-                !referenceOptionsData.includes(row.sp_details_reference_name)
-              ) {
-                referenceOptionsData.push(row.sp_details_reference_name);
+        // ── Build product codes/names from items table ──────────────────────────
+        const codes = ["Select Code"];
+        const names = ["Select Product"];
+        const productDataMap = {};
 
-                referenceDetailsMap[row.sp_details_reference_name] = {
-                  mobile: row.sp_contact_no || "",
-                  phone: row.reference_phone_no || "",
-                };
-              }
-            }
-
-            // Extract product information
+        if (itemsData && itemsData.length > 0) {
+          itemsData.forEach((row) => {
             const code = row.item_code;
             const name = row.item_name;
             const description = row.description || "";
             const rate = parseFloat(row.rate) || 0;
+            const category = row.item_category || "";
 
-            if (code && !codes.includes(code)) {
-              codes.push(code);
-            }
-
-            if (name && !names.includes(name)) {
-              names.push(name);
-            }
+            if (code && !codes.includes(code)) codes.push(code);
+            if (name && !names.includes(name)) names.push(name);
 
             if (code) {
-              productDataMap[code] = {
-                name: name,
-                description: description,
-                rate: rate,
-              };
+              productDataMap[code] = { name, description, rate, category };
             }
-
             if (name) {
-              productDataMap[name] = {
-                code: code,
-                description: description,
-                rate: rate,
-              };
+              productDataMap[name] = { code, description, rate, category };
             }
-          });
-
-          setStateOptions(stateOptionsData);
-          setCompanyOptions(companyOptionsData);
-          setReferenceOptions(referenceOptionsData);
-          setPreparedByOptions(preparedByOptionsData);
-          setProductCodes(codes);
-          setProductNames(names);
-          setProductData(productDataMap);
-
-          setDropdownData({
-            states: stateDetailsMap,
-            companies: companyDetailsMap,
-            references: referenceDetailsMap,
           });
         }
+
+        // ── Apply all state updates ─────────────────────────────────────────────
+        setStateOptions(stateOptionsData);
+        setCompanyOptions(companyOptionsData);
+        setReferenceOptions(referenceOptionsData);
+        setPreparedByOptions(preparedByOptionsData);
+        setProductCodes(codes);
+        setProductNames(names);
+        setProductData(productDataMap);
+
+        setDropdownData({
+          states: stateDetailsMap,
+          companies: companyDetailsMap,
+          references: referenceDetailsMap,
+        });
+
       } catch (error) {
         console.error("Error fetching dropdown data:", error);
+        // Fallback to empty options on catastrophic failure
+        setStateOptions([""]);
+        setCompanyOptions([""]);
+        setReferenceOptions([""]);
+        setPreparedByOptions([""]);
+        setProductCodes(["Select Code"]);
+        setProductNames(["Select Product"]);
       }
     };
 
     fetchDropdownData();
   }, []);
+
 
   // Fetch lead numbers from Supabase tables
   useEffect(() => {

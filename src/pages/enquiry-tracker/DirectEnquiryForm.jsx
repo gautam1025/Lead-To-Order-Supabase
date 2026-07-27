@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react"
 import supabase from "../../utils/supabase"
+import { TABLES, COLUMNS } from "../../constants/dbSchema"
 
 const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   const [leadSources, setLeadSources] = useState([])
@@ -58,96 +59,51 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
     }
   }, [newCallTrackerData.companyName, companyOptions])
 
-  // Fetch dropdown data, company data, and last enquiry number when component mounts
   useEffect(() => {
-    fetchDropdownData();
-    fetchCompanyData();
-    fetchLastEnquiryNumber();
+    fetchDropdownData()
+    fetchCompanyData()
+    generateEnquiryNumber()
+  }, [])
 
-    const params = new URLSearchParams(window.location.search);
-    const company = params.get("companyName");
-    const phone = params.get("phoneNumber");
-    const person = params.get("personName");
-    const stateVal = params.get("state");
-    const gstVal = params.get("gstNumber");
-    const addressVal = params.get("billingAddress");
-    const scVal = params.get("scName");
-
-    if (company || phone || person || stateVal || gstVal || addressVal || scVal) {
-      setNewCallTrackerData(prev => ({
-        ...prev,
-        companyName: company || prev.companyName,
-        phoneNumber: phone || prev.phoneNumber,
-        salesPersonName: person || prev.salesPersonName,
-        shippingAddress: addressVal || prev.shippingAddress,
-        gstNumber: gstVal || prev.gstNumber,
-        scName: scVal || prev.scName,
-        isCompanyAutoFilled: !!company
-      }));
-
-      if (stateVal) {
-        setEnquiryFormData(prev => ({
-          ...prev,
-          enquiryState: stateVal
-        }));
-      }
-    }
-  }, []);
-
-  // Function to fetch the last enquiry number from Supabase (Used for initial display only)
-  const fetchLastEnquiryNumber = async () => {
+  const generateEnquiryNumber = async () => {
     try {
       const { data, error } = await supabase
-        .from('enquiry_to_order')
-        .select('enquiry_no')
-        .not('enquiry_no', 'is', null)
-        .order('timestamp', { ascending: false })
-        .limit(200);
+        .from(TABLES.ENQUIRY_TO_ORDER)
+        .select("enquiry_no")
+        .not("enquiry_no", "is", null);
 
       if (error) {
         console.error("Error fetching enquiry numbers:", error);
-        if (error.code === '42P01') {
-          setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "En-01" }));
-          return "En-01";
-        }
+        setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "ENQ-001" }));
+        return;
       }
 
       let maxNumber = 0;
-      if (data && data.length > 0) {
-        data.forEach(row => {
-          if (row.enquiry_no) {
-            const match = row.enquiry_no.match(/En-(\d+)/i);
-            if (match) {
-              const num = parseInt(match[1], 10);
-              if (!isNaN(num) && num > maxNumber) {
-                maxNumber = num;
-              }
-            }
+      data.forEach(item => {
+        if (item.enquiry_no && item.enquiry_no.startsWith("ENQ-")) {
+          const numStr = item.enquiry_no.substring(4);
+          const num = parseInt(numStr, 10);
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num;
           }
-        });
-      }
+        }
+      });
 
       const nextNumber = maxNumber + 1;
-      const nextEnquiryNo = `En-${nextNumber.toString().padStart(2, "0")}`;
-
-      setNewCallTrackerData(prev => ({
-        ...prev,
-        enquiryNo: nextEnquiryNo
-      }));
-      
-      return nextEnquiryNo;
-    } catch (error) {
-      console.error("Error generating next enquiry number:", error);
-      const fallback = "En-01";
-      setNewCallTrackerData(prev => ({
-        ...prev,
-        enquiryNo: fallback
-      }));
-      return fallback;
+      const formattedEnquiryNo = `ENQ-${nextNumber.toString().padStart(3, '0')}`;
+      setNewCallTrackerData(prev => ({ ...prev, enquiryNo: formattedEnquiryNo }));
+    } catch (err) {
+      console.error("Error generating enquiry number:", err);
+      setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "ENQ-001" }));
     }
-  }
+  };
+
 
   const fetchDropdownData = async () => {
+    // Helper: fetch all values for a given category from the normalized dropdown table
+    const fetchCategory = (category) =>
+      supabase.from(TABLES.DROPDOWN).select("value").eq("category", category);
+
     try {
       const [
         { data: leadSourcesData, error: leadSourcesError },
@@ -156,50 +112,38 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         { data: nobData, error: nobError },
         { data: salesTypeData, error: salesTypeError },
         { data: approachData, error: approachError },
-        { data: productData, error: productError },
         { data: receiversData, error: receiversError },
         { data: assignToData, error: assignToError }
       ] = await Promise.all([
-        supabase.from("dropdown").select("lead_source").not("lead_source", "is", null),
-        supabase.from("dropdown").select("sales_co_ordinator_name").not("sales_co_ordinator_name", "is", null),
-        supabase.from("dropdown").select("state").not("state", "is", null),
-        supabase.from("dropdown").select("nob").not("nob", "is", null),
-        supabase.from("dropdown").select("sales_type").not("sales_type", "is", null),
-        supabase.from("dropdown").select("enquiry_approach").not("enquiry_approach", "is", null),
-        supabase.from("dropdown").select("item_name").not("item_name", "is", null),
-        supabase.from("dropdown").select("enquiry_receiver_name").not("enquiry_receiver_name", "is", null),
-        supabase.from("dropdown").select("enquiry_assign_to").not("enquiry_assign_to", "is", null)
+        fetchCategory("lead_source"),
+        fetchCategory("sc_name"),
+        fetchCategory("state"),
+        fetchCategory("nob"),
+        fetchCategory("sales_type"),
+        fetchCategory("enquiry_approach"),
+        fetchCategory("lead_receiver_name"),
+        fetchCategory("lead_assign_to"),
       ]);
 
       const errors = [
         leadSourcesError, scNamesError, statesError, nobError,
-        salesTypeError, approachError, productError, receiversError, assignToError
-      ].filter(error => error !== null);
+        salesTypeError, approachError, receiversError, assignToError
+      ].filter(Boolean);
 
       if (errors.length > 0) {
         throw new Error("Failed to fetch some dropdown data");
       }
 
-      const sources = leadSourcesData.map(item => item.lead_source);
-      const scNames = scNamesData.map(item => item.sales_co_ordinator_name);
-      const states = statesData.map(item => item.state);
-      const nobItems = nobData.map(item => item.nob);
-      const salesTypeOptions = salesTypeData.map(item => item.sales_type);
-      const approachOptions = approachData.map(item => item.enquiry_approach);
-      const productItems = productData.map(item => item.item_name);
-      const receivers = receiversData.map(item => item.enquiry_receiver_name);
-      const assignToProjects = assignToData.map(item => item.enquiry_assign_to);
+      const toValues = (arr) => (arr || []).map(item => item.value).filter(Boolean);
 
-      setLeadSources([...new Set(sources)]);
-      setScNameOptions([...new Set(scNames)]);
-      setEnquiryStates([...new Set(states)]);
-      setNobOptions([...new Set(nobItems)]);
-      setSalesTypes([...new Set(salesTypeOptions)]);
-      setEnquiryApproachOptions([...new Set(approachOptions)]);
-      setProductCategories([...new Set(productItems)]);
-      setReceiverOptions([...new Set(receivers)]);
-      setAssignToProjectOptions([...new Set(assignToProjects)]);
-
+      setLeadSources([...new Set(toValues(leadSourcesData))]);
+      setScNameOptions([...new Set(toValues(scNamesData))]);
+      setEnquiryStates([...new Set(toValues(statesData))]);
+      setNobOptions([...new Set(toValues(nobData))]);
+      setSalesTypes([...new Set(toValues(salesTypeData))]);
+      setEnquiryApproachOptions([...new Set(toValues(approachData))]);
+      setReceiverOptions([...new Set(toValues(receiversData))]);
+      setAssignToProjectOptions([...new Set(toValues(assignToData))]);
 
     } catch (error) {
       console.error("Error fetching dropdown values:", error);
@@ -210,7 +154,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       setNobOptions(["NOB 1", "NOB 2", "NOB 3"]);
       setSalesTypes(["NBD", "CRR", "NBD_CRR"]);
       setEnquiryApproachOptions(["Approach 1", "Approach 2", "Approach 3"]);
-      setProductCategories(["Product 1", "Product 2", "Product 3"]);
       setReceiverOptions(["Receiver 1", "Receiver 2", "Receiver 3"]);
       setAssignToProjectOptions(["Project 1", "Project 2", "Project 3"]);
     }

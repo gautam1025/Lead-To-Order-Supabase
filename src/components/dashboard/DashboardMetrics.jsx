@@ -6,7 +6,13 @@ import { AuthContext } from "../../App" // Import AuthContext
 import supabase from "../../utils/supabase" // Import your Supabase client
 
 function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
-  const { currentUser, userType, isAdmin, getUsernamesToFilter } = useContext(AuthContext) // Get user info and admin function
+  const authContext = useContext(AuthContext) || {}
+  const {
+    currentUser = null,
+    userType = null,
+    isAdmin = () => false,
+    getUsernamesToFilter = () => []
+  } = authContext
   const [metrics, setMetrics] = useState({
     totalLeads: "0",
     pendingFollowups: "0",

@@ -5,6 +5,7 @@ import DataTable from "../../components/DataTable";
 import SearchableDropdown from "../../components/SearchableDropdown";
 import supabase from "../../utils/supabase";
 import ModalForm from "../../components/ModalForm";
+import { TABLES, COLUMNS } from "../../constants/dbSchema";
 
 function ClientMaster() {
 
@@ -58,7 +59,7 @@ function ClientMaster() {
 
       while (fetchMore) {
         const { data, error: clientErr } = await supabase
-          .from("client_master")
+          .from(TABLES.CLIENT_MASTER)
           .select("*")
           .order('company_name', { ascending: true })
           .range(from, from + step - 1);
@@ -76,11 +77,11 @@ function ClientMaster() {
 
       // Fetch active tracking leads
       const { data: leadsData } = await supabase
-        .from("leads_to_order")
+        .from(TABLES.LEADS_TO_ORDER)
         .select("Company_Name, Leads_Tracking_Status")
         .eq("Leads_Tracking_Status", "Pending");
       const { data: enquiryData } = await supabase
-        .from("enquiry_to_order")
+        .from(TABLES.ENQUIRY_TO_ORDER)
         .select("company_name, current_stage")
         .ilike("current_stage", "pending");
 
@@ -197,11 +198,11 @@ function ClientMaster() {
 
     try {
       if (modalMode === "add") {
-        const { error } = await supabase.from("client_master").insert([supabaseData]);
+        const { error } = await supabase.from(TABLES.CLIENT_MASTER).insert([supabaseData]);
         if (error) throw error;
       } else {
         const { error } = await supabase
-          .from("client_master")
+          .from(TABLES.CLIENT_MASTER)
           .update(supabaseData)
           .eq("uuid", currentClient.uuid);
         if (error) throw error;
@@ -221,7 +222,7 @@ function ClientMaster() {
       setIsLoading(true);
       try {
         const { error } = await supabase
-          .from("client_master")
+          .from(TABLES.CLIENT_MASTER)
           .delete()
           .eq("uuid", client.uuid);
         if (error) throw error;

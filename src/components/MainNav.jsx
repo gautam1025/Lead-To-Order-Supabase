@@ -4,7 +4,8 @@ import { AuthContext } from "../App"
 import { useLocation } from "react-router-dom"
 
 function MainNav({ logout, setMobileMenuOpen }) {
-  const { currentUser, userType, isAdmin } = useContext(AuthContext)
+  const authContext = useContext(AuthContext) || {}
+  const { currentUser = null, userType = null, isAdmin = () => false } = authContext
   const location = useLocation()
 
   const getPageHeader = () => {

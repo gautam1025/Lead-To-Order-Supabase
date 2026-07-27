@@ -4,6 +4,7 @@ import DataTable from "../../components/DataTable";
 import SearchableDropdown from "../../components/SearchableDropdown";
 import ModalForm from "../../components/ModalForm";
 import supabase from "../../utils/supabase";
+import { TABLES, COLUMNS } from "../../constants/dbSchema";
 
 const CATEGORY_OPTIONS = [
   { value: "Lead Source", label: "Lead Source" },
@@ -32,7 +33,7 @@ function LeadMaster() {
     setIsLoading(true);
     // Fetch from SC_management where category = activeMaster
     const { data: scData, error: scError } = await supabase
-      .from("SC_management")
+      .from(TABLES.SC_MANAGEMENT)
       .select("*")
       .eq("category", activeMaster)
       .order('created_at', { ascending: false });
@@ -41,7 +42,7 @@ function LeadMaster() {
     }
     // Fetch global active category by checking which category is active in SC_management
     try {
-      const { data: activeRows } = await supabase.from("SC_management").select("category").eq("isActive", true).limit(1);
+      const { data: activeRows } = await supabase.from(TABLES.SC_MANAGEMENT).select("category").eq("isActive", true).limit(1);
       if (activeRows && activeRows.length > 0) {
         setGlobalActiveCategory(activeRows[0].category);
       } else {
@@ -54,48 +55,48 @@ function LeadMaster() {
   };
 
   const loadDropdowns = async () => {
-    let allData = [];
-    let from = 0;
-    const step = 1000;
-    let fetchMore = true;
+    // Helper: fetch all values for a given category from the normalized dropdown table
+    const fetchCategory = (category) =>
+      supabase.from(TABLES.DROPDOWN).select("value").eq("category", category);
 
-    while (fetchMore) {
-      const { data, error } = await supabase
-        .from("dropdown")
-        .select("*")
-        .range(from, from + step - 1);
-      
-      if (data && data.length > 0) {
-        allData = [...allData, ...data];
-        from += step;
-        if (data.length < step) fetchMore = false;
-      } else {
-        fetchMore = false;
-      }
-    }
+    try {
+      const [
+        { data: scData },
+        { data: sourcesData },
+        { data: nobData },
+        { data: statesData },
+        { data: salesTypesData },
+      ] = await Promise.all([
+        fetchCategory("sc_name"),
+        fetchCategory("lead_source"),
+        fetchCategory("nob"),
+        fetchCategory("state"),
+        fetchCategory("sales_type"),
+      ]);
 
-    if (allData.length > 0) {
-      const scs = [...new Set(allData.map((row) => row.sales_co_ordinator_name).filter(Boolean))];
-      setScOptions(scs.sort());
-      
-      const options = {
-        "Lead Source": [...new Set(allData.map((row) => row.lead_source).filter(Boolean))].sort(),
-        "NOB": [...new Set(allData.map((row) => row.nob).filter(Boolean))].sort(),
-        "State": [...new Set(allData.map((row) => row.state).filter(Boolean))].sort(),
-        "Group Name": [...new Set(allData.map((row) => row.group_name).filter(Boolean))].sort(),
-        "Sales Type": [...new Set(allData.map((row) => row.sales_type).filter(Boolean))].sort(),
-      };
-      setDropdownOptions(options);
+      const toValues = (arr) =>
+        [...new Set((arr || []).map(r => r.value).filter(Boolean))].sort();
+
+      setScOptions(toValues(scData));
+
+      setDropdownOptions({
+        "Lead Source": toValues(sourcesData),
+        "NOB": toValues(nobData),
+        "State": toValues(statesData),
+        "Sales Type": toValues(salesTypesData),
+      });
+    } catch (error) {
+      console.error("Error loading dropdowns:", error);
     }
   };
 
   const handleSetActiveCategory = async () => {
     try {
       // First, set all currently active rows to false
-      await supabase.from("SC_management").update({ isActive: false }).eq("isActive", true);
+      await supabase.from(TABLES.SC_MANAGEMENT).update({ isActive: false }).eq("isActive", true);
       
       // Then, set the rows matching the newly selected category to true
-      await supabase.from("SC_management").update({ isActive: true }).eq("category", activeMaster);
+      await supabase.from(TABLES.SC_MANAGEMENT).update({ isActive: true }).eq("category", activeMaster);
 
       setGlobalActiveCategory(activeMaster);
     } catch (error) {
@@ -136,14 +137,14 @@ function LeadMaster() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (modalMode === "add") {
-      await supabase.from("SC_management").insert([{
+      await supabase.from(TABLES.SC_MANAGEMENT).insert([{
         key: formData.key,
         value: formData.value,
         category: activeMaster,
         isActive: activeMaster === globalActiveCategory
       }]);
     } else {
-      await supabase.from("SC_management").update({
+      await supabase.from(TABLES.SC_MANAGEMENT).update({
         key: formData.key,
         value: formData.value,
         updated_at: new Date().toISOString()
@@ -155,7 +156,7 @@ function LeadMaster() {
 
   const handleDelete = async (item) => {
     if (window.confirm("Are you sure you want to delete this item?")) {
-      await supabase.from("SC_management").delete().eq("uuid", item.uuid);
+      await supabase.from(TABLES.SC_MANAGEMENT).delete().eq("uuid", item.uuid);
       loadData();
     }
   };

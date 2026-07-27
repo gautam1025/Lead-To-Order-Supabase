@@ -137,47 +137,32 @@ function NewEnquiryTracker() {
   useEffect(() => {
     const fetchDropdownOptions = async () => {
       try {
+        // Fetch from normalized dropdown table using category/value schema
+        const [
+          { data: statusData, error: statusError },
+          { data: feedbackData, error: feedbackError },
+        ] = await Promise.all([
+          supabase.from("dropdown").select("value").eq("category", "enquiry_status"),
+          supabase.from("dropdown").select("value").eq("category", "what_did_customer_say"),
+        ]);
 
-        // Fetch non-null values from supabase table
-        const { data, error } = await supabase
-          .from("dropdown")
-          .select("enquiry_status, what_did_customer_say")
-          .not("enquiry_status", "is", null)
-          .not("what_did_customer_say", "is", null)
+        if (statusError) throw statusError;
+        if (feedbackError) throw feedbackError;
 
-        if (error) throw error
+        const toValues = (arr) =>
+          [...new Set((arr || []).map(r => r.value).filter(v => v && v.trim() !== ""))];
 
-        if (data) {
-          // Extract unique + clean values
-          const statusOptions = [
-            ...new Set(
-              data
-                .map((row) => row.enquiry_status)
-                .filter((val) => val && val.trim() !== "")
-            ),
-          ]
+        setEnquiryStatusOptions(toValues(statusData));
+        setCustomerFeedbackOptions(toValues(feedbackData));
 
-          const feedbackOptions = [
-            ...new Set(
-              data
-                .map((row) => row.what_did_customer_say)
-                .filter((val) => val && val.trim() !== "")
-            ),
-          ]
-
-          setEnquiryStatusOptions(statusOptions)
-          setCustomerFeedbackOptions(feedbackOptions)
-        }
       } catch (error) {
-        console.error("Error fetching dropdown options:", error)
-        // fallback values
-        setEnquiryStatusOptions(["hot", "warm", "cold"])
-        setCustomerFeedbackOptions(["Feedback 1", "Feedback 2", "Feedback 3"])
-      } finally {
+        console.error("Error fetching dropdown options:", error);
+        setEnquiryStatusOptions(["hot", "warm", "cold"]);
+        setCustomerFeedbackOptions(["Feedback 1", "Feedback 2", "Feedback 3"]);
       }
-    }
+    };
 
-    fetchDropdownOptions()
+    fetchDropdownOptions();
   }, [])
 
 

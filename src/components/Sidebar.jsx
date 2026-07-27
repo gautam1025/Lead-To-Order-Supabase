@@ -7,13 +7,22 @@ import logoSvg from "../assests/logo.jpeg"
 
 function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     const location = useLocation()
-    const { userType, isAdmin, logout } = useContext(AuthContext)
-    const [isMasterOpen, setIsMasterOpen] = useState(false)
+    const authContext = useContext(AuthContext) || {}
+    const { userType = null, isAdmin = () => false, logout = () => {} } = authContext
+    const [isMasterOpen, setIsMasterOpen] = useState(() => location.pathname.startsWith("/master"))
     const [counts, setCounts] = useState({
         callTracker: null,
         enquiryTracker: null,
         clientMaster: null
     })
+
+    const isMasterActive = location.pathname.startsWith("/master")
+
+    useEffect(() => {
+        if (isMasterActive) {
+            setIsMasterOpen(true)
+        }
+    }, [location.pathname])
 
     useEffect(() => {
         const fetchCounts = async () => {
@@ -118,8 +127,6 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
             active: location.pathname.startsWith("/report"),
         })
     }
-
-    const isMasterActive = location.pathname.startsWith("/master");
 
     return (
         <>

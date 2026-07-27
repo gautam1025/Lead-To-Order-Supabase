@@ -58,8 +58,8 @@ function ExcelImportModal({ onClose, onSaved }) {
   const [fileName, setFileName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-  const fileInputRef = useRef(null);
-  const { showNotification } = useContext(AuthContext);
+  const authContext = useContext(AuthContext) || {};
+  const { showNotification = () => {} } = authContext;
 
   // Column mapping: Excel header → internal key
   const COLUMN_MAP_RAW = {
@@ -470,11 +470,12 @@ function Leads() {
   const [nextLeadNumber, setNextLeadNumber] = useState("");
   const [creditDaysOptions, setCreditDaysOptions] = useState([]);
   const [creditLimitOptions, setCreditLimitOptions] = useState([]);
-  const { showNotification } = useContext(AuthContext);
+  const formAuthContext = useContext(AuthContext) || {};
+  const { showNotification = () => {} } = formAuthContext;
   const [designationOptions, setDesignationOptions] = useState([]);
   const [nobOptions, setNobOptions] = useState([]);
   const [stateOptions, setStateOptions] = useState([]);
-  const [salesTypeOptions] = useState(["NBD", "CRR", "NBD_CRR"]);
+  const [salesTypeOptions, setSalesTypeOptions] = useState([]);
 
   const [isLoadingData, setIsLoadingData] = useState(true);
 
@@ -554,48 +555,46 @@ function Leads() {
   }, [formData.source, formData.nob, formData.state, formData.groupName, formData.salesType, activeScCategory, activeScRules]);
 
   const fetchDropdownData = async () => {
+    // Helper: fetch all values for a given category from the normalized dropdown table
+    const fetchCategory = (category) =>
+      supabase.from("dropdown").select("value").eq("category", category);
+
     try {
-      let allData = [];
-      let from = 0;
-      const step = 1000;
-      let fetchMore = true;
+      const [
+        { data: receiversData },
+        { data: sourcesData },
+        { data: scData },
+        { data: statesData },
+        { data: creditDaysData },
+        { data: creditLimitsData },
+        { data: designationsData },
+        { data: nobsData },
+        { data: salesTypesData },
+      ] = await Promise.all([
+        fetchCategory("lead_receiver_name"),
+        fetchCategory("lead_source"),
+        fetchCategory("sc_name"),
+        fetchCategory("state"),
+        fetchCategory("credit_days"),
+        fetchCategory("credit_limit"),
+        fetchCategory("designation"),
+        fetchCategory("nob"),
+        fetchCategory("sales_type"),
+      ]);
 
-      while (fetchMore) {
-        const { data, error } = await supabase
-          .from("dropdown")
-          .select("*")
-          .range(from, from + step - 1);
-        
-        if (error) throw error;
-        
-        if (data && data.length > 0) {
-          allData = [...allData, ...data];
-          from += step;
-          if (data.length < step) fetchMore = false;
-        } else {
-          fetchMore = false;
-        }
-      }
+      const toValues = (arr) =>
+        (arr || []).map(r => r.value).filter(v => v && v.trim() !== "").sort();
 
-      if (allData.length > 0) {
-        const receivers = [...new Set(allData.map((row) => row.lead_receiver_name).filter(Boolean))];
-        const sources = [...new Set(allData.map((row) => row.lead_source).filter(Boolean))];
-        const scs = [...new Set(allData.map((row) => row.sales_co_ordinator_name).filter(Boolean))];
-        const states = [...new Set(allData.map((row) => row.state).filter(Boolean))];
-        const creditDays = [...new Set(allData.map((row) => row.credit_days).filter(Boolean))];
-        const creditLimits = [...new Set(allData.map((row) => row.credit_limit).filter(Boolean))];
-        const designations = [...new Set(allData.map((row) => row.designation).filter(Boolean))];
-        const nobs = [...new Set(allData.map((row) => row.nob).filter(Boolean))];
+      setReceiverNames(toValues(receiversData));
+      setLeadSources(toValues(sourcesData));
+      setScNames(toValues(scData));
+      setStateOptions(toValues(statesData));
+      setCreditDaysOptions(toValues(creditDaysData));
+      setCreditLimitOptions(toValues(creditLimitsData));
+      setDesignationOptions(toValues(designationsData));
+      setNobOptions(toValues(nobsData));
+      setSalesTypeOptions(toValues(salesTypesData));
 
-        setReceiverNames(receivers.filter((item) => item && item.trim() !== "").sort());
-        setLeadSources(sources.filter((item) => item && item.trim() !== "").sort());
-        setScNames(scs.filter((item) => item && item.trim() !== "").sort());
-        setStateOptions(states.filter((item) => item && item.trim() !== "").sort());
-        setCreditDaysOptions(creditDays.filter((item) => item && item.trim() !== "").sort());
-        setCreditLimitOptions(creditLimits.filter((item) => item && item.trim() !== "").sort());
-        setDesignationOptions(designations.filter((item) => item && item.trim() !== "").sort());
-        setNobOptions(nobs.filter((item) => item && item.trim() !== "").sort());
-      }
     } catch (error) {
       console.error("Error fetching dropdown values:", error);
       setReceiverNames(["John Smith", "Sarah Johnson", "Michael Brown"]);
