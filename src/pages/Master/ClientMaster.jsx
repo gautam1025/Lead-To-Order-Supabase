@@ -48,38 +48,22 @@ function ClientMaster() {
     creditLimit: ""
   });
   
+  const fetchIdRef = useRef(0);
+
   const fetchClients = async () => {
+    fetchIdRef.current += 1;
+    const currentFetchId = fetchIdRef.current;
+
     setIsLoading(true);
+    setClientData([]); // Reset data before new fetch
+
     try {
-      // Fetch ALL clients from Supabase using range pagination
-      let clientsData = [];
-      let from = 0;
-      const step = 1000;
-      let fetchMore = true;
-
-      while (fetchMore) {
-        const { data, error: clientErr } = await supabase
-          .from(TABLES.CLIENT_MASTER)
-          .select("*")
-          .order('company_name', { ascending: true })
-          .range(from, from + step - 1);
-
-        if (clientErr) throw clientErr;
-
-        if (data && data.length > 0) {
-          clientsData = [...clientsData, ...data];
-          from += step;
-          if (data.length < step) fetchMore = false;
-        } else {
-          fetchMore = false;
-        }
-      }
-
-      // Fetch active tracking leads
+      // Fetch active tracking leads and enquiries FIRST
       const { data: leadsData } = await supabase
         .from(TABLES.LEADS_TO_ORDER)
         .select("Company_Name, Leads_Tracking_Status")
         .eq("Leads_Tracking_Status", "Pending");
+
       const { data: enquiryData } = await supabase
         .from(TABLES.ENQUIRY_TO_ORDER)
         .select("company_name, current_stage")
@@ -88,46 +72,85 @@ function ClientMaster() {
       const leadCompanies = new Set((leadsData || []).map(l => (l.Company_Name || "").toLowerCase().trim()).filter(Boolean));
       const enquiryCompanies = new Set((enquiryData || []).map(e => (e.company_name || "").toLowerCase().trim()).filter(Boolean));
 
-      const formattedData = (clientsData || []).map((c, i) => {
-        const nameLower = (c.company_name || "").toLowerCase().trim();
-        const inLead = leadCompanies.has(nameLower);
-        const inEnquiry = enquiryCompanies.has(nameLower);
-        
-        let trackerStatus = "-";
-        if (inLead && inEnquiry) {
-          trackerStatus = "Lead / Enquiry";
-        } else if (inLead) {
-          trackerStatus = "Lead";
-        } else if (inEnquiry) {
-          trackerStatus = "Enquiry";
+      // Fetch clients from Supabase using progressive chunks
+      let from = 0;
+      const step = 500;
+      let fetchMore = true;
+
+      while (fetchMore && currentFetchId === fetchIdRef.current) {
+        const { data, error: clientErr } = await supabase
+          .from(TABLES.CLIENT_MASTER)
+          .select("*")
+          .order('company_name', { ascending: true })
+          .range(from, from + step - 1);
+
+        if (clientErr) throw clientErr;
+        if (currentFetchId !== fetchIdRef.current) break; // Abort if a new fetch started
+
+        if (data && data.length > 0) {
+          const formattedChunk = data.map((c, i) => {
+            const nameLower = (c.company_name || "").toLowerCase().trim();
+            const inLead = leadCompanies.has(nameLower);
+            const inEnquiry = enquiryCompanies.has(nameLower);
+            
+            let trackerStatus = "-";
+            if (inLead && inEnquiry) {
+              trackerStatus = "Lead / Enquiry";
+            } else if (inLead) {
+              trackerStatus = "Lead";
+            } else if (inEnquiry) {
+              trackerStatus = "Enquiry";
+            }
+
+            return {
+              // Using from + i + 1 to maintain global index
+              id: from + i + 1,
+              uuid: c.uuid,
+              companyName: c.company_name || "",
+              clientCode: c.client_code || "",
+              clientName: c.client_name || "",
+              clientMobileNumber: c.client_mobile_number || "",
+              state: c.state || "",
+              billingAddress: c.billing_address || "",
+              gstNumber: c.gst_number || "",
+              companyGroupName: c.company_group_name || "",
+              scName: c.sc_name || "",
+              crmName: c.crm_name || "",
+              stateCode: c.state_code || "",
+              creditDays: c.credit_days ?? "",
+              creditLimit: c.credit_limit ?? "",
+              isRelevant: c.isRelevant !== false,
+              trackerStatus
+            };
+          });
+
+          // Progressively update state
+          setClientData(prev => {
+            const combined = [...prev, ...formattedChunk];
+            // Only sort if necessary, but data from Supabase is already ordered by company_name
+            // We can rely on the DB ordering if we don't have overlapping company names across chunks,
+            // but for safety, we can re-sort.
+            return combined.sort((a, b) => a.companyName.localeCompare(b.companyName, undefined, { sensitivity: 'base' }));
+          });
+
+          from += step;
+          
+          // Hide loading indicator after first chunk
+          if (from === step && currentFetchId === fetchIdRef.current) {
+             setIsLoading(false);
+          }
+
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
         }
-
-        return {
-          id: i + 1,
-          uuid: c.uuid,
-          companyName: c.company_name || "",
-          clientCode: c.client_code || "",
-          clientName: c.client_name || "",
-          clientMobileNumber: c.client_mobile_number || "",
-          state: c.state || "",
-          billingAddress: c.billing_address || "",
-          gstNumber: c.gst_number || "",
-          companyGroupName: c.company_group_name || "",
-          scName: c.sc_name || "",
-          crmName: c.crm_name || "",
-          stateCode: c.state_code || "",
-          creditDays: c.credit_days ?? "",
-          creditLimit: c.credit_limit ?? "",
-          isRelevant: c.isRelevant !== false,
-          trackerStatus
-        };
-      }).sort((a, b) => a.companyName.localeCompare(b.companyName, undefined, { sensitivity: 'base' }));
-
-      setClientData(formattedData);
+      }
     } catch (error) {
       console.error("Error fetching clients:", error);
     } finally {
-      setIsLoading(false);
+      if (currentFetchId === fetchIdRef.current) {
+        setIsLoading(false); // Ensure it's false when done or on error
+      }
     }
   };
 
@@ -281,6 +304,11 @@ function ClientMaster() {
 
     return matchesSearch && matchesCompany && matchesState && matchesRelevance;
   });
+
+  const paginatedData = filteredData.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
 
   const renderRow = (row, index) => {
     const urlParams = new URLSearchParams({
@@ -605,7 +633,7 @@ function ClientMaster() {
         <div className="flex-1 min-h-0 overflow-hidden relative">
           <DataTable 
             headers={headers}
-            data={filteredData}
+            data={paginatedData}
             renderRow={renderRow}
             renderCard={renderCard}
             minWidth="1600px"

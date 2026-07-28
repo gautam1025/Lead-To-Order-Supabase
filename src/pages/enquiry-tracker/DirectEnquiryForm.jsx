@@ -104,6 +104,9 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
     const fetchCategory = (category) =>
       supabase.from(TABLES.DROPDOWN).select("value").eq("category", category);
 
+    // Fetch items from public.items table
+    const fetchItems = () => supabase.from("items").select("item_name");
+
     try {
       const [
         { data: leadSourcesData, error: leadSourcesError },
@@ -113,7 +116,8 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         { data: salesTypeData, error: salesTypeError },
         { data: approachData, error: approachError },
         { data: receiversData, error: receiversError },
-        { data: assignToData, error: assignToError }
+        { data: assignToData, error: assignToError },
+        { data: itemsData, error: itemsError }
       ] = await Promise.all([
         fetchCategory("lead_source"),
         fetchCategory("sc_name"),
@@ -123,11 +127,12 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         fetchCategory("enquiry_approach"),
         fetchCategory("lead_receiver_name"),
         fetchCategory("lead_assign_to"),
+        fetchItems()
       ]);
 
       const errors = [
         leadSourcesError, scNamesError, statesError, nobError,
-        salesTypeError, approachError, receiversError, assignToError
+        salesTypeError, approachError, receiversError, assignToError, itemsError
       ].filter(Boolean);
 
       if (errors.length > 0) {
@@ -135,6 +140,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       }
 
       const toValues = (arr) => (arr || []).map(item => item.value).filter(Boolean);
+      const toItemValues = (arr) => [...new Set((arr || []).map(item => item.item_name).filter(Boolean))].sort();
 
       setLeadSources([...new Set(toValues(leadSourcesData))]);
       setScNameOptions([...new Set(toValues(scNamesData))]);
@@ -144,6 +150,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       setEnquiryApproachOptions([...new Set(toValues(approachData))]);
       setReceiverOptions([...new Set(toValues(receiversData))]);
       setAssignToProjectOptions([...new Set(toValues(assignToData))]);
+      setProductCategories(toItemValues(itemsData));
 
     } catch (error) {
       console.error("Error fetching dropdown values:", error);

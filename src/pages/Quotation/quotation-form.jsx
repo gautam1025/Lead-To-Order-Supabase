@@ -88,7 +88,7 @@ const QuotationForm = ({
         // 3. Fetch items from items table
         const { data: itemsData, error: itemsError } = await supabase
           .from("items")
-          .select("item_code, item_name, description, rate, item_category");
+          .select("item_code, item_name, description, rate");
 
         // 4. Fetch prepared_by from dropdown table (category/value schema)
         const { data: preparedByData, error: preparedByError } = await supabase
@@ -186,16 +186,15 @@ const QuotationForm = ({
             const name = row.item_name;
             const description = row.description || "";
             const rate = parseFloat(row.rate) || 0;
-            const category = row.item_category || "";
 
             if (code && !codes.includes(code)) codes.push(code);
             if (name && !names.includes(name)) names.push(name);
 
             if (code) {
-              productDataMap[code] = { name, description, rate, category };
+              productDataMap[code] = { name, description, rate };
             }
             if (name) {
-              productDataMap[name] = { code, description, rate, category };
+              productDataMap[name] = { code, description, rate };
             }
           });
         }

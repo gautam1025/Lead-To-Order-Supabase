@@ -72,11 +72,14 @@ function NewCallTracker() {
     const fetchCategory = (category) =>
       supabase.from('dropdown').select('value').eq('category', category);
 
+    // Fetch items from public.items
+    const fetchItems = () => supabase.from('items').select('item_name');
+
     try {
       const [
         { data: statesData, error: statesError },
         { data: salesTypesData, error: salesTypesError },
-        { data: productCatData, error: productCatError },
+        { data: itemsData, error: itemsError },
         { data: nobData, error: nobError },
         { data: approachData, error: approachError },
         { data: feedbackData, error: feedbackError },
@@ -86,7 +89,7 @@ function NewCallTracker() {
       ] = await Promise.all([
         fetchCategory('state'),
         fetchCategory('sales_type'),
-        fetchCategory('item_name'),
+        fetchItems(),
         fetchCategory('nob'),
         fetchCategory('enquiry_approach'),
         fetchCategory('what_did_customer_say'),
@@ -96,10 +99,11 @@ function NewCallTracker() {
       ]);
 
       const toValues = (arr) => [...new Set((arr || []).map(i => i.value).filter(Boolean))].sort();
+      const toItemValues = (arr) => [...new Set((arr || []).map(i => i.item_name).filter(Boolean))].sort();
 
       setEnquiryStates(toValues(statesData))
       setSalesTypes(toValues(salesTypesData))
-      setProductCategories(toValues(productCatData))
+      setProductCategories(toItemValues(itemsData))
       setNobOptions(toValues(nobData))
       setEnquiryApproachOptions(toValues(approachData).length > 0 ? toValues(approachData) : ['Incoming', 'Outgoing'])
       setCustomerFeedbackOptions(toValues(feedbackData))
