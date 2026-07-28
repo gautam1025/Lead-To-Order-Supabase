@@ -173,7 +173,6 @@ const ItemsTable = ({
 
         <div
           className="overflow-x-auto relative"
-          onWheel={(e) => e.preventDefault()}
         >
           {isLoading && (
             <div className="flex absolute inset-0 z-10 justify-center items-center bg-white bg-opacity-70">
@@ -182,7 +181,6 @@ const ItemsTable = ({
           )}
           <table
             className="min-w-full divide-y divide-gray-200"
-            onWheel={(e) => e.preventDefault()}
           >
             <thead className="bg-gray-50">
               <tr>

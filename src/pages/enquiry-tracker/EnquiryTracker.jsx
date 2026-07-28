@@ -79,7 +79,7 @@ const columnsConfig = [
   { key: "quotationNumber", label: "Quotation Number" },
   { key: "valueWithoutTax", label: "Quotation Value Without Tax" },
   { key: "valueWithTax", label: "Quotation Value With Tax" },
-  { key: "quotationUpload", label: "Quotation Upload" },
+  { key: "quotationUpload", label: "Quotation Copy" },
   { key: "quotationRemarks", label: "Quotation Remarks" },
   { key: "validatorName", label: "Quotation Validator Name" },
   { key: "sendStatus", label: "Quotation Send Status" },
@@ -377,6 +377,65 @@ function EnquiryTracker() {
     }
   };
 
+  // Function to fetch all existing order numbers
+  const fetchExistingOrderNumbers = async () => {
+    try {
+      const [trackerRes, leadsRes, directRes] = await Promise.all([
+        supabase
+          .from("enquiry_tracker")
+          .select('"Order No."')
+          .not('"Order No."', 'is', null)
+          .order('Timestamp', { ascending: false })
+          .limit(1000),
+        supabase
+          .from("leads_to_order")
+          .select('Order_No')
+          .not('Order_No', 'is', null)
+          .order('Timestamp', { ascending: false })
+          .limit(1000),
+        supabase
+          .from("enquiry_to_order")
+          .select('order_no')
+          .not('order_no', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1000)
+      ]);
+
+      const allNumbers = [
+        ...(trackerRes.data || []).map(item => item["Order No."]),
+        ...(leadsRes.data || []).map(item => item.Order_No),
+        ...(directRes.data || []).map(item => item.order_no)
+      ];
+
+      return allNumbers.filter(no => no && typeof no === 'string' && no.trim() !== "");
+    } catch (error) {
+      console.error("Exception fetching order numbers:", error);
+      return [];
+    }
+  };
+
+  // Function to generate the next order number
+  const generateNextOrderNumber = async () => {
+    try {
+      const existingOrderNumbers = await fetchExistingOrderNumbers();
+      const orderNumbers = existingOrderNumbers
+        .map(orderNo => {
+          const match = orderNo.match(/DO-(\d+)/i);
+          return match ? parseInt(match[1], 10) : 0;
+        })
+        .filter(num => !isNaN(num) && num > 0);
+
+      const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
+      const nextNumber = maxOrderNumber + 1;
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      return `DO-${paddedNumber}`;
+    } catch (error) {
+      console.error("Error generating order number:", error);
+      const timestamp = Date.now().toString().slice(-4);
+      return `DO-${timestamp}`;
+    }
+  };
+
 const handleSaveClick = async (index) => {
   try {
     // Handle Pending tab - update leads_to_order table
@@ -394,6 +453,32 @@ const handleSaveClick = async (index) => {
       const isEnquiryRecord = editedData.tableSource === "enquiry_to_order" || (editedData.leadNo && editedData.leadNo.toUpperCase().startsWith("EN-"));
 
       if (isEnquiryRecord) {
+        // Parse items if available
+        const items = editedData.quotationItems || [];
+        const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+        
+        const itemUpdates = {};
+        if (items.length > 0) {
+          for (let i = 0; i < 10; i++) {
+            const itemNum = i + 1;
+            if (i < items.length) {
+              itemUpdates[`item_name${itemNum}`] = items[i].name || "";
+              itemUpdates[`quantity${itemNum}`] = Number(items[i].qty) || null;
+            } else {
+              itemUpdates[`item_name${itemNum}`] = null;
+              itemUpdates[`quantity${itemNum}`] = null;
+            }
+          }
+        }
+        
+        let itemQtyJson = null;
+        if (items.length > 10) {
+          itemQtyJson = JSON.stringify(items.slice(10).map(item => ({
+            name: item.name,
+            quantity: item.qty
+          })));
+        }
+
         const directEnquiryUpdateData = {
           enquiry_no: editedData.lead_no || editedData.leadNo,
           lead_source: editedData.Lead_Source || editedData.leadSource,
@@ -409,19 +494,32 @@ const handleSaveClick = async (index) => {
           project_name: editedData.Project_Name || editedData.projectName,
           sales_type: editedData.Enquiry_Type || editedData.enquiryType,
           enquiry_approach: editedData.Enquiry_Approach || editedData.enquiryApproach,
-          item_name1: editedData.Item_Name1 || editedData.itemName1,
-          quantity1: (editedData.Quantity1 || editedData.quantity1) ? parseInt(editedData.Quantity1 || editedData.quantity1, 10) : null,
-          item_name2: editedData.Item_Name2 || editedData.itemName2,
-          quantity2: (editedData.Quantity2 || editedData.quantity2) ? parseInt(editedData.Quantity2 || editedData.quantity2, 10) : null,
-          item_name3: editedData.Item_Name3 || editedData.itemName3,
-          quantity3: (editedData.Quantity3 || editedData.quantity3) ? parseInt(editedData.Quantity3 || editedData.quantity3, 10) : null,
-          item_name4: editedData.Item_Name4 || editedData.itemName4,
-          quantity4: (editedData.Quantity4 || editedData.quantity4) ? parseInt(editedData.Quantity4 || editedData.quantity4, 10) : null,
-          item_name5: editedData.Item_Name5 || editedData.itemName5,
-          quantity5: (editedData.Quantity5 || editedData.quantity5) ? parseInt(editedData.Quantity5 || editedData.quantity5, 10) : null,
           next_call_date: convertDateToYYYYMMDD(editedData.Next_Call_Date_Field || editedData.nextCallDate),
           next_call_time: convertTimeTo24Hour(editedData.Next_Call_Time || editedData.nextCallTime),
         };
+
+        if (editedData.orderStatus?.toLowerCase() === "yes") {
+          Object.assign(directEnquiryUpdateData, {
+            actual1: new Date().toISOString(),
+            is_order_received_status: editedData.orderStatus,
+            order_no: editedData.Order_No || editedData.order_no || await generateNextOrderNumber(),
+            acceptance_via: editedData.acceptanceVia,
+            payment_mode: editedData.paymentMode,
+            destination: editedData.destination,
+            po_number: editedData.poNumber,
+            payment_terms_days: editedData.paymentTerms,
+            transport_mode: editedData.transportMode,
+            conveyed_for_registration_form: editedData.conveyedForRegistration === "yes",
+            offer: editedData.orderVideo,
+            acceptance_file_upload: editedData.acceptanceFile,
+            remark: editedData.orderRemark,
+            ...itemUpdates,
+            ...(items.length > 0 ? {
+              total_qty: String(totalQty),
+              item_qty: itemQtyJson,
+            } : {})
+          });
+        }
 
         Object.keys(directEnquiryUpdateData).forEach((key) => {
           if (directEnquiryUpdateData[key] === undefined || directEnquiryUpdateData[key] === null) {
@@ -448,6 +546,32 @@ const handleSaveClick = async (index) => {
         return;
       }
 
+      // Parse items if available for leads
+      const leadItems = editedData.quotationItems || [];
+      const leadTotalQty = leadItems.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+      
+      const leadItemUpdates = {};
+      if (leadItems.length > 0) {
+        for (let i = 0; i < 5; i++) {
+          const itemNum = i + 1;
+          if (i < leadItems.length) {
+            leadItemUpdates[`Item_Name${itemNum}`] = leadItems[i].name || "";
+            leadItemUpdates[`Quantity${itemNum}`] = String(leadItems[i].qty || 0);
+          } else {
+            leadItemUpdates[`Item_Name${itemNum}`] = null;
+            leadItemUpdates[`Quantity${itemNum}`] = null;
+          }
+        }
+      }
+      
+      let leadItemQtyJson = null;
+      if (leadItems.length > 5) {
+        leadItemQtyJson = JSON.stringify(leadItems.slice(5).map(item => ({
+          name: item.name,
+          quantity: item.qty
+        })));
+      }
+
       const pendingUpdateData = {
         "LD-Lead-No": editedData.lead_no,
         "Lead_Receiver_Name": editedData.Lead_Receiver_Name,
@@ -466,20 +590,35 @@ const handleSaveClick = async (index) => {
         "Enquiry_Type": editedData.Enquiry_Type,
         "Enquiry_Approach": editedData.Enquiry_Approach,
         "Project_Approximate_Value": editedData.Project_Approximate_Value,
-        "Item_Name1": editedData.Item_Name1,
-        "Quantity1": editedData.Quantity1,
-        "Item_Name2": editedData.Item_Name2,
-        "Quantity2": editedData.Quantity2,
-        "Item_Name3": editedData.Item_Name3,
-        "Quantity3": editedData.Quantity3,
-        "Item_Name4": editedData.Item_Name4,
-        "Quantity4": editedData.Quantity4,
-        "Item_Name5": editedData.Item_Name5,
-        "Quantity5": editedData.Quantity5,
         "Next_Action": editedData.Next_Action,
         "Next_Call_Date": convertDateToYYYYMMDD(editedData.Next_Call_Date_Field),
         "Next_Call_Time": convertTimeTo24Hour(editedData.Next_Call_Time),
       };
+
+      if (editedData.orderStatus?.toLowerCase() === "yes") {
+        Object.assign(pendingUpdateData, {
+          "Actual1": new Date().toISOString().slice(0, 10),
+          "Is_Order_Received?_Status": editedData.orderStatus,
+          "Order_No": editedData.Order_No || editedData.order_no || await generateNextOrderNumber(),
+          "Acceptance_Via": editedData.acceptanceVia,
+          "Payment_Mode": editedData.paymentMode,
+          "Destination": editedData.destination,
+          "Po Number": editedData.poNumber,
+          "Payment_Terms _In_Days": editedData.paymentTerms,
+          "Transport_Mode": editedData.transportMode,
+          "Credit_Limit": editedData.creditLimit,
+          "Credit_Days": editedData.creditDays,
+          "CONVEYED_FOR_REGISTRATION_FORM": editedData.conveyedForRegistration === "yes",
+          "Offer": editedData.orderVideo,
+          "Acceptance_File_Upload": editedData.acceptanceFile,
+          "REMARK": editedData.orderRemark,
+          ...leadItemUpdates,
+          ...(leadItems.length > 0 ? {
+            "Total Order Qty": String(leadTotalQty),
+            "Item/qty": leadItemQtyJson,
+          } : {})
+        });
+      }
 
       // Remove undefined/null values
       Object.keys(pendingUpdateData).forEach((key) => {
@@ -616,7 +755,7 @@ const handleSaveClick = async (index) => {
       "Quotation Number": editedData.quotationNumber,
       "Quotation Value Without Tax": editedData.valueWithoutTax,
       "Quotation Value With Tax": editedData.valueWithTax,
-      "Quotation Upload": editedData.quotationUpload,
+      "Quotation Copy": editedData.quotationUpload,
       "Quotation Remarks": editedData.quotationRemarks,
       "Quotation Validator Name": editedData.validatorName,
       "Quotation Send Status": editedData.sendStatus,
@@ -1927,7 +2066,7 @@ const handleSaveClick = async (index) => {
           quotationNumber: item["Quotation Number"] || "",
           valueWithoutTax: item["Quotation Value Without Tax"] || "",
           valueWithTax: item["Quotation Value With Tax"] || "",
-          quotationUpload: item["Quotation Upload"] || "",
+          quotationUpload: item["Quotation Copy"] || "",
           quotationRemarks: item["Quotation Remarks"] || "",
           validatorName: item["Quotation Validator Name"] || "",
           sendStatus: item["Quotation Send Status"] || "",

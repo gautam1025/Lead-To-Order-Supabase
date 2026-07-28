@@ -227,9 +227,9 @@ function NewEnquiryTracker() {
       const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
 
       const nextNumber = maxOrderNumber + 1;
-      // Padding to at least 2 digits, but handles 1000+ naturally
-      const paddedNumber = String(nextNumber).padStart(2, "0");
-
+      // Padding to at least 3 digits
+      const paddedNumber = String(nextNumber).padStart(3, "0");
+      return `DO-${paddedNumber}`;
     } catch (error) {
       console.error("Error generating order number:", error);
       const timestamp = Date.now().toString().slice(-4);
@@ -687,6 +687,12 @@ function NewEnquiryTracker() {
         default:
           console.warn("Unknown stage:", currentStage);
       }
+      // Clean up empty, null, or undefined values from updateData
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key] === undefined || updateData[key] === null || updateData[key] === "") {
+          delete updateData[key];
+        }
+      });
 
       // ✅ Perform the update
       const { data, error } = await supabase
@@ -974,8 +980,8 @@ function NewEnquiryTracker() {
             send_quotation_no: allFormData.sendQuotationNo,
             quotation_shared_by: allFormData.quotationSharedBy,
             quotation_number: allFormData.quotationNumber,
-            quotation_value_without_tax: allFormData.valueWithoutTax,
-            quotation_value_with_tax: allFormData.valueWithTax,
+            quotation_value_without_tax: allFormData.valueWithoutTax ? Number(allFormData.valueWithoutTax) : null,
+            quotation_value_with_tax: allFormData.valueWithTax ? Number(allFormData.valueWithTax) : null,
             quotation_upload: allFormData.quotationFileUrl,
             quotation_remarks: allFormData.remarks,
           });
@@ -1078,6 +1084,13 @@ function NewEnquiryTracker() {
         default:
           console.warn("Unknown stage:", currentStage);
       }
+
+      // Clean up empty, null, or undefined values from updateData
+      Object.keys(updateData).forEach((key) => {
+        if (updateData[key] === undefined || updateData[key] === null || updateData[key] === "") {
+          delete updateData[key];
+        }
+      });
 
       const { data, error } = await supabase
         .from("enquiry_to_order")
@@ -1363,6 +1376,13 @@ function NewEnquiryTracker() {
         }
       }
       // --- END: Client Master Sync ---
+
+      // Clean up empty, null, or undefined values from supabaseData
+      Object.keys(supabaseData).forEach((key) => {
+        if (supabaseData[key] === undefined || supabaseData[key] === null || supabaseData[key] === "") {
+          delete supabaseData[key];
+        }
+      });
 
       const isEnquiryTableRecord = (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("EN-")) || activeTab === "directEnquiry";
 

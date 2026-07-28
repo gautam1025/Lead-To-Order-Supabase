@@ -74,14 +74,14 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
       if (error) {
         console.error("Error fetching enquiry numbers:", error);
-        setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "ENQ-001" }));
+        setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "En-001" }));
         return;
       }
 
       let maxNumber = 0;
       data.forEach(item => {
-        if (item.enquiry_no && item.enquiry_no.startsWith("ENQ-")) {
-          const numStr = item.enquiry_no.substring(4);
+        if (item.enquiry_no && item.enquiry_no.startsWith("En-")) {
+          const numStr = item.enquiry_no.substring(3);
           const num = parseInt(numStr, 10);
           if (!isNaN(num) && num > maxNumber) {
             maxNumber = num;
@@ -90,14 +90,13 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       });
 
       const nextNumber = maxNumber + 1;
-      const formattedEnquiryNo = `ENQ-${nextNumber.toString().padStart(3, '0')}`;
+      const formattedEnquiryNo = `En-${nextNumber.toString().padStart(3, '0')}`;
       setNewCallTrackerData(prev => ({ ...prev, enquiryNo: formattedEnquiryNo }));
     } catch (err) {
-      console.error("Error generating enquiry number:", err);
-      setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "ENQ-001" }));
+      console.error("Exception generating enquiry number:", err);
+      setNewCallTrackerData(prev => ({ ...prev, enquiryNo: "En-001" }));
     }
   };
-
 
   const fetchLastEnquiryNumber = async () => {
     try {
@@ -108,13 +107,13 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
       if (error) {
         console.error("Error fetching latest enquiry number:", error);
-        return "ENQ-001";
+        return "En-001";
       }
 
       let maxNumber = 0;
       data.forEach(item => {
-        if (item.enquiry_no && item.enquiry_no.startsWith("ENQ-")) {
-          const numStr = item.enquiry_no.substring(4);
+        if (item.enquiry_no && item.enquiry_no.startsWith("En-")) {
+          const numStr = item.enquiry_no.substring(3);
           const num = parseInt(numStr, 10);
           if (!isNaN(num) && num > maxNumber) {
             maxNumber = num;
@@ -123,10 +122,10 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       });
 
       const nextNumber = maxNumber + 1;
-      return `ENQ-${nextNumber.toString().padStart(3, '0')}`;
+      return `En-${nextNumber.toString().padStart(3, '0')}`;
     } catch (err) {
       console.error("Error generating latest enquiry number:", err);
-      return "ENQ-001";
+      return "En-001";
     }
   };
 
@@ -441,7 +440,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         }
 
         alert(`Call tracker updated successfully. Enquiry No: ${latestEnquiryNo}`);
-        onClose();
+        onClose(true);
       }
     } catch (err) {
       console.error("Unexpected error:", err);

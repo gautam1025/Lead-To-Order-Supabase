@@ -115,7 +115,7 @@ if (data && data.table && data.table.rows) {
               id="enquiryNo"
               name="enquiryNo"
               type="text"
-              placeholder="ENQ-001"
+              placeholder="En-001"
               value={enquiryNo}
               className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
               readOnly
@@ -227,7 +227,6 @@ if (data && data.table && data.table.rows) {
                 className="hidden"
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
-                required
               />
             </label>
           </div>
