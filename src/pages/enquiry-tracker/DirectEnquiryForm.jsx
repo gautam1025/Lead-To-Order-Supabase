@@ -99,13 +99,67 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   };
 
 
+  const fetchLastEnquiryNumber = async () => {
+    try {
+      const { data, error } = await supabase
+        .from(TABLES.ENQUIRY_TO_ORDER)
+        .select("enquiry_no")
+        .not("enquiry_no", "is", null);
+
+      if (error) {
+        console.error("Error fetching latest enquiry number:", error);
+        return "ENQ-001";
+      }
+
+      let maxNumber = 0;
+      data.forEach(item => {
+        if (item.enquiry_no && item.enquiry_no.startsWith("ENQ-")) {
+          const numStr = item.enquiry_no.substring(4);
+          const num = parseInt(numStr, 10);
+          if (!isNaN(num) && num > maxNumber) {
+            maxNumber = num;
+          }
+        }
+      });
+
+      const nextNumber = maxNumber + 1;
+      return `ENQ-${nextNumber.toString().padStart(3, '0')}`;
+    } catch (err) {
+      console.error("Error generating latest enquiry number:", err);
+      return "ENQ-001";
+    }
+  };
+
   const fetchDropdownData = async () => {
     // Helper: fetch all values for a given category from the normalized dropdown table
     const fetchCategory = (category) =>
       supabase.from(TABLES.DROPDOWN).select("value").eq("category", category);
 
-    // Fetch items from public.items table
-    const fetchItems = () => supabase.from("items").select("item_name");
+    // Fetch items from public.items table (handling more than 1000 items)
+    const fetchItems = async () => {
+      let allItems = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from("items")
+          .select("item_name")
+          .range(from, from + step - 1);
+
+        if (error) return { data: null, error };
+        
+        if (data && data.length > 0) {
+          allItems = [...allItems, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+      return { data: allItems, error: null };
+    };
 
     try {
       const [

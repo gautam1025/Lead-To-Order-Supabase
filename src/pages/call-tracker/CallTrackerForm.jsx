@@ -72,8 +72,31 @@ function NewCallTracker() {
     const fetchCategory = (category) =>
       supabase.from('dropdown').select('value').eq('category', category);
 
-    // Fetch items from public.items
-    const fetchItems = () => supabase.from('items').select('item_name');
+    // Fetch items from public.items table (handling more than 1000 items)
+    const fetchItems = async () => {
+      let allItems = [];
+      let from = 0;
+      const step = 1000;
+      let fetchMore = true;
+
+      while (fetchMore) {
+        const { data, error } = await supabase
+          .from("items")
+          .select("item_name")
+          .range(from, from + step - 1);
+
+        if (error) return { data: null, error };
+        
+        if (data && data.length > 0) {
+          allItems = [...allItems, ...data];
+          from += step;
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
+      return { data: allItems, error: null };
+    };
 
     try {
       const [

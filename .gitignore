@@ -27,5 +27,4 @@ dist-ssr
 
 schema.txt
 schema2.txt
-Login.jsx
-task.txt
+schema_migration_guide.md
