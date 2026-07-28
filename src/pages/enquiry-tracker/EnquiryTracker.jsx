@@ -101,6 +101,8 @@ const columnsConfig = [
   { key: "orderNo", label: "Order No" },
   { key: "destination", label: "Destination" },
   { key: "poNumber", label: "PO Number" },
+  { key: "acceptanceVia", label: "Acceptance Via" },
+  { key: "acceptanceFile", label: "Acceptance File" },
 ];
 
 const defaultVisibility = {
@@ -163,6 +165,42 @@ const defaultVisibility = {
   orderNo: false,
   destination: false,
   poNumber: false,
+  acceptanceVia: false,
+  acceptanceFile: false,
+};
+
+const historyColumnsConfig = [
+  { key: "timestamp", label: "Timestamp" },
+  { key: "leadId", label: "Lead No." },
+  { key: "companyName", label: "Company Name" },
+  { key: "currentStage", label: "Current Stage" },
+  { key: "callingDate", label: "Calling Date" },
+  { key: "quotationNumber", label: "Quotation Number" },
+  { key: "valueWithTax", label: "Quotation Value With Tax" },
+  { key: "valueWithoutTax", label: "Quotation Value Without Tax" },
+  { key: "quotationUpload", label: "Quotation Copy" },
+  { key: "acceptanceVia", label: "Acceptance Via" },
+  { key: "acceptanceFile", label: "Acceptance File" },
+  ...columnsConfig.filter(opt => ![
+    "timestamp", "leadId", "companyName", "currentStage", "callingDate", 
+    "quotationNumber", "valueWithTax", "valueWithoutTax", "quotationUpload",
+    "acceptanceVia", "acceptanceFile"
+  ].includes(opt.key))
+];
+
+const historyDefaultVisibility = {
+  ...Object.keys(defaultVisibility).reduce((acc, key) => { acc[key] = false; return acc; }, {}),
+  timestamp: true,
+  leadId: true,
+  companyName: true,
+  currentStage: true,
+  callingDate: true,
+  quotationNumber: true,
+  valueWithTax: true,
+  valueWithoutTax: true,
+  quotationUpload: true,
+  acceptanceVia: true,
+  acceptanceFile: true,
 };
 
 function EnquiryTracker() {
@@ -247,7 +285,7 @@ function EnquiryTracker() {
     historyOlder: 0,
   });
 
-  const [visibleColumns, setVisibleColumns] = useState(defaultVisibility);
+  const [visibleColumns, setVisibleColumns] = useState(historyDefaultVisibility);
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
   // Pending tab column visibility state
@@ -1236,7 +1274,7 @@ const handleSaveClick = async (index) => {
     setVisibleColumns(newState);
   };
 
-  const columnOptions = columnsConfig;
+  const columnOptions = activeTab === "history" ? historyColumnsConfig : columnsConfig;
   const pendingColumnOptions = columnsConfig;
   const directEnquiryColumnOptions = columnsConfig;
 
@@ -2066,7 +2104,7 @@ const handleSaveClick = async (index) => {
           quotationNumber: item["Quotation Number"] || "",
           valueWithoutTax: item["Quotation Value Without Tax"] || "",
           valueWithTax: item["Quotation Value With Tax"] || "",
-          quotationUpload: item["Quotation Copy"] || "",
+          quotationUpload: item["Quotation Upload"] || item["Quotation Copy"] || mL["Quotation_Upload"] || mE["quotation_upload"] || "",
           quotationRemarks: item["Quotation Remarks"] || "",
           validatorName: item["Quotation Validator Name"] || "",
           sendStatus: item["Quotation Send Status"] || "",
@@ -2079,14 +2117,14 @@ const handleSaveClick = async (index) => {
           nextCallDate: formatDateToDDMMYYYY(item["Next Call Date"]) || "",
           nextCallTime: formatTimeTo12Hour(item["Next Call Time"]) || "",
           orderStatus: item["Is Order Received? Status"] || "",
-          acceptanceVia: item["Acceptance Via"] || "",
+          acceptanceVia: item["Acceptance Via"] || mL["Acceptance_Via"] || mE["acceptance_via"] || "",
           paymentMode: item["Payment Mode"] || "",
           paymentTerms: item["Payment Terms (In Days)"] || "",
           transportMode: item["Transport Mode"] || "",
           registrationFrom: item["CONVEYED FOR REGISTRATION FORM"] || "",
           conveyedForRegistration: item["CONVEYED FOR REGISTRATION FORM"] || "",
           offer: item["Offer"] || "",
-          acceptanceFile: item["Acceptance File Upload"] || "",
+          acceptanceFile: item["Acceptance File Upload"] || mL["Acceptance_File_Upload"] || mE["acceptance_file_upload"] || "",
           orderRemark: item["Remark"] || "",
           apologyVideo: item["Order Lost Apology Video"] || "",
           reasonStatus: item["If No Then Get Relevant Reason Status"] || "",
@@ -3502,8 +3540,8 @@ const handleSaveClick = async (index) => {
   };
 
   // ─── Row render helpers ───────────────────────────────────────────────────
-  const renderRowCells = (tracker, visibleState, isEditing = false) => {
-    return columnsConfig.map(opt => {
+  const renderRowCells = (tracker, visibleState, isEditing = false, config = columnsConfig) => {
+    return config.map(opt => {
       if (!visibleState[opt.key]) return null;
       if (opt.key === "salespersonName" && !isAdmin()) return null;
 
@@ -3621,7 +3659,7 @@ const handleSaveClick = async (index) => {
           View
         </button>
       </td>
-      {renderRowCells(tracker, visibleColumns)}
+      {renderRowCells(tracker, visibleColumns, false, historyColumnsConfig)}
     </tr>
   );
 
@@ -3697,7 +3735,7 @@ const handleSaveClick = async (index) => {
 
     const historyHeaders = [
       "Actions",
-      ...columnsConfig
+      ...historyColumnsConfig
         .filter(opt => visibleColumns[opt.key])
         .filter(opt => opt.key !== "salespersonName" || isAdmin())
         .map(opt => opt.label)

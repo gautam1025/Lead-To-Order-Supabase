@@ -1193,7 +1193,7 @@ function NewEnquiryTracker() {
 
       if (isMakeQuotationStage && quotationData.quotationFile && !quotationData.quotationFileUrl) {
         showNotification("Uploading quotation file...", "info");
-        const fileUrl = await uploadFileToSupabase(quotationData.quotationFile, "make_quotation");
+        const fileUrl = await uploadFileToSupabase(quotationData.quotationFile, "quotation_image");
 
         // Update the quotation data with the file URL
         setQuotationData(prev => ({
