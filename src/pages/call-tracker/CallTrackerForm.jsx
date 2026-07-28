@@ -118,7 +118,7 @@ function NewCallTracker() {
         fetchCategory('what_did_customer_say'),
         fetchCategory('lead_source'),
         fetchCategory('lead_receiver_name'),
-        fetchCategory('sc_name'),
+        fetchCategory('lead_assign_to'),
       ]);
 
       const toValues = (arr) => [...new Set((arr || []).map(i => i.value).filter(Boolean))].sort();
@@ -564,7 +564,7 @@ const handleSubmit = async (e) => {
             <div className="space-y-2">
               <label htmlFor="enquiryNo" className="block text-sm font-medium text-gray-700">
                 Lead No.
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="enquiryNo"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -578,7 +578,7 @@ const handleSubmit = async (e) => {
             <div className="space-y-2">
   <label htmlFor="customerFeedback" className="block text-sm font-medium text-gray-700">
     What did the customer say?
-  </label>
+   <span className="text-red-500">*</span></label>
   <select
     id="customerFeedback"
     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -599,7 +599,7 @@ const handleSubmit = async (e) => {
   <div className="space-y-2">
     <label htmlFor="otherRemarks" className="block text-sm font-medium text-gray-700">
       Other Remarks
-    </label>
+     <span className="text-red-500">*</span></label>
     <input
       type="text"
       id="otherRemarks"
@@ -699,7 +699,7 @@ const handleSubmit = async (e) => {
                 <div className="space-y-2">
                   <label htmlFor="nextAction" className="block text-sm font-medium text-gray-700">
                     Next Action
-                  </label>
+                   <span className="text-red-500">*</span></label>
                   <input
                     id="nextAction"
                     value={formData.nextAction || ""}
@@ -714,7 +714,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="nextCallDate" className="block text-sm font-medium text-gray-700">
                       Next Call Date
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="nextCallDate"
                       type="date"
@@ -728,7 +728,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="nextCallTime" className="block text-sm font-medium text-gray-700">
                       Next Call Time
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="nextCallTime"
                       type="time"
@@ -751,7 +751,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="leadSource" className="block text-sm font-medium text-gray-700">
                       Enquiry Source
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="leadSource"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
@@ -771,7 +771,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="scName" className="block text-sm font-medium text-gray-700">
                       SC Name
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="scName"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -785,7 +785,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
                       Company Name
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       list="companyOptions"
                       id="companyName"
@@ -804,7 +804,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
                       Phone Number
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="phoneNumber"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -818,7 +818,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="salesPersonName" className="block text-sm font-medium text-gray-700">
                       Person Name
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="salesPersonName"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -832,7 +832,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="location" className="block text-sm font-medium text-gray-700">
                       Billing Address
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="location"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -899,7 +899,7 @@ const handleSubmit = async (e) => {
                       value={enquiryAssignToProject}
                       onChange={(e) => setEnquiryAssignToProject(e.target.value)}
                     >
-                      <option value="">Select project</option>
+                      <option value="">Select person</option>
                       {assignToProjectOptions.map((project, index) => (
                         <option key={index} value={project}>
                           {project}
@@ -924,7 +924,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="enquiryDate" className="block text-sm font-medium text-gray-700">
                       Enquiry Received Date
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="enquiryDate"
                       type="date"
@@ -938,7 +938,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="enquiryState" className="block text-sm font-medium text-gray-700">
                       Enquiry for State
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="enquiryState"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -958,7 +958,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
                       NOB
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="projectName"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -978,7 +978,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="salesType" className="block text-sm font-medium text-gray-700">
                       Enquiry Type
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="salesType"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -998,7 +998,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
                     <label htmlFor="enquiryApproach" className="block text-sm font-medium text-gray-700">
                       Enquiry Approach
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="enquiryApproach"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1018,7 +1018,7 @@ const handleSubmit = async (e) => {
                   <div className="space-y-2">
         <label htmlFor="leadsTrackingStatus" className="block text-sm font-medium text-gray-700">
           Leads Tracking Status
-        </label>
+         <span className="text-red-500">*</span></label>
         <select
           id="leadsTrackingStatus"
           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1051,7 +1051,7 @@ const handleSubmit = async (e) => {
                       <div className="md:col-span-5 space-y-2">
   <label htmlFor={`itemName-${item.id}`} className="block text-sm font-medium text-gray-700">
     Item Name 1
-  </label>
+   <span className="text-red-500">*</span></label>
   <input
     list={`item-options-${item.id}`}
     id={`itemName-${item.id}`}
@@ -1072,7 +1072,7 @@ const handleSubmit = async (e) => {
                       <div className="md:col-span-5 space-y-2">
                         <label htmlFor={`quantity-${item.id}`} className="block text-sm font-medium text-gray-700">
                           Quantity
-                        </label>
+                         <span className="text-red-500">*</span></label>
                         <input
                           id={`quantity-${item.id}`}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"

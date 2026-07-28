@@ -260,7 +260,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         <div className="space-y-2">
           <label htmlFor="orderStatusQuotationNumber" className="block text-sm font-medium text-gray-700">
             Quotation Number
-          </label>
+           <span className="text-red-500">*</span></label>
           {isLoadingQuotations ? (
             <div className="flex items-center space-x-2">
               <input
@@ -425,7 +425,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
             <div className="space-y-2">
               <label htmlFor="acceptanceVia" className="block text-sm font-medium text-gray-700">
                 Acceptance Via
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="acceptanceVia"
                 name="acceptanceVia"
@@ -444,7 +444,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
             <div className="space-y-2">
               <label htmlFor="paymentMode" className="block text-sm font-medium text-gray-700">
                 Payment Mode
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="paymentMode"
                 name="paymentMode"
@@ -491,7 +491,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
             <div className="space-y-2">
               <label htmlFor="paymentTerms" className="block text-sm font-medium text-gray-700">
                 Payment Terms
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="paymentTerms"
                 name="paymentTerms"
@@ -645,7 +645,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           <div className="space-y-2">
             <label htmlFor="reasonStatus" className="block text-sm font-medium text-gray-700">
               If No then get relevant reason Status
-            </label>
+             <span className="text-red-500">*</span></label>
             <select
               id="reasonStatus"
               name="reasonStatus"
@@ -685,7 +685,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           <div className="space-y-2">
             <label htmlFor="holdReason" className="block text-sm font-medium text-gray-700">
               CUSTOMER ORDER HOLD REASON CATEGORY
-            </label>
+             <span className="text-red-500">*</span></label>
             <select
               id="holdReason"
               name="holdReason"
@@ -704,7 +704,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           <div className="space-y-2">
             <label htmlFor="holdingDate" className="block text-sm font-medium text-gray-700">
               HOLDING DATE
-            </label>
+             <span className="text-red-500">*</span></label>
             <input
               id="holdingDate"
               name="holdingDate"

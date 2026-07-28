@@ -1546,7 +1546,7 @@ function NewEnquiryTracker() {
             <div className="space-y-2">
               <label htmlFor="enquiryNo" className="block text-sm font-medium text-gray-700">
                 Enquiry No.
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="enquiryNo"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1560,7 +1560,7 @@ function NewEnquiryTracker() {
             <div className="space-y-2">
               <label htmlFor="enquiryStatus" className="block text-sm font-medium text-gray-700">
                 Enquiry Status
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="enquiryStatus"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -1578,7 +1578,7 @@ function NewEnquiryTracker() {
             <div className="space-y-2">
               <label htmlFor="customerFeedback" className="block text-sm font-medium text-gray-700">
                 What Did Customer Say
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 list="customer-feedback-options"
                 id="customerFeedback"

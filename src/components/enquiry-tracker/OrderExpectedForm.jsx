@@ -44,7 +44,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
         <div className="space-y-2">
           <label htmlFor="followupStatus" className="block text-sm font-medium text-gray-700">
             Followup Status
-          </label>
+           <span className="text-red-500">*</span></label>
           <select
             id="followupStatus"
             name="followupStatus"
@@ -66,7 +66,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
         <div className="space-y-2">
           <label htmlFor="nextCallDate" className="block text-sm font-medium text-gray-700">
             Next Call Date
-          </label>
+           <span className="text-red-500">*</span></label>
           <input
             id="nextCallDate"
             name="nextCallDate"
@@ -81,7 +81,7 @@ function OrderExpectedForm({ formData, onFieldChange }) {
         <div className="space-y-2">
           <label htmlFor="nextCallTime" className="block text-sm font-medium text-gray-700">
             Next Call Time
-          </label>
+           <span className="text-red-500">*</span></label>
           <input
             id="nextCallTime"
             name="nextCallTime"

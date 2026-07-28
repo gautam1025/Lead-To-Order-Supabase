@@ -489,7 +489,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="leadSource" className="block text-sm font-medium text-gray-700">
                 Enquiry Source
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="leadSource"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -509,7 +509,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="scName" className="block text-sm font-medium text-gray-700">
                 SC Name
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="scName"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -530,7 +530,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2 relative">
               <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
                 Company Name
-              </label>
+               <span className="text-red-500">*</span></label>
               <div className="relative">
                 <input
                   type="text"
@@ -568,7 +568,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700">
                 Phone Number
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="phoneNumber"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -582,7 +582,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="salesPersonName" className="block text-sm font-medium text-gray-700">
                 Person Name
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="salesPersonName"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -596,7 +596,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="location" className="block text-sm font-medium text-gray-700">
                 Billing Address
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="location"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -663,7 +663,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
             <div className="space-y-2">
               <label htmlFor="enquiryAssignToProject" className="block text-sm font-medium text-gray-700">
-                Enquiry Assign to Project
+                Enquiry Assign to Person
               </label>
               <select
                 id="enquiryAssignToProject"
@@ -675,7 +675,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   isCompanyAutoFilled: false
                 }))}
               >
-                <option value="">Select project</option>
+                <option value="">Select person</option>
                 {assignToProjectOptions.map((project, index) => (
                   <option key={index} value={project}>
                     {project}
@@ -712,7 +712,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               <div className="space-y-2">
                 <label htmlFor="enquiryDate" className="block text-sm font-medium text-gray-700">
                   Enquiry Received Date
-                </label>
+                 <span className="text-red-500">*</span></label>
                 <input
                   id="enquiryDate"
                   type="date"
@@ -726,7 +726,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               <div className="space-y-2">
                 <label htmlFor="enquiryState" className="block text-sm font-medium text-gray-700">
                   Enquiry for State
-                </label>
+                 <span className="text-red-500">*</span></label>
                 <select
                   id="enquiryState"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -746,7 +746,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               <div className="space-y-2">
                 <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
                   NOB
-                </label>
+                 <span className="text-red-500">*</span></label>
                 <select
                   id="projectName"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -766,7 +766,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               <div className="space-y-2">
                 <label htmlFor="salesType" className="block text-sm font-medium text-gray-700">
                   Enquiry Type
-                </label>
+                 <span className="text-red-500">*</span></label>
                 <select
                   id="salesType"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -786,7 +786,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               <div className="space-y-2">
                 <label htmlFor="enquiryApproach" className="block text-sm font-medium text-gray-700">
                   Enquiry Approach
-                </label>
+                 <span className="text-red-500">*</span></label>
                 <select
                   id="enquiryApproach"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"

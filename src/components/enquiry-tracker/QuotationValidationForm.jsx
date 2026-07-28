@@ -173,7 +173,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
         <div className="space-y-2">
           <label htmlFor="validationQuotationNumber" className="block text-sm font-medium text-gray-700">
             Quotation Number
-          </label>
+           <span className="text-red-500">*</span></label>
           {isLoadingQuotations ? (
             <div className="flex items-center space-x-2">
               <input
@@ -214,7 +214,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
         <div className="space-y-2">
           <label htmlFor="validatorName" className="block text-sm font-medium text-gray-700">
             Quotation Validator Name
-          </label>
+           <span className="text-red-500">*</span></label>
           <select
             id="validatorName"
             name="validatorName"
@@ -234,7 +234,7 @@ function QuotationValidationForm({ formData, onFieldChange, enquiryNo }) {
       <div className="space-y-2">
         <label htmlFor="sendStatus" className="block text-sm font-medium text-gray-700">
           Quotation Send Status
-        </label>
+         <span className="text-red-500">*</span></label>
         <select
           id="sendStatus"
           name="sendStatus"

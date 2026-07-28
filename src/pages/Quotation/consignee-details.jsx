@@ -99,7 +99,7 @@ const ConsigneeDetails = ({
         )}
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium">Company Name</label>
+          <label className="block text-sm font-medium">Company Name <span className="text-red-500">*</span></label>
           <input
             list="companyOptions"
             value={quotationData.consigneeName}

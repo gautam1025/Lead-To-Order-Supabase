@@ -125,7 +125,7 @@ if (data && data.table && data.table.rows) {
           <div className="space-y-2">
             <label htmlFor="sendQuotationNo" className="block text-sm font-medium">
               Send Quotation No.
-            </label>
+             <span className="text-red-500">*</span></label>
             <input
               id="sendQuotationNo"
               name="sendQuotationNo"
@@ -141,7 +141,7 @@ if (data && data.table && data.table.rows) {
           <div className="space-y-2">
             <label htmlFor="quotationSharedBy" className="block text-sm font-medium">
               Quotation Shared By
-            </label>
+             <span className="text-red-500">*</span></label>
             <select
               id="quotationSharedBy"
               name="quotationSharedBy"
@@ -160,7 +160,7 @@ if (data && data.table && data.table.rows) {
           <div className="space-y-2">
             <label htmlFor="quotationNumber" className="block text-sm font-medium">
               Quotation Number
-            </label>
+             <span className="text-red-500">*</span></label>
             <input
               id="quotationNumber"
               name="quotationNumber"
@@ -176,7 +176,7 @@ if (data && data.table && data.table.rows) {
           <div className="space-y-2">
             <label htmlFor="valueWithoutTax" className="block text-sm font-medium">
               Quotation Value Without Tax
-            </label>
+             <span className="text-red-500">*</span></label>
             <input
               id="valueWithoutTax"
               name="valueWithoutTax"
@@ -192,7 +192,7 @@ if (data && data.table && data.table.rows) {
           <div className="space-y-2">
             <label htmlFor="valueWithTax" className="block text-sm font-medium">
               Quotation Value With Tax
-            </label>
+             <span className="text-red-500">*</span></label>
             <input
               id="valueWithTax"
               name="valueWithTax"

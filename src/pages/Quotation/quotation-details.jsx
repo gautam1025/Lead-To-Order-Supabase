@@ -235,7 +235,7 @@ const handleScroll = (e) => {
         </div>
 
         <div className="space-y-2">
-          <label className="block text-sm font-medium">Prepared By</label>
+          <label className="block text-sm font-medium">Prepared By <span className="text-red-500">*</span></label>
           <input
             type="text"
             list="preparedByList"

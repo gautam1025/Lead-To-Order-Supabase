@@ -152,7 +152,7 @@ const ItemsTable = ({
                           <span className="text-sm text-gray-700">
                             {field.label}
                           </span>
-                        </label>
+                         <span className="text-red-500">*</span></label>
                       ))}
                     </div>
                   </div>
