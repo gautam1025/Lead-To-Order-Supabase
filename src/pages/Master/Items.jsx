@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useContext } from "react";
+import { useState, useEffect, useRef, useContext, useMemo, useCallback } from "react";
 import { Search, Plus, Pencil, Trash2, RefreshCw, Eye } from "lucide-react";
 import DataTable from "../../components/DataTable";
 import ModalForm from "../../components/ModalForm";
@@ -34,6 +34,8 @@ function Items() {
     description: ""
   });
 
+  const fetchIdRef = useRef(0);
+
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (columnToggleRef.current && !columnToggleRef.current.contains(event.target)) {
@@ -44,36 +46,66 @@ function Items() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  useEffect(() => {
-    fetchItems();
-  }, []);
+  // Progressive Chunked Fetch (bypasses 1000 row limit)
+  const fetchItems = useCallback(async () => {
+    fetchIdRef.current += 1;
+    const currentFetchId = fetchIdRef.current;
 
-  // Reset to page 1 on search
-  useEffect(() => {
-    setCurrentPage(1);
-  }, [searchQuery]);
-
-  const fetchItems = async () => {
     setIsLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from("items")
-        .select("*")
-        .order("item_name", { ascending: true });
+    setItemsData([]); // Reset data before new fetch
 
-      if (error) throw error;
-      setItemsData(data || []);
+    try {
+      let from = 0;
+      const step = 500;
+      let fetchMore = true;
+
+      while (fetchMore && currentFetchId === fetchIdRef.current) {
+        const { data, error } = await supabase
+          .from("items")
+          .select("*")
+          .order("item_name", { ascending: true })
+          .range(from, from + step - 1);
+
+        if (error) throw error;
+        if (currentFetchId !== fetchIdRef.current) break; // Abort if a new fetch started
+
+        if (data && data.length > 0) {
+          setItemsData(prev => [...prev, ...data]);
+
+          from += step;
+
+          // Hide loading indicator as soon as the first chunk arrives for instant responsiveness
+          if (from === step && currentFetchId === fetchIdRef.current) {
+            setIsLoading(false);
+          }
+
+          if (data.length < step) fetchMore = false;
+        } else {
+          fetchMore = false;
+        }
+      }
     } catch (error) {
       console.error("Error fetching items:", error);
       if (showNotification) {
         showNotification("Failed to fetch items: " + error.message, "error");
       }
     } finally {
-      setIsLoading(false);
+      if (currentFetchId === fetchIdRef.current) {
+        setIsLoading(false);
+      }
     }
-  };
+  }, [showNotification]);
 
-  const handleOpenModal = (mode, item = null) => {
+  useEffect(() => {
+    fetchItems();
+  }, [fetchItems]);
+
+  // Reset to page 1 on search
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery]);
+
+  const handleOpenModal = useCallback((mode, item = null) => {
     setModalMode(mode);
     setCurrentItem(item);
     if (item && mode === "edit") {
@@ -92,9 +124,9 @@ function Items() {
       });
     }
     setIsModalOpen(true);
-  };
+  }, []);
 
-  const handleCloseModal = () => {
+  const handleCloseModal = useCallback(() => {
     setIsModalOpen(false);
     setCurrentItem(null);
     setFormData({
@@ -103,7 +135,7 @@ function Items() {
       rate: "",
       description: ""
     });
-  };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -147,7 +179,7 @@ function Items() {
     }
   };
 
-  const handleDelete = async (item) => {
+  const handleDelete = useCallback(async (item) => {
     if (window.confirm(`Are you sure you want to delete ${item.item_name}?`)) {
       setIsLoading(true);
       try {
@@ -168,39 +200,39 @@ function Items() {
         setIsLoading(false);
       }
     }
-  };
+  }, [fetchItems, showNotification]);
 
   // Header column configuration
-  const allHeaders = [
+  const allHeaders = useMemo(() => [
     { key: "actions", label: "Actions" },
     { key: "item_name", label: "Item Name" },
     { key: "item_code", label: "Item Code" },
     { key: "rate", label: "Rate (₹)" },
     { key: "description", label: "Description" }
-  ];
+  ], []);
 
-  const visibleHeaders = allHeaders.filter(col => !hiddenColumns.includes(col.key));
-  const headers = visibleHeaders.map(col => col.label);
+  const visibleHeaders = useMemo(() => allHeaders.filter(col => !hiddenColumns.includes(col.key)), [allHeaders, hiddenColumns]);
+  const headers = useMemo(() => visibleHeaders.map(col => col.label), [visibleHeaders]);
 
-  // Filter items
-  const filteredData = itemsData.filter(item => {
+  // Memoized filter calculation
+  const filteredData = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    if (!q) return true;
-    return (
+    if (!q) return itemsData;
+    return itemsData.filter(item => (
       (item.item_name || "").toLowerCase().includes(q) ||
       (item.item_code || "").toLowerCase().includes(q) ||
       (item.description || "").toLowerCase().includes(q) ||
       (item.rate !== null && item.rate !== undefined && String(item.rate).includes(q))
-    );
-  });
+    ));
+  }, [itemsData, searchQuery]);
 
-  // Slice paginated data
-  const paginatedData = filteredData.slice(
-    (currentPage - 1) * itemsPerPage,
-    currentPage * itemsPerPage
-  );
+  // Memoized paginated slice
+  const paginatedData = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredData.slice(start, start + itemsPerPage);
+  }, [filteredData, currentPage, itemsPerPage]);
 
-  const renderRow = (row, index) => {
+  const renderRow = useCallback((row, index) => {
     const columnCells = {
       actions: (
         <td key="actions" className="px-6 py-4 whitespace-nowrap text-sm text-center">
@@ -259,9 +291,9 @@ function Items() {
         {visibleHeaders.map(col => columnCells[col.key])}
       </tr>
     );
-  };
+  }, [visibleHeaders, handleOpenModal, handleDelete]);
 
-  const renderCard = (item, index) => {
+  const renderCard = useCallback((item, index) => {
     return (
       <div key={item.uuid || index} className="bg-white p-4 rounded-lg shadow-sm border border-gray-200">
         <div className="flex justify-between items-start mb-2">
@@ -288,7 +320,7 @@ function Items() {
         </div>
       </div>
     );
-  };
+  }, [handleOpenModal, handleDelete]);
 
   return (
     <div className="flex-1 flex flex-col h-full min-h-0">
