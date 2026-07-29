@@ -130,7 +130,7 @@ if (data && data.table && data.table.rows) {
               id="sendQuotationNo"
               name="sendQuotationNo"
               type="text"
-              placeholder="QUO-001"
+              placeholder="001"
               value={formData.sendQuotationNo}
               onChange={handleChange}
               className="w-full p-2 border border-gray-300 rounded-md"

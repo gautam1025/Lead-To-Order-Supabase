@@ -20,7 +20,7 @@ const DataTable = ({
   onPageChange,
   onItemsPerPageChange,
   totalResults,
-  itemsPerPageOptions = [10, 15, 20, 50, 100]
+  itemsPerPageOptions = [50, 100, 200]
 }) => {
   return (
     <div className="flex flex-col h-full min-h-0 w-full bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">

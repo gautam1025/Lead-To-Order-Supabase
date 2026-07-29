@@ -85,10 +85,32 @@ const QuotationForm = ({
           .select("company_name, billing_address, state, client_name, client_mobile_number, gst_number, state_code")
           .eq("isRelevant", true);
 
-        // 3. Fetch items from items table
-        const { data: itemsData, error: itemsError } = await supabase
-          .from("items")
-          .select("item_code, item_name, description, rate");
+        // 3. Fetch items from items table in chunks
+        const fetchItems = async () => {
+          let allItems = [];
+          let from = 0;
+          const step = 500;
+          let fetchMore = true;
+
+          while (fetchMore) {
+            const { data, error } = await supabase
+              .from("items")
+              .select("item_code, item_name, description, rate")
+              .range(from, from + step - 1);
+
+            if (error) throw error;
+            
+            if (data && data.length > 0) {
+              allItems = [...allItems, ...data];
+              from += step;
+              if (data.length < step) fetchMore = false;
+            } else {
+              fetchMore = false;
+            }
+          }
+          return { data: allItems, error: null };
+        };
+        const { data: itemsData, error: itemsError } = await fetchItems();
 
         // 4. Fetch prepared_by from dropdown table (category/value schema)
         const { data: preparedByData, error: preparedByError } = await supabase

@@ -624,7 +624,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="shippingAddress" className="block text-sm font-medium text-gray-700">
                 Shipping Address
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="shippingAddress"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -635,13 +635,14 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   shippingAddress: e.target.value,
                   isCompanyAutoFilled: false
                 }))}
+                required
               />
             </div>
 
             <div className="space-y-2">
               <label htmlFor="enquiryReceiverName" className="block text-sm font-medium text-gray-700">
                 Enquiry Receiver Name
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="enquiryReceiverName"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -651,6 +652,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   enquiryReceiverName: e.target.value,
                   isCompanyAutoFilled: false
                 }))}
+                required
               >
                 <option value="">Select receiver</option>
                 {receiverOptions.map((receiver, index) => (
@@ -664,7 +666,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="enquiryAssignToProject" className="block text-sm font-medium text-gray-700">
                 Enquiry Assign to Person
-              </label>
+               <span className="text-red-500">*</span></label>
               <select
                 id="enquiryAssignToProject"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -674,6 +676,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   enquiryAssignToProject: e.target.value,
                   isCompanyAutoFilled: false
                 }))}
+                required
               >
                 <option value="">Select person</option>
                 {assignToProjectOptions.map((project, index) => (
@@ -687,7 +690,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="gstNumber" className="block text-sm font-medium text-gray-700">
                 GST Number
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="gstNumber"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -698,6 +701,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   gstNumber: e.target.value,
                   isCompanyAutoFilled: false
                 }))}
+                required
               />
             </div>
 

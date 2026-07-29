@@ -58,6 +58,7 @@ function ExcelImportModal({ onClose, onSaved }) {
   const [fileName, setFileName] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+  const fileInputRef = useRef(null);
   const authContext = useContext(AuthContext) || {};
   const { showNotification = () => {} } = authContext;
 
@@ -1338,19 +1339,21 @@ function Leads() {
                 <label htmlFor="creditLimit" className="block text-xs font-semibold text-gray-700">
                   Credit Limit
                 </label>
-                <select
+                <input
+                  type="number"
+                  step="1"
+                  min="0"
                   id="creditLimit"
                   value={formData.creditLimit}
-                  onChange={handleChange}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    if (val === "" || /^\d+$/.test(val)) {
+                      handleChange({ target: { id: "creditLimit", value: val } });
+                    }
+                  }}
                   className="w-full px-3 py-1.5 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
-                >
-                  <option value="">Select credit limit</option>
-                  {creditLimitOptions.map((option, index) => (
-                    <option key={index} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Enter whole number"
+                />
               </div>
             </div>
 

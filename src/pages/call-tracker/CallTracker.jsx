@@ -876,12 +876,29 @@ function CallTracker() {
           // Add sorting by lead number (LD-Lead-No) in ascending order
           pendingQuery = pendingQuery.order("id", { ascending: true });
 
-          // Apply pagination with range
-          pendingQuery = pendingQuery.range(from, to);
+          // Fetch all data in chunks of 500
+          let allData = [];
+          let currentFrom = 0;
+          const chunkSize = 500;
+          let fetchMore = true;
+          let totalRecordsCount = 0;
 
-          const { data, error, count } = await pendingQuery;
-
-          if (error) throw error;
+          while (fetchMore) {
+            const { data, error, count } = await pendingQuery.range(currentFrom, currentFrom + chunkSize - 1);
+            if (error) throw error;
+            if (count !== null) totalRecordsCount = count;
+            
+            if (data && data.length > 0) {
+              allData = [...allData, ...data];
+              currentFrom += chunkSize;
+              if (data.length < chunkSize) fetchMore = false;
+            } else {
+              fetchMore = false;
+            }
+          }
+          
+          const data = allData;
+          const count = totalRecordsCount;
 
           const filteredPending = (data || []).map((row) => ({
             timestamp: row.Next_Call_Date
@@ -1053,12 +1070,29 @@ function CallTracker() {
             historyQuery = historyQuery.lte("Timestamp", endDate);
           }
 
-          // Apply pagination with range
-          historyQuery = historyQuery.range(from, to);
+          // Fetch all data in chunks of 500
+          let allData = [];
+          let currentFrom = 0;
+          const chunkSize = 500;
+          let fetchMore = true;
+          let totalRecordsCount = 0;
 
-          const { data, error, count } = await historyQuery;
-
-          if (error) throw error;
+          while (fetchMore) {
+            const { data, error, count } = await historyQuery.range(currentFrom, currentFrom + chunkSize - 1);
+            if (error) throw error;
+            if (count !== null) totalRecordsCount = count;
+            
+            if (data && data.length > 0) {
+              allData = [...allData, ...data];
+              currentFrom += chunkSize;
+              if (data.length < chunkSize) fetchMore = false;
+            } else {
+              fetchMore = false;
+            }
+          }
+          
+          const data = allData;
+          const count = totalRecordsCount;
 
           // Update filtered count
           if (!isLoadMore) {
@@ -2914,7 +2948,7 @@ function CallTracker() {
 
   // ─── Pagination ───────────────────────────────────────────────────────────
   const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [itemsPerPage, setItemsPerPage] = useState(50);
 
   const currentData = activeTab === "pending" ? filteredPendingFollowUps : filteredHistoryFollowUps;
   const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage));

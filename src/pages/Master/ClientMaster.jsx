@@ -643,7 +643,7 @@ function ClientMaster() {
             onPageChange={setCurrentPage}
             onItemsPerPageChange={setItemsPerPage}
             totalResults={filteredData.length}
-            itemsPerPageOptions={[10, 15, 20, 50, 100]}
+            itemsPerPageOptions={[50, 100, 200]}
           />
         </div>
 

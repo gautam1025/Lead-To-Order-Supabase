@@ -5,7 +5,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
   const [orderStatus, setOrderStatus] = useState(formData.orderStatus || "")
   const [acceptanceViaOptions, setAcceptanceViaOptions] = useState(["email", "phone", "in-person", "other"])
   const [paymentModeOptions, setPaymentModeOptions] = useState(["cash", "check", "bank-transfer", "credit-card"])
-  const [reasonStatusOptions, setReasonStatusOptions] = useState(["price", "competitor", "timeline", "specifications", "other"])
+  const [reasonStatusOptions, setReasonStatusOptions] = useState([])
   const [holdReasonOptions, setHoldReasonOptions] = useState(["budget", "approval", "project-delay", "reconsideration", "other"])
   const [paymentTermsOptions, setPaymentTermsOptions] = useState(["30", "45", "60", "90"])
   const [conveyedOptions, setConveyedOptions] = useState(["Yes", "No"])
@@ -71,9 +71,9 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         const toValues = (arr) =>
           [...new Set((arr || []).map(r => r.value).filter(Boolean))].sort();
 
+        setReasonStatusOptions(toValues(rsData));
         if (avData?.length) setAcceptanceViaOptions(toValues(avData));
         if (pmData?.length) setPaymentModeOptions(toValues(pmData));
-        if (rsData?.length) setReasonStatusOptions(toValues(rsData));
         if (hrData?.length) setHoldReasonOptions(toValues(hrData));
         if (ptData?.length) setPaymentTermsOptions(toValues(ptData));
         if (tmData?.length) setTransportModeOptions(toValues(tmData));
@@ -84,7 +84,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         console.error("Error fetching order status dropdowns:", err);
         setAcceptanceViaOptions(["email", "phone", "in-person", "other"]);
         setPaymentModeOptions(["cash", "check", "bank-transfer", "credit-card"]);
-        setReasonStatusOptions(["price", "competitor", "timeline", "specifications", "other"]);
+        setReasonStatusOptions([]);
         setHoldReasonOptions(["budget", "approval", "project-delay", "reconsideration", "other"]);
         setPaymentTermsOptions(["30", "45", "60", "90"]);
         setTransportModeOptions(["Road", "Air", "Sea", "Rail"]);
@@ -341,20 +341,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
             />
             <label htmlFor="order-no" className="text-sm text-gray-700">
               NO
-            </label>
-          </div>
-          <div className="flex items-center space-x-2">
-            <input
-              type="radio"
-              id="order-hold"
-              name="orderStatus"
-              value="hold"
-              checked={orderStatus === "hold"}
-              onChange={() => handleStatusChange("hold")}
-              className="h-4 w-4 text-purple-600 focus:ring-purple-500"
-            />
-            <label htmlFor="order-hold" className="text-sm text-gray-700">
-              HOLD
             </label>
           </div>
         </div>
@@ -672,60 +658,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               placeholder="Enter reason remarks"
               value={formData.reasonRemark || ""}
-              onChange={handleChange}
-            />
-          </div>
-        </div>
-      )}
-
-      {orderStatus === "hold" && (
-        <div className="space-y-4 border p-4 rounded-md">
-          <h4 className="font-medium">Order Hold Details</h4>
-
-          <div className="space-y-2">
-            <label htmlFor="holdReason" className="block text-sm font-medium text-gray-700">
-              CUSTOMER ORDER HOLD REASON CATEGORY
-             <span className="text-red-500">*</span></label>
-            <select
-              id="holdReason"
-              name="holdReason"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              value={formData.holdReason || ""}
-              onChange={handleChange}
-              required
-            >
-              <option value="">Select reason</option>
-              {holdReasonOptions.map((option, index) => (
-                <option key={index} value={option.toLowerCase()}>{option}</option>
-              ))}
-            </select>
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="holdingDate" className="block text-sm font-medium text-gray-700">
-              HOLDING DATE
-             <span className="text-red-500">*</span></label>
-            <input
-              id="holdingDate"
-              name="holdingDate"
-              type="date"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              value={formData.holdingDate || ""}
-              onChange={handleChange}
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <label htmlFor="holdRemark" className="block text-sm font-medium text-gray-700">
-              HOLD REMARK
-            </label>
-            <textarea
-              id="holdRemark"
-              name="holdRemark"
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-              placeholder="Enter hold remarks"
-              value={formData.holdRemark || ""}
               onChange={handleChange}
             />
           </div>

@@ -1,3 +1,1 @@
-1. Enquiry Tracker -> order Received = NO, then dropdown update + remove the HOLD radio button
-
-2. 
+CRM ka name prefill ana chahiye based on 

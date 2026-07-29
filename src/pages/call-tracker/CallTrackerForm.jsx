@@ -345,7 +345,6 @@ const handleSubmit = async (e) => {
       insertData["Project_Name"] = projectName
       insertData["Enquiry_Type"] = salesType
       insertData["Enquiry_Approach"] = enquiryApproach
-      insertData["Leads_Tracking_Status"] = leadsTrackingStatus
       insertData["lead_status"] = leadStatus
       
       // Handle first 5 items
@@ -458,7 +457,6 @@ const handleSubmit = async (e) => {
       updateData["Enquiry_Type"] = insertData["Enquiry_Type"]
       updateData["Enquiry_Approach"] = insertData["Enquiry_Approach"]
       updateData["Project_Approximate_Value"] = insertData["Project_Approximate_Value"]
-      updateData["Leads_Tracking_Status"] = insertData["Leads_Tracking_Status"]
       
       // Update item fields
       for (let i = 1; i <= 5; i++) {
@@ -577,8 +575,7 @@ const handleSubmit = async (e) => {
 
             <div className="space-y-2">
   <label htmlFor="customerFeedback" className="block text-sm font-medium text-gray-700">
-    What did the customer say?
-   <span className="text-red-500">*</span></label>
+    What did the customer say ? <span className="text-red-500">*</span></label>
   <select
     id="customerFeedback"
     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -613,7 +610,8 @@ const handleSubmit = async (e) => {
 )}
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Lead Status</label>
+              <label className="block text-sm font-medium text-gray-700">Lead Status <span className="text-red-500">*</span>
+              </label>
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
                   <input
@@ -624,6 +622,7 @@ const handleSubmit = async (e) => {
                     checked={leadStatus === "Relevant"}
                     onChange={() => setLeadStatus("Relevant")}
                     className="h-4 w-4 text-red-600 focus:ring-red-500"
+                    required
                   />
                   <label htmlFor="hot" className="text-sm text-gray-700">
                     Relevant
@@ -638,6 +637,7 @@ const handleSubmit = async (e) => {
                     checked={leadStatus === "Not Relevant"}
                     onChange={() => setLeadStatus("Not Relevant")}
                     className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                    required
                   />
                   <label htmlFor="warm" className="text-sm text-gray-700">
                     Not Relevant
@@ -647,7 +647,7 @@ const handleSubmit = async (e) => {
             </div>
 
             <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Enquiry Received Status</label>
+              <label className="block text-sm font-medium text-gray-700">Enquiry Received Status <span className="text-red-500">*</span></label>
               <div className="space-y-1">
                 <div className="flex items-center space-x-2">
                   <input
@@ -1015,22 +1015,6 @@ const handleSubmit = async (e) => {
                     </select>
                   </div>
 
-                  <div className="space-y-2">
-        <label htmlFor="leadsTrackingStatus" className="block text-sm font-medium text-gray-700">
-          Leads Tracking Status
-         <span className="text-red-500">*</span></label>
-        <select
-          id="leadsTrackingStatus"
-          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-          value={leadsTrackingStatus}
-          onChange={(e) => setLeadsTrackingStatus(e.target.value)}
-          required
-        >
-          <option value="">Select status</option>
-          <option value="Pending">Pending</option>
-          <option value="Completed">Completed</option>
-        </select>
-      </div>
     </div>
 
                 <div className="space-y-4">
