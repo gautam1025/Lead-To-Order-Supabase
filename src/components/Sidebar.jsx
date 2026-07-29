@@ -13,7 +13,8 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     const [counts, setCounts] = useState({
         callTracker: null,
         enquiryTracker: null,
-        clientMaster: null
+        clientMaster: null,
+        itemsMaster: null
     })
 
     const isMasterActive = location.pathname.startsWith("/master")
@@ -32,7 +33,8 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                     enquiryLeadsRes, 
                     enquiryDirectRes, 
                     clientTotalRes, 
-                    clientNotRelevantRes
+                    clientNotRelevantRes,
+                    itemsRes
                 ] = await Promise.all([
                     // Call Tracker Pending Follow-ups
                     supabase
@@ -64,17 +66,24 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                     supabase
                         .from("client_master")
                         .select("*", { count: "exact", head: true })
-                        .eq("isRelevant", false)
+                        .eq("isRelevant", false),
+
+                    // Items total count
+                    supabase
+                        .from("items")
+                        .select("*", { count: "exact", head: true })
                 ]);
 
                 const callCount = callRes.count || 0;
                 const enquiryCount = (enquiryLeadsRes.count || 0) + (enquiryDirectRes.count || 0);
                 const relevantClientCount = Math.max(0, (clientTotalRes.count || 0) - (clientNotRelevantRes.count || 0));
+                const itemsCount = itemsRes.count || 0;
 
                 setCounts({
                     callTracker: callCount,
                     enquiryTracker: enquiryCount,
-                    clientMaster: relevantClientCount
+                    clientMaster: relevantClientCount,
+                    itemsMaster: itemsCount
                 });
             } catch (err) {
                 console.error("Error fetching sidebar counts:", err);
@@ -253,6 +262,22 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                     }`}
                                 >
                                     Consignors
+                                </Link>
+                                <Link
+                                    to="/master/items"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                        location.pathname === "/master/items"
+                                            ? "bg-sky-50 text-sky-600 font-semibold"
+                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                                    }`}
+                                >
+                                    <span>Items</span>
+                                    {counts.itemsMaster !== null && (
+                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700">
+                                            {counts.itemsMaster}
+                                        </span>
+                                    )}
                                 </Link>
                             </div>
                         )}

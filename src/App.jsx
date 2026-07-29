@@ -19,6 +19,7 @@ import LeadMaster from "./pages/Master/LeadMaster"
 import ClientMaster from "./pages/Master/ClientMaster"
 import Dropdowns from "./pages/Master/Dropdowns"
 import Consignors from "./pages/Master/Consignors"
+import Items from "./pages/Master/Items"
 import Setting from "./pages/Setting/Setting"
 import supabase from "./utils/supabase"
 
@@ -417,6 +418,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <Consignors />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/items"
+                    element={
+                      <ProtectedRoute>
+                        <Items />
                       </ProtectedRoute>
                     }
                   />
