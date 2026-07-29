@@ -32,49 +32,33 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   }, [])
 
   // Add this new useEffect after the existing sharedByOptions useEffect
-useEffect(() => {
-  const generateSendQuotationNo = async () => {
-    if (!enquiryNo) return;
+  // Fetch quotation count from Supabase
+  useEffect(() => {
+    const generateSendQuotationNo = async () => {
+      if (!enquiryNo) return;
+      
+      try {
+        const { count, error } = await supabase
+          .from('enquiry_tracker')
+          .select('*', { count: 'exact', head: true })
+          .eq('Enquiry No.', enquiryNo)
+          .in('Current Stage', ['Make Quotation', 'make-quotation']);
+
+        if (error) throw error;
+        
+        // Generate new quotation number (count + 1)
+        const newQuotationNo = `${(count || 0) + 1}`;
+        onFieldChange('sendQuotationNo', newQuotationNo);
+        
+      } catch (error) {
+        console.error("Error generating quotation number:", error);
+        // Fallback: just use 1
+        onFieldChange('sendQuotationNo', "1");
+      }
+    }
     
-    try {
-      // Fetch data from ENQUIRY TRACKER sheet
-      const trackerUrl = "https://docs.google.com/spreadsheets/d/1TZVWkmASF7tG-QER17588sl4SvRgY7knFKFDtYFjB0Q/gviz/tq?tqx=out:json&sheet=ENQUIRY TRACKER"
-      const response = await fetch(trackerUrl)
-      const text = await response.text()
-      
-      // Extract the JSON part from the response
-      const jsonStart = text.indexOf('{')
-      const jsonEnd = text.lastIndexOf('}') + 1
-      const jsonData = text.substring(jsonStart, jsonEnd)
-      
-      const data = JSON.parse(jsonData)
-      
-      let count = 0;
-      
-      // Count occurrences in column B (index 1)
-    // Count occurrences in column B (index 1) where column E (index 4) is "make quotation"
-if (data && data.table && data.table.rows) {
-  data.table.rows.forEach(row => {
-    if (row.c && row.c[1] && row.c[1].v === enquiryNo && 
-        row.c[4] && row.c[4].v === "make-quotation") {
-      count++;
-    }
-  })
-}
-      
-      // Generate new quotation number (count + 1)
-      const newQuotationNo = `${count + 1}`;
-      onFieldChange('sendQuotationNo', newQuotationNo);
-      
-    } catch (error) {
-      console.error("Error generating quotation number:", error)
-      // Fallback: just use enquiry number with -1
-      onFieldChange('sendQuotationNo', `${enquiryNo}-1`);
-    }
-  }
-  
-  generateSendQuotationNo()
-}, [enquiryNo]) // Dependency on enquiryNo
+    generateSendQuotationNo();
+  }, [enquiryNo]); // Dependency on enquiryNo
 
 // Also modify the Send Quotation No. input field to be readonly:
 // Change this line in the JSX:
@@ -133,7 +117,8 @@ if (data && data.table && data.table.rows) {
               placeholder="001"
               value={formData.sendQuotationNo}
               onChange={handleChange}
-              className="w-full p-2 border border-gray-300 rounded-md"
+              className="w-full p-2 border border-gray-300 rounded-md bg-gray-100"
+              readOnly
               required
             />
           </div>
