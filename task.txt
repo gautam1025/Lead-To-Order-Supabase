@@ -1,1 +1,13 @@
-CRM ka name prefill ana chahiye based on 
+I have dropped all the functions and triggers to calculate the delay and planned_at calculations.
+
+Now, I want to implement the calculation of leads.planned_at & call_tracker_for_leads.planned_at when the data is submitted through Leads.jsx and CallTrackerForm.jsx. by matching the stage_name & TAT from the tat_config table. these all will be submitted from the frontend.
+
+also, the call_tracker_for_leads.planned_at will be calculated only when the call_tracker_for_leads.enquiry_received_status=yes. in the CallTrackerForm.jsx.
+
+------------
+
+1. TAT ka table add karna hai -done
+2. Leads me call-tracker k liye planned calculate ho rha hai.
+3. leads.planned_at k basis par Call-Tracker ka pending show krana hai, call tracker ka pending data leads se aayega, Lead Status visible only for NBD, More Details column added in pending tab.
+
+4. 

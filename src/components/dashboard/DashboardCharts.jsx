@@ -77,18 +77,18 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
 
         // --- 1. LEADS COUNT ---
         let leadsCountQuery = supabase
-          .from('leads_to_order')
+          .from('leads')
           .select('*', { count: 'exact', head: true })
 
         // Apply SC Name Filter
         if (isAdmin()) {
           if (scNameFilter !== "all") {
-            leadsCountQuery = leadsCountQuery.eq('SC_Name', scNameFilter)
+            leadsCountQuery = leadsCountQuery.eq('salesperson_name', scNameFilter)
           }
         } else if (currentUser?.username) {
           // Standard user filter
           const usernamesToFilter = getUsernamesToFilter()
-          leadsCountQuery = leadsCountQuery.in('SC_Name', usernamesToFilter)
+          leadsCountQuery = leadsCountQuery.in('salesperson_name', usernamesToFilter)
         }
 
         // Apply Date Filter
@@ -98,23 +98,22 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
           return `${date}T23:59:59`
         }
 
-        // Apply Date Filter (using Created_At for leads)
         if (startDate) {
-          leadsCountQuery = leadsCountQuery.gte('Created_At', startDate)
+          leadsCountQuery = leadsCountQuery.gte('created_at', startDate)
         }
         if (endDate) {
-          leadsCountQuery = leadsCountQuery.lte('Created_At', getEndDateWithTime(endDate))
+          leadsCountQuery = leadsCountQuery.lte('created_at', getEndDateWithTime(endDate))
         }
 
         const { count: leadsCount, error: leadsCountError } = await leadsCountQuery
+
         if (!leadsCountError) {
           totalLeads = leadsCount || 0
         }
 
         // --- 2. ENQUIRIES COUNT ---
-        // (where Enquiry_Received_Status = "yes")
-        let enquiriesCountQuery = supabase
-          .from('leads_tracker')
+        let enquiryCountQuery = supabase
+          .from('enquiries')
           .select('*', { count: 'exact', head: true })
           .eq('Enquiry_Received_Status', 'yes')
 
@@ -212,8 +211,8 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
 
         // --- LEADS SOURCES ---
         let leadSourcesQuery = supabase
-          .from('leads_to_order')
-          .select('Lead_Source')
+          .from('leads')
+          .select('lead_source')
 
         if (isAdmin()) {
           if (scNameFilter !== "all") {

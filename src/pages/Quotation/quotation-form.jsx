@@ -283,10 +283,8 @@ const QuotationForm = ({
         ].join(",");
 
         const { data: leadsData, error: leadsError } = await supabase
-          .from("leads_to_order")
-          .select(leadsColumns)
-          .not("Planned1", "is", null)
-          .is("Actual1", null);
+          .from("leads")
+          .select("*");
 
         if (!leadsError && leadsData) {
           leadsData.forEach((row) => {
@@ -344,10 +342,8 @@ const QuotationForm = ({
         ].join(",");
 
         const { data: enquiryData, error: enquiryError } = await supabase
-          .from("enquiry_to_order")
-          .select(enquiryColumns)
-          .not("planned1", "is", null)
-          .is("actual1", null);
+          .from("enquiries")
+          .select("*");
 
         if (!enquiryError && enquiryData) {
           enquiryData.forEach((row) => {
@@ -654,13 +650,11 @@ const QuotationForm = ({
         "\"Item/qty\"",
       ].join(",");
 
-      // Check leads_to_order table first
+      // Check leads table first
       const { data: leadsData, error: leadsError } = await supabase
-        .from("leads_to_order")
-        .select(leadsColumns)
-        .eq("Company_Name", companyName)
-        .not("Planned1", "is", null)
-        .is("Actual1", null)
+        .from("leads")
+        .select("*")
+        .eq("company_name", companyName)
         .limit(1);
 
       if (!leadsError && leadsData && leadsData.length > 0) {
@@ -737,11 +731,9 @@ const QuotationForm = ({
         ].join(",");
 
         const { data: enquiryData, error: enquiryError } = await supabase
-          .from("enquiry_to_order")
-          .select(enquiryColumns)
+          .from("enquiries")
+          .select("*")
           .eq("company_name", companyName)
-          .not("planned1", "is", null)
-          .is("actual1", null)
           .limit(1);
 
         if (!enquiryError && enquiryData && enquiryData.length > 0) {

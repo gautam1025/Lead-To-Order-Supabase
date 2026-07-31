@@ -369,31 +369,39 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
     setIsSubmitting(true);
 
     try {
-      // ✅ STEP 1: Fetch the ACTUAL latest enquiry number right before submitting
-      // This minimizes the chance of duplicates compared to fetching on form load
-      const latestEnquiryNo = await fetchLastEnquiryNumber();
+      // Fetch TAT config for stage_name = "Enquiry Tracker for Enquiries"
+      let tatHours = 1;
+      let tatMinutes = 0;
 
-      // Prepare the first 10 items in individual columns
-      const itemColumns = {};
-      const first10Items = items.slice(0, 10);
+      try {
+        const { data: tatData } = await supabase
+          .from("tat_config")
+          .select("tat_hours, tat_minutes")
+          .eq("stage_name", "Enquiry Tracker for Enquiries")
+          .maybeSingle();
 
-      first10Items.forEach((item, index) => {
-        itemColumns[`item_name${index + 1}`] = item.name || "";
-        itemColumns[`quantity${index + 1}`] = item.quantity || "0";
-      });
+        if (tatData) {
+          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
+            tatHours = parseInt(tatData.tat_hours, 10) || 0;
+          }
+          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
+            tatMinutes = parseInt(tatData.tat_minutes, 10) || 0;
+          }
+          if (tatHours === 0 && tatMinutes === 0) {
+            tatHours = 1;
+          }
+        }
+      } catch (err) {
+        console.warn("Could not fetch TAT config for Enquiry Tracker for Enquiries, defaulting to 1 hour:", err);
+      }
 
-      // Prepare additional items beyond 10 as JSON
-      const additionalItems = items.length > 10
-        ? items.slice(10).map(item => ({
-          name: item.name || "",
-          quantity: item.quantity || "0"
-        }))
-        : [];
+      const createdAtDate = new Date();
+      const plannedAtTime = new Date(createdAtDate.getTime() + (tatHours * 60 + tatMinutes) * 60 * 1000);
 
       const rowData = {
-        timestamp: new Date().toISOString(),
-        enquiry_no: latestEnquiryNo, // Use the freshly fetched number
-        current_stage: null,
+        created_at: createdAtDate.toISOString(),
+        planned_at: plannedAtTime.toISOString(),
+        enquiry_status: "New",
         lead_source: newCallTrackerData.leadSource,
         sales_coordinator_name: newCallTrackerData.scName,
         company_name: newCallTrackerData.companyName,
@@ -405,43 +413,46 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         enquiry_receiver_name: newCallTrackerData.enquiryReceiverName,
         enquiry_assign_to_project: newCallTrackerData.enquiryAssignToProject,
         gst_number: newCallTrackerData.gstNumber,
-        enquiry_date: enquiryFormData.enquiryDate ? formatDateToISO(enquiryFormData.enquiryDate) : "",
+        enquiry_date: enquiryFormData.enquiryDate ? formatDateToISO(enquiryFormData.enquiryDate) : null,
         enquiry_for_state: enquiryFormData.enquiryState,
         project_name: enquiryFormData.projectName,
         sales_type: enquiryFormData.salesType,
         enquiry_approach: enquiryFormData.enquiryApproach,
-        ...itemColumns,
-        item_qty: additionalItems.length > 0 ? JSON.stringify(additionalItems) : null,
-        total_qty: calculateTotalQuantity(),
       };
 
+      // 1. Insert header into enquiries table
+      const { data: insertedEnquiry, error: enquiryError } = await supabase
+        .from("enquiries")
+        .insert([rowData])
+        .select()
+        .single();
 
-      // Insert data into Supabase directly
-      const { data, error } = await supabase
-        .from("enquiry_to_order")
-        .insert([rowData]);
-
-      if (error) {
-        console.error("Error inserting data:", error.message);
-        alert("Error saving data: " + error.message);
-      } else {
-        
-        // Insert initial blank tracking log for Direct Enquiry
-        const trackingData = {
-          "Timestamp": new Date().toISOString().split('T')[0],
-          "enquiry_no": rowData.enquiry_no,
-        };
-        const { error: trackerError } = await supabase
-          .from("enquiry_tracker")
-          .insert([trackingData]);
-          
-        if (trackerError) {
-          console.error("Error inserting into enquiry_tracker:", trackerError.message);
-        }
-
-        alert(`Call tracker updated successfully. Enquiry No: ${latestEnquiryNo}`);
-        onClose(true);
+      if (enquiryError) {
+        console.error("Error inserting enquiry:", enquiryError.message);
+        alert("Error saving enquiry: " + enquiryError.message);
+        return;
       }
+
+      const newEnquiryId = insertedEnquiry.id;
+      const assignedEnquiryNo = insertedEnquiry.enquiry_no;
+
+      // 2. Insert items into enquiry_items table
+      const itemRows = items.map(item => ({
+        enquiry_id: newEnquiryId,
+        item_name: item.name,
+        quantity: parseInt(item.quantity, 10) || 1,
+      }));
+
+      const { error: itemsError } = await supabase
+        .from("enquiry_items")
+        .insert(itemRows);
+
+      if (itemsError) {
+        console.error("Error inserting enquiry items:", itemsError.message);
+      }
+
+      alert(`Call tracker updated successfully. Enquiry No: ${assignedEnquiryNo || 'Generated'}`);
+      onClose(true);
     } catch (err) {
       console.error("Unexpected error:", err);
       alert("Error saving data: " + err.message);

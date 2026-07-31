@@ -5,12 +5,12 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom"
 import { AuthContext } from "../../App"
 import supabase from "../../utils/supabase"
 
-function NewCallTracker() {
+function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose }) {
   const navigate = useNavigate()
-   const location = useLocation();
+  const location = useLocation();
   const [searchParams] = useSearchParams()
-  const leadId = searchParams.get("leadId")
-  const leadNo = searchParams.get("leadNo")
+  const activeLeadId = initialLeadId || searchParams.get("leadId")
+  const activeLeadNo = initialLeadNo || searchParams.get("leadNo")
   const { showNotification } = useContext(AuthContext)
   const [customerFeedbackOptions, setCustomerFeedbackOptions] = useState([])
 
@@ -158,9 +158,9 @@ function NewCallTracker() {
 
       while (fetchMore) {
         const { data: pageData, error } = await supabase
-          .from("dropdown")
-          .select("lead_form_company_name, lead_form_person_name, lead_form_mobile_no, lead_form_email, lead_form_address")
-          .not("lead_form_company_name", "is", null)
+          .from("client_master")
+          .select("company_name, client_name, client_mobile_number, state, billing_address, gst_number")
+          .not("company_name", "is", null)
           .range(from, from + step - 1);
 
         if (error) throw error;
@@ -179,14 +179,14 @@ function NewCallTracker() {
         const detailsMap = {}
 
         data.forEach((row) => {
-          if (row.lead_form_company_name) {
-            companies.push(row.lead_form_company_name)
-            detailsMap[row.lead_form_company_name] = {
-              salesPerson: row.lead_form_person_name || "",
-              phoneNumber: row.lead_form_mobile_no || "",
-              email: row.lead_form_email || "",
-              billingAddress: row.lead_form_address || "",
-              shippingAddress: row.lead_form_address || "",
+          if (row.company_name) {
+            companies.push(row.company_name)
+            detailsMap[row.company_name] = {
+              salesPerson: row.client_name || "",
+              phoneNumber: row.client_mobile_number || "",
+              billingAddress: row.billing_address || "",
+              shippingAddress: row.billing_address || "",
+              gstNumber: row.gst_number || "",
             }
           }
         })
@@ -219,43 +219,43 @@ function NewCallTracker() {
     fetchDropdownData()
     fetchCompanyData()
 
-    if (leadNo) {
+    if (activeLeadNo) {
       setFormData((prevData) => ({
         ...prevData,
-        leadNo: leadNo,
+        leadNo: activeLeadNo,
       }))
     }
-  }, [leadNo])
+  }, [activeLeadNo])
 
   // Prefill lead details
   useEffect(() => {
     const loadLeadDetails = async () => {
-      if (leadNo) {
+      if (activeLeadNo) {
         try {
           const { data, error } = await supabase
-            .from("leads_to_order")
+            .from("leads")
             .select("*")
-            .eq("LD-Lead-No", leadNo)
+            .eq("lead_no", activeLeadNo)
             .maybeSingle()
 
           if (error) throw error
           if (data) {
-            setLeadSource(data.Lead_Source || "")
-            setScName(data.SC_Name || "")
-            setCompanyName(data.Company_Name || "")
-            setPhoneNumber(data.Phone_Number || "")
-            setSalesPersonName(data.Salesperson_Name || "")
-            setBillingLocation(data.Location || "")
-            setEmailAddress(data.Email_Address || "")
-            setShippingAddress(data.Address || "")
-            setEnquiryReceiverName(data.Lead_Receiver_Name || "")
-            setGstNumber(data.GST_Number || "")
-            setEnquiryState(data.State || "")
-            setProjectName(data.NOB || "")
-            setSalesType(data.Sales_Type || "")
-            setEnquiryApproach(data.Enquiry_Approach || "")
-            setLeadsTrackingStatus(data.Leads_Tracking_Status || "Pending")
-            setLeadStatus(data.Status || "")
+            setLeadSource(data.Lead_Source || data.lead_source || "")
+            setScName(data.SC_Name || data.salesperson_name || "")
+            setCompanyName(data.Company_Name || data.company_name || "")
+            setPhoneNumber(data.Phone_Number || data.phone_number || "")
+            setSalesPersonName(data.Salesperson_Name || data.salesperson_name || "")
+            setBillingLocation(data.Location || data.location || "")
+            setEmailAddress(data.Email_Address || data.email_address || "")
+            setShippingAddress(data.Address || data.address || "")
+            setEnquiryReceiverName(data.Lead_Receiver_Name || data.lead_receiver_name || "")
+            setGstNumber(data.GST_Number || data.gst_number || "")
+            setEnquiryState(data.State || data.state || "")
+            setProjectName(data.NOB || data.nob || "")
+            setSalesType(data.Sales_Type || data.sales_type || "")
+            setEnquiryApproach(data.Enquiry_Approach || data.enquiry_approach || "")
+            setLeadsTrackingStatus(data.Leads_Tracking_Status || data.lead_status || "Pending")
+            setLeadStatus(data.Status || data.lead_status || "")
             
             // Prefill items
             const loadedItems = []
@@ -296,7 +296,7 @@ function NewCallTracker() {
       }
     }
     loadLeadDetails()
-  }, [leadNo])
+  }, [activeLeadNo])
 
 
   const handleChange = (e) => {
@@ -314,178 +314,113 @@ function NewCallTracker() {
     }, 0)
   }
 
-const handleSubmit = async (e) => {
-  e.preventDefault()
-  setIsSubmitting(true)
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setIsSubmitting(true)
 
-  try {
-    // Prepare the data object for Supabase insertion
-    const insertData = {
-      "Timestamp": new Date().toISOString().split('T')[0],
-      "LD-Lead-No": formData.leadNo,
-      "What_Did_The_Customer_say?": formData.customerFeedback,
-      "other_remarks": formData.customerFeedback === "Other" ? formData.otherRemarks : null,
-      "SC_Name": scName,
-      "Company_Name": companyName,
-      "Enquiry_Received_Status": enquiryStatus === "yes" ? "yes" : 
-                                enquiryStatus === "expected" ? "expected" : 
-                                enquiryStatus === "not-interested" ? "not-interested" : enquiryStatus,
-    }
+    try {
+      // 1. Fetch the UUID of the lead using lead_no
+      const { data: leadRecord, error: leadErr } = await supabase
+        .from('leads')
+        .select('id')
+        .eq('lead_no', formData.leadNo)
+        .single();
 
-    // Handle different scenarios based on enquiry status
-    if (enquiryStatus === "expected") {
-      insertData["Next_Action"] = formData.nextAction
-      insertData["Next_Call_Date"] = formData.nextCallDate ? new Date(formData.nextCallDate).toISOString().split("T")[0] : null
-      insertData["Next_Call_Time"] = formData.nextCallTime || null
-    }
-    else if (enquiryStatus === "yes") {
-      // For confirmed enquiries, add all enquiry details
-      insertData["Enquiry_Received_Date"] = enquiryDate ? new Date(enquiryDate).toISOString().split('T')[0] : null
-      insertData["Enquiry_for_State"] = enquiryState
-      insertData["Project_Name"] = projectName
-      insertData["Enquiry_Type"] = salesType
-      insertData["Enquiry_Approach"] = enquiryApproach
-      insertData["lead_status"] = leadStatus
-      
-      // Handle first 5 items
-      const first5Items = items.slice(0, 5)
-      first5Items.forEach((item, index) => {
-        const itemNumber = index + 1
-        insertData[`Item_Name${itemNumber}`] = item.name || ""
-        insertData[`Quantity${itemNumber}`] = item.quantity || "0"
-      })
-
-      // Fill remaining item slots with empty values if less than 5 items
-      for (let i = first5Items.length + 1; i <= 5; i++) {
-        insertData[`Item_Name${i}`] = ""
-        insertData[`Quantity${i}`] = "0"
+      if (leadErr || !leadRecord) {
+        throw new Error(`Could not find lead with lead_no: ${formData.leadNo}`);
       }
 
-      // Store remaining items in JSON format
-      const remainingItems = items.slice(5)
-      if (remainingItems.length > 0) {
-        const itemsJson = remainingItems.map(item => ({
-          name: item.name || "",
-          quantity: item.quantity || "0"
-        }))
-        insertData["Item_Qty"] = JSON.stringify(itemsJson)
-      } else {
-        insertData["Item_Qty"] = null
+      // 2. Prepare data for call_tracker_for_leads (valid schema.txt columns only)
+      const insertData = {
+        created_at: new Date().toISOString(),
+        lead_id: leadRecord.id,
+        what_did_customer_say: formData.customerFeedback || null,
+        other_remarks: formData.customerFeedback === "Other" ? formData.otherRemarks : null,
+        sc_name: scName || null,
+        enquiry_received_status: enquiryStatus === "yes" ? "yes" : 
+                                  enquiryStatus === "expected" ? "expected" : 
+                                  enquiryStatus === "not-interested" ? "not-interested" : (enquiryStatus || null),
+      };
+
+      // Handle different scenarios based on enquiry status
+      if (enquiryStatus === "expected") {
+        insertData.next_action = formData.nextAction || null;
+        insertData.next_call_date = formData.nextCallDate ? new Date(formData.nextCallDate).toISOString().split("T")[0] : null;
+        insertData.next_call_time = formData.nextCallTime || null;
+      } else if (enquiryStatus === "yes") {
+        insertData.enquiry_received_date = enquiryDate ? new Date(enquiryDate).toISOString().split('T')[0] : null;
+        insertData.enquiry_for_state = enquiryState || null;
+        insertData.project_name = projectName || null;
+        insertData.enquiry_type = salesType || null;
+        insertData.enquiry_approach = enquiryApproach || null;
+
+        // Calculate planned_at using tat_config for stage 'Enquiry Tracker for Leads'
+        try {
+          const { data: tatConfig } = await supabase
+            .from("tat_config")
+            .select("tat_hours, tat_minutes")
+            .eq("stage_name", "Enquiry Tracker for Leads")
+            .maybeSingle();
+
+          let tatHours = tatConfig?.tat_hours;
+          let tatMinutes = tatConfig?.tat_minutes;
+
+          if ((tatHours === null || tatHours === undefined) && (tatMinutes === null || tatMinutes === undefined)) {
+            tatHours = 1;
+            tatMinutes = 0;
+          } else {
+            tatHours = Number(tatHours) || 0;
+            tatMinutes = Number(tatMinutes) || 0;
+          }
+
+          const now = new Date();
+          const plannedAt = new Date(now.getTime() + (tatHours * 60 * 60 * 1000) + (tatMinutes * 60 * 1000));
+          insertData.planned_at = plannedAt.toISOString();
+        } catch (tatErr) {
+          console.error("Error calculating planned_at for Enquiry Tracker:", tatErr);
+          const now = new Date();
+          insertData.planned_at = new Date(now.getTime() + 60 * 60 * 1000).toISOString();
+        }
       }
 
-      // Calculate total quantity
-      const totalQuantity = calculateTotalQuantity()
-      insertData["Total_Qty"] = totalQuantity.toString()
-    }
+      // Insert data into Supabase call_tracker_for_leads table
+      const { error: insertError } = await supabase
+        .from('call_tracker_for_leads')
+        .insert([insertData])
+        .select();
 
-    // Insert data into Supabase leads_tracker table
-    const { data, error } = await supabase
-      .from('leads_tracker')
-      .insert([insertData])
-      .select()
-
-    if (error) {
-      throw error
-    }
-
-
-    // First, clear all the specified columns in leads_to_order table
-    const clearData = {
-      "What_Did_The_Customer say?": null,
-      "Enquiry_Received_Status": null,
-      "Enquiry_Received_Date": null,
-      "Enquiry_for_State": null,
-      "Project_Name": null,
-      "Enquiry_Type": null,
-      "Enquiry_Approach": null,
-      "Project_Approximate_Value": null,
-      "Item_Name1": null,
-      "Quantity1": null,
-      "Item_Name2": null,
-      "Quantity2": null,
-      "Item_Name3": null,
-      "Quantity3": null,
-      "Item_Name4": null,
-      "Quantity4": null,
-      "Item_Name5": null,
-      "Quantity5": null,
-      "Next_Action": null,
-      "Next_Call_Date": null,
-      "Next_Call_Time": null
-    }
-
-    // Clear the columns first
-    const { error: clearError } = await supabase
-      .from('leads_to_order')
-      .update(clearData)
-      .eq('LD-Lead-No', formData.leadNo)
-
-    if (clearError) {
-      console.error("Error clearing leads_to_order columns:", clearError)
-    } else {
-    }
-
-    // Prepare update data for leads_to_order table
-    const updateData = {}
-    
-    // Map the fields that need to be updated
-    updateData["What_Did_The_Customer say?"] = insertData["What_Did_The_Customer_say?"]
-    updateData["Enquiry_Received_Status"] = insertData["Enquiry_Received_Status"]
-    updateData["Status"] = insertData["lead_status"]
-    const now = new Date();
-    const pad = (n) => n.toString().padStart(2, "0");
-    const formatted =
-      pad(now.getDate()) + "/" +
-      pad(now.getMonth() + 1) + "/" +
-      now.getFullYear() + " " +
-      pad(now.getHours()) + ":" +
-      pad(now.getMinutes()) + ":" +
-      pad(now.getSeconds());
-
-    updateData["Actual"] = formatted;
-
-    if (enquiryStatus === "expected") {
-      updateData["Next_Action"] = insertData["Next_Action"]
-      updateData["Next_Call_Date"] = insertData["Next_Call_Date"]
-      updateData["Next_Call_Time"] = insertData["Next_Call_Time"]
-    }
-    
-    if (enquiryStatus === "yes") {
-      updateData["Enquiry_Received_Date"] = insertData["Enquiry_Received_Date"]
-      updateData["Enquiry_for_State"] = insertData["Enquiry_for_State"]
-      updateData["Project_Name"] = insertData["Project_Name"]
-      updateData["Enquiry_Type"] = insertData["Enquiry_Type"]
-      updateData["Enquiry_Approach"] = insertData["Enquiry_Approach"]
-      updateData["Project_Approximate_Value"] = insertData["Project_Approximate_Value"]
-      
-      // Update item fields
-      for (let i = 1; i <= 5; i++) {
-        updateData[`Item_Name${i}`] = insertData[`Item_Name${i}`] || ""
-        updateData[`Quantity${i}`] = insertData[`Quantity${i}`] || "0"
+      if (insertError) {
+        throw insertError;
       }
 
-      // Update lead details in leads_to_order
-      updateData["Lead_Source"] = leadSource
-      updateData["SC_Name"] = scName
-      updateData["Company_Name"] = companyName
-      updateData["Phone_Number"] = phoneNumber
-      updateData["Salesperson_Name"] = salesPersonName
-      updateData["Location"] = billingLocation
-      updateData["Email_Address"] = emailAddress
-      updateData["Address"] = shippingAddress
-      updateData["Lead_Receiver_Name"] = enquiryReceiverName
-      updateData["GST_Number"] = gstNumber
-    }
+      // 3. Prepare update data for leads table
+      const updateData = {
+        lead_source: leadSource || null,
+        salesperson_name: salesPersonName || scName || null,
+        company_name: companyName || null,
+        phone_number: phoneNumber || null,
+        location: billingLocation || null,
+        email_address: emailAddress || null,
+        address: shippingAddress || null,
+        lead_receiver_name: enquiryReceiverName || null,
+        gst_number: gstNumber || null,
+        additional_notes: formData.customerFeedback || null,
+        lead_status: enquiryStatus === "yes" ? "Enquiry Received" : (leadStatus || "In Followup"),
+      };
 
-    updateData["Item/qty"] = insertData["Item_Qty"] || null
-    updateData["Total Order Qty"] = insertData["Total_Qty"] || null
+      if (enquiryStatus === "expected" && formData.nextCallDate) {
+        updateData.planned_at = new Date(formData.nextCallDate).toISOString();
+      }
 
-    // Update the leads_to_order table with new data
-    const { data: updateResult, error: updateError } = await supabase
-      .from('leads_to_order')
-      .update(updateData)
-      .eq('LD-Lead-No', formData.leadNo)
-      .select()
+      // 4. Update the leads table with new data
+      const { error: updateError } = await supabase
+        .from('leads')
+        .update(updateData)
+        .eq('lead_no', formData.leadNo);
+
+      if (updateError) {
+        console.error("Error updating leads table:", updateError);
+      }
 
     if (leadStatus === "Not Relevant" && companyName) {
       try {
@@ -508,7 +443,11 @@ const handleSubmit = async (e) => {
       showNotification("Follow-up recorded successfully", "success")
     }
 
-    navigate("/call-tracker")
+    if (isModal) {
+      if (onClose) onClose(true)
+    } else {
+      navigate("/call-tracker")
+    }
 
   } catch (error) {
     console.error("Error submitting form:", error)
@@ -548,13 +487,13 @@ const handleSubmit = async (e) => {
   }
 
   return (
-    <div className="container mx-auto py-1 px-2">
-      <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm border border-slate-200">
+    <div className="container mx-auto max-w-4xl py-2">
+      <div className="bg-white rounded-lg shadow border border-slate-200 overflow-hidden">
         <div className="px-3 py-2 border-b border-slate-100">
           <h2 className="text-base font-bold text-slate-800">Lead Follow-Up</h2>
           <p className="text-[11px] text-slate-500">
             Record details of the follow-up call
-            {leadId && <span className="font-medium text-amber-600"> for Lead #{leadId}</span>}
+            {activeLeadId && <span className="font-medium text-amber-600"> for Lead #{activeLeadId}</span>}
           </p>
         </div>
         <form onSubmit={handleSubmit}>
@@ -609,42 +548,44 @@ const handleSubmit = async (e) => {
   </div>
 )}
 
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-gray-700">Lead Status <span className="text-red-500">*</span>
-              </label>
-              <div className="space-y-1">
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="hot"
-                    name="leadStatus"
-                    value="hot"
-                    checked={leadStatus === "Relevant"}
-                    onChange={() => setLeadStatus("Relevant")}
-                    className="h-4 w-4 text-red-600 focus:ring-red-500"
-                    required
-                  />
-                  <label htmlFor="hot" className="text-sm text-gray-700">
-                    Relevant
-                  </label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="radio"
-                    id="warm"
-                    name="leadStatus"
-                    value="warm"
-                    checked={leadStatus === "Not Relevant"}
-                    onChange={() => setLeadStatus("Not Relevant")}
-                    className="h-4 w-4 text-amber-600 focus:ring-amber-500"
-                    required
-                  />
-                  <label htmlFor="warm" className="text-sm text-gray-700">
-                    Not Relevant
-                  </label>
+            {salesType === "NBD" && (
+              <div className="space-y-2">
+                <label className="block text-sm font-medium text-gray-700">Lead Status <span className="text-red-500">*</span>
+                </label>
+                <div className="space-y-1">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="hot"
+                      name="leadStatus"
+                      value="hot"
+                      checked={leadStatus === "Relevant"}
+                      onChange={() => setLeadStatus("Relevant")}
+                      className="h-4 w-4 text-red-600 focus:ring-red-500"
+                      required={salesType === "NBD"}
+                    />
+                    <label htmlFor="hot" className="text-sm text-gray-700">
+                      Relevant
+                    </label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="radio"
+                      id="warm"
+                      name="leadStatus"
+                      value="warm"
+                      checked={leadStatus === "Not Relevant"}
+                      onChange={() => setLeadStatus("Not Relevant")}
+                      className="h-4 w-4 text-amber-600 focus:ring-amber-500"
+                      required={salesType === "NBD"}
+                    />
+                    <label htmlFor="warm" className="text-sm text-gray-700">
+                      Not Relevant
+                    </label>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Enquiry Received Status <span className="text-red-500">*</span></label>
@@ -1100,7 +1041,13 @@ const handleSubmit = async (e) => {
           <div className="p-6 border-t flex justify-between">
             <button
               type="button"
-              onClick={() => navigate(-1)}
+              onClick={() => {
+                if (isModal) {
+                  if (onClose) onClose(false)
+                } else {
+                  navigate(-1)
+                }
+              }}
               className="px-4 py-2 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500"
             >
               Cancel

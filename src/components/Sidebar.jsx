@@ -28,56 +28,136 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     useEffect(() => {
         const fetchCounts = async () => {
             try {
+                const safeFetch = async (queryPromise) => {
+                    try {
+                        const res = await queryPromise;
+                        return res || { count: 0 };
+                    } catch {
+                        return { count: 0 };
+                    }
+                };
+
+                // Call Tracker Pending count
+                let callCount = 0;
+                try {
+                    // Group 1: leads where planned_at is not null and id not in call_tracker_for_leads
+                    let allTrackerData = [];
+                    let fetchMore = true;
+                    let currentFrom = 0;
+                    
+                    while (fetchMore) {
+                        const { data, error } = await supabase
+                            .from("call_tracker_for_leads")
+                            .select("lead_id, enquiry_received_status, created_at")
+                            .order("created_at", { ascending: false })
+                            .range(currentFrom, currentFrom + 999);
+                        
+                        if (error) break;
+                        if (data && data.length > 0) {
+                            allTrackerData = [...allTrackerData, ...data];
+                            currentFrom += 1000;
+                            if (data.length < 1000) fetchMore = false;
+                        } else {
+                            fetchMore = false;
+                        }
+                    }
+
+                    const latestTrackerPerLead = new Map();
+                    allTrackerData.forEach(row => {
+                        if (row.lead_id && !latestTrackerPerLead.has(row.lead_id)) {
+                            latestTrackerPerLead.set(row.lead_id, row);
+                        }
+                    });
+
+                    const existingLeadIds = Array.from(latestTrackerPerLead.keys());
+
+                    let group1Query = supabase
+                        .from("leads")
+                        .select("id")
+                        .not("planned_at", "is", null);
+
+                    const { data: g1Leads } = await group1Query;
+                    const existingIdsSet = new Set(existingLeadIds);
+                    const g1Count = (g1Leads || []).filter(lead => !existingIdsSet.has(lead.id)).length;
+
+                    // Group 2 count: latest records where status != 'yes'
+                    const group2Count = Array.from(latestTrackerPerLead.values()).filter(row => 
+                        !row.enquiry_received_status || row.enquiry_received_status.toLowerCase() !== 'yes'
+                    ).length;
+
+                    callCount = g1Count + group2Count;
+                } catch (e) {
+                    console.error("Error fetching call tracker count:", e);
+                }
+
+                // Enquiry Tracker Pending count
+                let enquiryCount = 0;
+                try {
+                    // 1. Pending leads count from call_tracker_for_leads
+                    const { data: existingTrackerLeads } = await supabase
+                        .from("enquiry_tracker_for_leads")
+                        .select("lead_id")
+                        .not("lead_id", "is", null);
+
+                    const existingLeadIds = Array.from(
+                        new Set((existingTrackerLeads || []).map((r) => r.lead_id).filter(Boolean))
+                    );
+
+                    let enquiryLeadsQuery = supabase
+                        .from("call_tracker_for_leads")
+                        .select("*", { count: "exact", head: true })
+                        .not("planned_at", "is", null);
+
+                    if (existingLeadIds.length > 0) {
+                        enquiryLeadsQuery = enquiryLeadsQuery.not("lead_id", "in", `(${existingLeadIds.join(",")})`);
+                    }
+
+                    // 2. Pending direct enquiries count from enquiries
+                    const { data: existingTrackerEnquiries } = await supabase
+                        .from("enquiry_tracker")
+                        .select("enquiry_id")
+                        .not("enquiry_id", "is", null);
+
+                    const existingEnquiryIds = Array.from(
+                        new Set((existingTrackerEnquiries || []).map((r) => r.enquiry_id).filter(Boolean))
+                    );
+
+                    let enquiryDirectQuery = supabase
+                        .from("enquiries")
+                        .select("*", { count: "exact", head: true })
+                        .not("planned_at", "is", null);
+
+                    if (existingEnquiryIds.length > 0) {
+                        enquiryDirectQuery = enquiryDirectQuery.not("id", "in", `(${existingEnquiryIds.join(",")})`);
+                    }
+
+                    const [enquiryLeadsRes, enquiryDirectRes] = await Promise.all([
+                        safeFetch(enquiryLeadsQuery),
+                        safeFetch(enquiryDirectQuery)
+                    ]);
+
+                    enquiryCount = (enquiryLeadsRes?.count || 0) + (enquiryDirectRes?.count || 0);
+                } catch (e) {
+                    console.error("Error fetching enquiry tracker count:", e);
+                }
+
                 const [
-                    callRes, 
-                    enquiryLeadsRes, 
-                    enquiryDirectRes, 
                     clientTotalRes, 
                     clientNotRelevantRes,
                     itemsRes
                 ] = await Promise.all([
-                    // Call Tracker Pending Follow-ups
-                    supabase
-                        .from("leads_to_order")
-                        .select("*", { count: "exact", head: true })
-                        .not("Planned", "is", null)
-                        .is("Actual", null),
-
-                    // Enquiry Tracker Pending (leads_to_order)
-                    supabase
-                        .from("leads_to_order")
-                        .select("*", { count: "exact", head: true })
-                        .not("Planned1", "is", null)
-                        .is("Actual1", null),
-
-                    // Enquiry Tracker Pending (enquiry_to_order)
-                    supabase
-                        .from("enquiry_to_order")
-                        .select("*", { count: "exact", head: true })
-                        .not("planned1", "is", null)
-                        .is("actual1", null),
-
                     // Client Master total clients count
-                    supabase
-                        .from("client_master")
-                        .select("*", { count: "exact", head: true }),
+                    safeFetch(supabase.from("client_master").select("*", { count: "exact", head: true })),
 
                     // Client Master non-relevant clients count
-                    supabase
-                        .from("client_master")
-                        .select("*", { count: "exact", head: true })
-                        .eq("isRelevant", false),
+                    safeFetch(supabase.from("client_master").select("*", { count: "exact", head: true }).eq("isRelevant", false)),
 
                     // Items total count
-                    supabase
-                        .from("items")
-                        .select("*", { count: "exact", head: true })
+                    safeFetch(supabase.from("items").select("*", { count: "exact", head: true }))
                 ]);
 
-                const callCount = callRes.count || 0;
-                const enquiryCount = (enquiryLeadsRes.count || 0) + (enquiryDirectRes.count || 0);
-                const relevantClientCount = Math.max(0, (clientTotalRes.count || 0) - (clientNotRelevantRes.count || 0));
-                const itemsCount = itemsRes.count || 0;
+                const relevantClientCount = Math.max(0, (clientTotalRes?.count || 0) - (clientNotRelevantRes?.count || 0));
+                const itemsCount = itemsRes?.count || 0;
 
                 setCounts({
                     callTracker: callCount,
@@ -263,7 +343,7 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                 >
                                     Consignors
                                 </Link>
-                                <Link
+                                 <Link
                                     to="/master/items"
                                     onClick={() => setMobileMenuOpen(false)}
                                     className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
@@ -278,6 +358,17 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                             {counts.itemsMaster}
                                         </span>
                                     )}
+                                </Link>
+                                <Link
+                                    to="/master/tat"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                        location.pathname === "/master/tat" || location.pathname === "/master/tat-config"
+                                            ? "bg-sky-50 text-sky-600 font-semibold"
+                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                                    }`}
+                                >
+                                    TAT Configuration
                                 </Link>
                             </div>
                         )}

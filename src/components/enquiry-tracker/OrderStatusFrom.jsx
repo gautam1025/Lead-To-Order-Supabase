@@ -173,22 +173,23 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
       console.log("Fetching items for quotation number:", quotationNumber)
 
       const { data, error } = await supabase
-        .from("Make_Quotation")
-        .select("Items")
-        .eq("Quotation_No", quotationNumber)
+        .from("make_quotations")
+        .select("items")
+        .eq("quotation_no", quotationNumber)
         .maybeSingle()
 
       if (error) {
-        console.error("Error fetching from Make_Quotation:", error)
+        console.error("Error fetching from make_quotations:", error)
         setQuotationItems([])
         return
       }
 
-      if (data && data.Items) {
+      const rawItems = data?.items || data?.Items;
+      if (rawItems) {
         // Parse Items JSON and extract name and qty
         let items = []
         try {
-          items = typeof data.Items === 'string' ? JSON.parse(data.Items) : data.Items
+          items = typeof rawItems === 'string' ? JSON.parse(rawItems) : rawItems
         } catch (e) {
           console.error("Error parsing Items JSON:", e)
           items = []
@@ -197,21 +198,21 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         // Extract only name and qty from items
         const extractedItems = items.map((item, index) => ({
           id: index + 1,
-          name: item.name || "",
-          qty: item.qty || 0
+          name: item.name || item.item_name || "",
+          qty: item.qty || item.quantity || 0
         }))
 
-        console.log("Fetched items from Make_Quotation:", extractedItems)
+        console.log("Fetched items from make_quotations:", extractedItems)
         setQuotationItems(extractedItems)
 
         // Pass items to parent component
         onFieldChange('quotationItems', extractedItems)
       } else {
-        console.log("No items found in Make_Quotation for:", quotationNumber)
+        console.log("No items found in make_quotations for:", quotationNumber)
         setQuotationItems([])
       }
     } catch (error) {
-      console.error("Exception fetching items from Make_Quotation:", error)
+      console.error("Exception fetching items from make_quotations:", error)
       setQuotationItems([])
     } finally {
       setIsLoadingItems(false)

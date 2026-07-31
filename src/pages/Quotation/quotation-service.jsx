@@ -78,9 +78,9 @@ export const getNextQuotationNumber = async (prefix = "NBD") => {
 
     // Fetch all quotations matching the prefix and current year
     const { data, error } = await supabase
-      .from("Make_Quotation")
-      .select("Quotation_No")
-      .like("Quotation_No", `${yearPrefix}-%`);
+      .from("make_quotations")
+      .select("quotation_no")
+      .like("quotation_no", `${yearPrefix}-%`);
 
     if (error) {
       console.error("Error fetching latest quotations:", error);
@@ -92,7 +92,8 @@ export const getNextQuotationNumber = async (prefix = "NBD") => {
     if (data && data.length > 0) {
 
       data.forEach((item) => {
-        const quotationNo = item.Quotation_No;
+        const quotationNo = item.quotation_no || item.Quotation_No;
+        if (!quotationNo) return;
         const parts = quotationNo.split("-");
 
         // The serial number should be the 4th part (index 3)
@@ -119,38 +120,28 @@ export const getNextQuotationNumber = async (prefix = "NBD") => {
   }
 };
 
-// Function to get company prefix from leads_to_order or enquiry_to_order tables
+// Function to get company prefix from leads or enquiries tables
 export const getCompanyPrefix = async (companyName) => {
   try {
-    // First try leads_to_order table
+    // First try leads table
     const { data: leadsData, error: leadsError } = await supabase
-      .from("leads_to_order")
-      .select("Company_Name")
-      .eq("Company_Name", companyName)
+      .from("leads")
+      .select("company_name")
+      .eq("company_name", companyName)
       .limit(1);
 
     if (!leadsError && leadsData && leadsData.length > 0) {
-      // Generate prefix from company name (first 3 letters uppercase)
-      const prefix = companyName
-        .substring(0, 3)
-        .toUpperCase()
-        .replace(/[^A-Z]/g, "");
       return "NBD";
     }
 
-    // If not found, try enquiry_to_order table
+    // If not found, try enquiries table
     const { data: enquiryData, error: enquiryError } = await supabase
-      .from("enquiry_to_order")
+      .from("enquiries")
       .select("company_name")
       .eq("company_name", companyName)
       .limit(1);
 
     if (!enquiryError && enquiryData && enquiryData.length > 0) {
-      // Generate prefix from company name (first 3 letters uppercase)
-      const prefix = companyName
-        .substring(0, 3)
-        .toUpperCase()
-        .replace(/[^A-Z]/g, "");
       return "NBD";
     }
 
@@ -160,4 +151,5 @@ export const getCompanyPrefix = async (companyName) => {
     return "NBD"; // Default fallback
   }
 };
+
 

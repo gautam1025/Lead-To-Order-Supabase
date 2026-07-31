@@ -20,6 +20,7 @@ import ClientMaster from "./pages/Master/ClientMaster"
 import Dropdowns from "./pages/Master/Dropdowns"
 import Consignors from "./pages/Master/Consignors"
 import Items from "./pages/Master/Items"
+import TatConfig from "./pages/Master/tatConfig"
 import Setting from "./pages/Setting/Setting"
 import supabase from "./utils/supabase"
 
@@ -98,13 +99,13 @@ function App() {
       if (userType === "admin") {
         // Admin sees all data - fetch from appropriate Supabase tables
         const { data: leadsData, error: leadsError } = await supabase
-          .from('leads_to_order')
+          .from('leads')
           .select('*')
           .order('id', { ascending: false })
           .limit(100);
         
         const { data: enquiryData, error: enquiryError } = await supabase
-          .from('enquiry_to_order')
+          .from('enquiries')
           .select('*')
           .order('created_at', { ascending: false })
           .limit(100);
@@ -135,15 +136,15 @@ function App() {
 
         // Fetch leads for all usernames in the list
         const { data: userLeads, error: userLeadsError } = await supabase
-          .from('leads_to_order')
+          .from('leads')
           .select('*')
-          .in('Salesperson_Name', usernamesToFetch)
+          .in('salesperson_name', usernamesToFetch)
           .order('id', { ascending: false })
           .limit(100);
 
         // Fetch enquiries for all usernames in the list
         const { data: userEnquiries, error: userEnquiriesError } = await supabase
-          .from('enquiry_to_order')
+          .from('enquiries')
           .select('*')
           .in('sales_person_name', usernamesToFetch)
           .order('created_at', { ascending: false })
@@ -426,6 +427,22 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <Items />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/tat"
+                    element={
+                      <ProtectedRoute>
+                        <TatConfig />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/tat-config"
+                    element={
+                      <ProtectedRoute>
+                        <TatConfig />
                       </ProtectedRoute>
                     }
                   />

@@ -18,14 +18,14 @@ const formatDate = (date) => {
 const generateNextImportLeadNumbers = async (count) => {
   try {
     const { data, error } = await supabase
-      .from("leads_to_order")
-      .select('"LD-Lead-No"')
+      .from("leads")
+      .select("lead_no")
       .order("id", { ascending: false })
       .limit(1);
 
     let startNum = 1;
     if (!error && data && data.length > 0) {
-      const lastLeadNumber = data[0]["LD-Lead-No"];
+      const lastLeadNumber = data[0].lead_no || data[0]["LD-Lead-No"];
       if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
         const match = lastLeadNumber.match(/LD-(\d+)/);
         if (match) {
@@ -186,41 +186,61 @@ function ExcelImportModal({ onClose, onSaved }) {
     setIsSaving(true);
     setSaveError("");
     try {
-      const leadNumbers = await generateNextImportLeadNumbers(importedRows.length);
-      const rowsToInsert = importedRows.map((row, idx) => ({
-        Timestamp: formatDate(new Date()),
-        "LD-Lead-No": leadNumbers[idx],
-        Lead_Receiver_Name: row.receiverName || "",
-        Lead_Source: row.source || "",
-        Company_Name: row.companyName || "",
-        Phone_Number: row.phoneNumber || "",
-        Salesperson_Name: row.personName || "",
-        SC_Name: row.scName || "",
-        Location: row.location || "",
-        Email_Address: row.email || "",
-        State: row.state || "",
-        Address: row.address || "",
-        Person_name_1: row.person1Name || "",
-        Designation_1: row.person1Designation || "",
-        Phone_Number_1: row.person1Phone || "",
-        Person_Name_2: row.person2Name || "",
-        Designation_2: row.person2Designation || "",
-        Phone_Number_2: row.person2Phone || "",
-        Person_Name_3: row.person3Name || "",
-        Designation_3: row.person3Designation || "",
-        Phone_Number_3: row.person3Phone || "",
-        NOB: row.nob || "",
-        GST_Number: row.gstNumber || "",
-        Sales_Type: row.salesType || "",
-        Additional_Notes: row.additionalNotes || "",
-        "Customer_Registration Form": "",
-        "Credit _Access": "",
-        Credit_Days: "",
-        Credit_Limit: "",
-        handle_person: row.handlePerson || "",
-      }));
+      // Fetch TAT for Stage='Call-Tracker for Leads' (defaults to 1 hr if null/missing)
+      let tatHours = 1;
+      let tatMinutes = 0;
+      try {
+        const { data: tatData } = await supabase
+          .from("tat_config")
+          .select("tat_hours, tat_minutes")
+          .eq("stage_name", "Call-Tracker for Leads")
+          .maybeSingle();
 
-      const { error } = await supabase.from("leads_to_order").insert(rowsToInsert);
+        if (tatData) {
+          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
+            tatHours = Number(tatData.tat_hours);
+          }
+          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
+            tatMinutes = Number(tatData.tat_minutes);
+          }
+        }
+      } catch (tatErr) {
+        console.error("Error fetching TAT config for bulk import:", tatErr);
+      }
+
+      const tatOffsetMs = (tatHours * 3600000) + (tatMinutes * 60000);
+      const leadNumbers = await generateNextImportLeadNumbers(importedRows.length);
+
+      const rowsToInsert = importedRows.map((row, idx) => {
+        const createdAtDate = new Date();
+        const plannedAtDate = new Date(createdAtDate.getTime() + tatOffsetMs);
+
+        return {
+          created_at: createdAtDate.toISOString(),
+          planned_at: plannedAtDate.toISOString(),
+          lead_no: leadNumbers[idx],
+          lead_receiver_name: row.receiverName || "",
+          lead_source: row.source || "",
+          company_name: row.companyName || "",
+          phone_number: row.phoneNumber || "",
+          salesperson_name: row.personName || row.scName || "",
+          location: row.location || "",
+          email_address: row.email || "",
+          state: row.state || "",
+          address: row.address || "",
+          nob: row.nob || "",
+          gst_number: row.gstNumber || "",
+          sales_type: row.salesType || "",
+          additional_notes: row.additionalNotes || "",
+          customer_registration_form: "",
+          credit_access: "",
+          credit_days: null,
+          credit_limit: null,
+          handle_person: row.handlePerson || "",
+        };
+      });
+
+      const { error } = await supabase.from("leads").insert(rowsToInsert);
       if (error) throw error;
 
       showNotification(`${importedRows.length} lead(s) imported successfully!`, "success");
@@ -641,8 +661,8 @@ function Leads() {
   const generateNextLeadNumber = async () => {
     try {
       const { data, error } = await supabase
-        .from("leads_to_order")
-        .select('"LD-Lead-No"')
+        .from("leads")
+        .select("lead_no")
         .order("id", { ascending: false })
         .limit(1);
 
@@ -656,7 +676,7 @@ function Leads() {
         return;
       }
 
-      const lastLeadNumber = data[0]["LD-Lead-No"];
+      const lastLeadNumber = data[0].lead_no || data[0]["LD-Lead-No"];
       if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
         const match = lastLeadNumber.match(/LD-(\d+)/);
         if (match) {
@@ -829,40 +849,58 @@ function Leads() {
         }
       }
 
-      // 2. Insert into leads_to_order
+      // Fetch TAT for Stage='Call-Tracker for Leads' (defaults to 1 hr if null/missing)
+      let tatHours = 1;
+      let tatMinutes = 0;
+      try {
+        const { data: tatData } = await supabase
+          .from("tat_config")
+          .select("tat_hours, tat_minutes")
+          .eq("stage_name", "Call-Tracker for Leads")
+          .maybeSingle();
+
+        if (tatData) {
+          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
+            tatHours = Number(tatData.tat_hours);
+          }
+          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
+            tatMinutes = Number(tatData.tat_minutes);
+          }
+        }
+      } catch (tatErr) {
+        console.error("Error fetching TAT config:", tatErr);
+      }
+
+      const createdAtDate = new Date();
+      const plannedAtDate = new Date(
+        createdAtDate.getTime() + (tatHours * 3600000) + (tatMinutes * 60000)
+      );
+
+      // 2. Insert into leads
       const leadData = {
-        Timestamp: formatDate(new Date()),
-        "LD-Lead-No": nextLeadNumber,
-        Lead_Receiver_Name: formData.receiverName,
-        Lead_Source: formData.source,
-        Company_Name: formData.companyName,
-        Phone_Number: formData.phoneNumber,
-        Salesperson_Name: formData.salespersonName,
-        SC_Name: formData.scName,
-        Location: formData.location,
-        Email_Address: formData.email,
-        State: formData.state,
-        Address: formData.address,
-        Person_name_1: formData.contactPersons[0]?.name || "",
-        Designation_1: formData.contactPersons[0]?.designation || "",
-        Phone_Number_1: formData.contactPersons[0]?.number || "",
-        Person_Name_2: formData.contactPersons[1]?.name || "",
-        Designation_2: formData.contactPersons[1]?.designation || "",
-        Phone_Number_2: formData.contactPersons[1]?.number || "",
-        Person_Name_3: formData.contactPersons[2]?.name || "",
-        Designation_3: formData.contactPersons[2]?.designation || "",
-        Phone_Number_3: formData.contactPersons[2]?.number || "",
-        NOB: formData.nob,
-        GST_Number: formData.gst,
-        Sales_Type: formData.salesType,
-        Additional_Notes: formData.notes,
-        "Customer_Registration Form": formData.customerRegistrationForm,
-        "Credit _Access": formData.creditAccess,
-        Credit_Days: formData.creditDays,
-        Credit_Limit: formData.creditLimit,
+        created_at: createdAtDate.toISOString(),
+        planned_at: plannedAtDate.toISOString(),
+        lead_no: nextLeadNumber,
+        lead_receiver_name: formData.receiverName || "",
+        lead_source: formData.source || "",
+        company_name: formData.companyName || "",
+        phone_number: formData.phoneNumber || "",
+        salesperson_name: formData.salespersonName || "",
+        location: formData.location || "",
+        email_address: formData.email || "",
+        state: formData.state || "",
+        address: formData.address || "",
+        nob: formData.nob || "",
+        gst_number: formData.gst || "",
+        sales_type: formData.salesType || "",
+        additional_notes: formData.notes || "",
+        customer_registration_form: formData.customerRegistrationForm || "",
+        credit_access: formData.creditAccess || "",
+        credit_days: formData.creditDays ? parseInt(formData.creditDays, 10) : null,
+        credit_limit: formData.creditLimit ? parseFloat(formData.creditLimit) : null,
       };
 
-      const { error } = await supabase.from("leads_to_order").insert([leadData]);
+      const { error } = await supabase.from("leads").insert([leadData]);
       if (error) throw error;
 
       showNotification("Lead created successfully", "success");

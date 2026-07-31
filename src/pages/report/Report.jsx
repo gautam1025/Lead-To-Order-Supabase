@@ -151,9 +151,9 @@ function Report() {
                 return true;
             };
 
-            // 1. Fetch Calls (leads_tracker)
+            // 1. Fetch Calls (call_tracker_for_leads)
             // Modified to client-side filter to support "d/m/y" text formats in backend
-            let callsQuery = supabase.from("leads_tracker").select("Timestamp");
+            let callsQuery = supabase.from("call_tracker_for_leads").select("Timestamp");
             if (filters.scName !== "all") callsQuery = callsQuery.eq("SC_Name", filters.scName);
 
             const { data: callsData, error: callsError } = await callsQuery;
@@ -170,21 +170,21 @@ function Report() {
             }
 
 
-            // 2, 3, 4 & 5. Fetch Total Leads, Enquiries, Quotations & Orders (leads_to_order)
+            // 2, 3, 4 & 5. Fetch Total Leads, Enquiries, Quotations & Orders (leads)
             let leadsQuery = supabase
-                .from("leads_to_order")
-                .select("Planned1, Actual1, SC_Name, Quotation_Number, Timestamp, Quotation_Value_Without_Tax, \"Is_Order_Received?_Status\", \"Enquiry_Approach\"");
+                .from("leads")
+                .select("*");
 
             if (filters.scName !== "all") {
-                leadsQuery = leadsQuery.eq("SC_Name", filters.scName);
+                leadsQuery = leadsQuery.eq("salesperson_name", filters.scName);
             }
 
             const { data: leadsData, error: leadsError } = await leadsQuery;
 
-            // Fetch Enquiries from enquiry_to_order table for Incoming, Outgoing, and Conversion
+            // Fetch Enquiries from enquiries table for Incoming, Outgoing, and Conversion
             let enquiryQuery = supabase
-                .from("enquiry_to_order")
-                .select("enquiry_approach, is_order_received_status, timestamp, created_at, sc_name, enquiry_assign_to_project");
+                .from("enquiries")
+                .select("*");
 
             const { data: enquiryData, error: enquiryError } = await enquiryQuery;
 
@@ -323,7 +323,7 @@ function Report() {
         setIsLoading(true);
         try {
             let query = supabase
-                .from("enquiry_to_order")
+                .from("enquiries")
                 .select("id, quotation_value_without_tax, order_no, is_order_received_status, created_at, enquiry_receiver_name, actual1");
 
             if (fosFilters.receiverName !== "all") {
@@ -515,11 +515,11 @@ function Report() {
             };
 
             let leadsQuery = supabase
-                .from("leads_to_order")
-                .select("Planned1, Actual1, SC_Name, Timestamp, Quotation_Value_Without_Tax, Quotation_Value_With_Tax");
+                .from("leads")
+                .select("*");
 
             if (scPipelineFilters.scName !== "all") {
-                leadsQuery = leadsQuery.eq("SC_Name", scPipelineFilters.scName);
+                leadsQuery = leadsQuery.eq("salesperson_name", scPipelineFilters.scName);
             }
 
             const { data: leadsData, error: leadsError } = await leadsQuery;
@@ -533,26 +533,21 @@ function Report() {
                 console.error("Error fetching SC Pipeline data:", leadsError);
             } else if (leadsData) {
                 leadsData.forEach(row => {
-                    const tDate = parseDate(row.Timestamp);
+                    const tDate = parseDate(row.created_at);
 
-                    // Total Leads + Total Value logic (date-filtered by Timestamp)
+                    // Total Leads + Total Value logic
                     if (tDate) {
                         if (isDateInRange(tDate, scPipelineFilters.startDate, scPipelineFilters.endDate)) {
                             leadsCount++;
-                            // Total Value: sum Quotation_Value_With_Tax for matching rows
-                            if (row.Quotation_Value_With_Tax) {
-                                const parsed = parseFloat(String(row.Quotation_Value_With_Tax).replace(/,/g, '').replace(/[^\d.-]/g, ''));
-                                if (!isNaN(parsed)) leadsValue += parsed;
-                            }
                         }
                     }
                 });
             }
 
-            // Fetch No. of Enquiry from enquiry_to_order table
+            // Fetch No. of Enquiry from enquiries table
             const { data: enquiryData, error: enquiryError } = await supabase
-                .from("enquiry_to_order")
-                .select("enquiry_assign_to_project, timestamp, quotation_value_with_tax");
+                .from("enquiries")
+                .select("*");
 
             if (enquiryError) {
                 console.error("Error fetching enquiry_to_order data:", enquiryError);
@@ -610,76 +605,8 @@ function Report() {
         if (!isAdmin() || activeTab !== "fos") return;
 
         try {
-            const isUnfiltered = fosFilters.receiverName === "all" && !fosFilters.startDate && !fosFilters.endDate;
-
-            if (isUnfiltered) {
-                // 📊 Default logic: Sum of total_visit table + Count of tankhwa_patra table
-                const [
-                    { data: visitSumData, error: visitError },
-                    { count: patraCount, error: patraError }
-                ] = await Promise.all([
-                    supabase.from('total_visit').select('total_visit'),
-                    supabase.from('tankhwa_patra').select('*', { count: 'exact', head: true })
-                ]);
-
-                if (!visitError && !patraError) {
-                    const visitSum = (visitSumData || []).reduce((acc, row) => acc + (Number(row.total_visit) || 0), 0);
-                    setTotalVisitCount(visitSum + (patraCount || 0));
-                } else {
-                    console.error("Default visit fetch error:", visitError || patraError);
-                    setTotalVisitCount(0);
-                }
-                return;
-            }
-
-            // 🔍 Filtered logic: Only tankhwa_patra with JS filtering
-            let query = supabase
-                .from("tankhwa_patra")
-                .select("Name, \"Punch In Time\"");
-
-            // 👤 Receiver Name filter (using fuzzy ilike for "Mr. NAME (PHONE)")
-            if (fosFilters.receiverName !== "all") {
-                query = query.ilike("Name", `%${fosFilters.receiverName}%`);
-            }
-
-            const { data, error } = await query;
-
-            if (error) {
-                console.error("Tankhwa Patra visit error:", error);
-                setTotalVisitCount(0);
-                return;
-            }
-
-            let filteredData = data || [];
-
-            // 📅 Date filters in JS due to format "DD-MM-YYYY HH:mm:ss"
-            const startDate = fosFilters.startDate ? new Date(fosFilters.startDate).setHours(0, 0, 0, 0) : null;
-            const endDate = fosFilters.endDate ? new Date(fosFilters.endDate).setHours(23, 59, 59, 999) : null;
-
-            if (startDate || endDate) {
-                filteredData = filteredData.filter(row => {
-                    const punchInTime = row["Punch In Time"];
-                    if (!punchInTime) return false;
-
-                    // Parse "DD-MM-YYYY HH:mm:ss"
-                    const parts = punchInTime.split(" ")[0].split("-");
-                    if (parts.length === 3) {
-                        const day = parseInt(parts[0], 10);
-                        const month = parseInt(parts[1], 10) - 1;
-                        const year = parseInt(parts[2], 10);
-                        const punchDate = new Date(year, month, day).getTime();
-
-                        if (startDate && punchDate < startDate) return false;
-                        if (endDate && punchDate > endDate) return false;
-                        return true;
-                    }
-                    return false;
-                });
-            }
-
-            // ✅ Each row after filtering = 1 visit
-            setTotalVisitCount(filteredData.length);
-
+            // 📊 Default logic: Tables tankhwa_patra and total_visit have been removed.
+            setTotalVisitCount(0);
         } catch (err) {
             console.error("Visit count error:", err);
         }

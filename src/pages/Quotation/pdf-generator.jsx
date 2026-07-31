@@ -543,7 +543,7 @@ const QuotationPDFDocument = ({
 }) => {
   const displayedQuotationNo =
     (quotationData &&
-      (quotationData.Quotation_No || quotationData.finalQuotationNo)) ||
+      (quotationData.quotation_no || quotationData.Quotation_No || quotationData.finalQuotationNo)) ||
     quotationData?.quotationNo ||
     "NBD-002";
 

@@ -137,11 +137,11 @@ function Quotation() {
 
 
       let query = supabase
-        .from("Make_Quotation")
-        .select("Quotation_No");
+        .from("make_quotations")
+        .select("quotation_no");
 
       if (search) {
-        query = query.ilike("Quotation_No", `%${search}%`);
+        query = query.ilike("quotation_no", `%${search}%`);
       }
 
       query = query
@@ -269,9 +269,9 @@ function Quotation() {
 
     try {
       const { data, error } = await supabase
-        .from("Make_Quotation")
+        .from("make_quotations")
         .select("*")
-        .eq("Quotation_No", quotationNo)
+        .eq("quotation_no", quotationNo)
         .single();
 
       if (error) {
@@ -665,12 +665,12 @@ function Quotation() {
         };
 
         const { data, error } = await supabase
-          .from("Make_Quotation")
+          .from("make_quotations")
           .insert([quotationRecord])
           .select();
 
         if (!error) {
-          authoritativeQuotationNo = data && data[0] && data[0].Quotation_No ? data[0].Quotation_No : candidateNo;
+          authoritativeQuotationNo = data && data[0] && (data[0].quotation_no || data[0].Quotation_No) ? (data[0].quotation_no || data[0].Quotation_No) : candidateNo;
           break;
         }
 
@@ -731,9 +731,9 @@ function Quotation() {
       if (uploadedPdfUrl) {
         // Update the record with the Pdf_Url
         await supabase
-          .from("Make_Quotation")
-          .update({ Pdf_Url: uploadedPdfUrl })
-          .eq("Quotation_No", authoritativeQuotationNo);
+          .from("make_quotations")
+          .update({ pdf_url: uploadedPdfUrl })
+          .eq("quotation_no", authoritativeQuotationNo);
 
         // Set the PDF URL for reference
         setPdfUrl(uploadedPdfUrl);

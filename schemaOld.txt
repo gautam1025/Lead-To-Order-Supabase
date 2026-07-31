@@ -1,0 +1,490 @@
+// This is the schema of the testing version.
+
+
+## Table `Make_Quotation`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `Timestamp` | `timestamp` |  Nullable |
+| `Quotation_No` | `text` |  Nullable Unique |
+| `Quotation_Date` | `date` |  Nullable |
+| `Prepared_By` | `text` |  Nullable |
+| `Consigner_State` | `text` |  Nullable |
+| `Reference_Name` | `text` |  Nullable |
+| `Address` | `text` |  Nullable |
+| `Mobile` | `text` |  Nullable |
+| `Phone` | `text` |  Nullable |
+| `GSTIN` | `text` |  Nullable |
+| `State_Code` | `text` |  Nullable |
+| `Company_Name` | `text` |  Nullable |
+| `Consignee_Address` | `text` |  Nullable |
+| `Ship_To` | `text` |  Nullable |
+| `State` | `text` |  Nullable |
+| `Contact_Name` | `text` |  Nullable |
+| `Contact_No` | `text` |  Nullable |
+| `Consignee_GSTIN` | `text` |  Nullable |
+| `Consignee_State_Code` | `text` |  Nullable |
+| `MSME_No` | `text` |  Nullable |
+| `Validity` | `text` |  Nullable |
+| `Payment_Terms` | `text` |  Nullable |
+| `Delivery` | `text` |  Nullable |
+| `Freight` | `text` |  Nullable |
+| `Insurance` | `text` |  Nullable |
+| `Taxes` | `text` |  Nullable |
+| `Notes` | `text` |  Nullable |
+| `Account_No` | `text` |  Nullable |
+| `Bank_Name` | `text` |  Nullable |
+| `Bank_Address` | `text` |  Nullable |
+| `IFSC_Code` | `text` |  Nullable |
+| `Email` | `text` |  Nullable |
+| `Website` | `text` |  Nullable |
+| `Pan` | `text` |  Nullable |
+| `Items` | `jsonb` |  Nullable |
+| `Divine_Empire_10th_Anniversary_Special_Offer` | `text` |  Nullable |
+| `Pdf_Url` | `text` |  Nullable |
+| `Grand_Total` | `numeric` |  Nullable |
+
+## Table `login`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `username` | `text` |  Unique |
+| `password` | `text` |  |
+| `created_at` | `timestamp` |  Nullable |
+| `usertype` | `userType` |  Nullable |
+| `alternate_access` | `text` |  Nullable |
+
+## Table `tankhwa_patra`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `Employee Code` | `text` |  Nullable |
+| `Name` | `text` |  Nullable |
+| `Co-Person` | `text` |  Nullable |
+| `Punch In Time` | `text` |  Nullable |
+| `Punch Out Time` | `text` |  Nullable |
+| `Visit Date` | `text` |  Nullable |
+| `Time` | `text` |  Nullable |
+| `Check-In-DateTime` | `text` |  Nullable |
+| `Check-In-Location` | `text` |  Nullable |
+| `Check-Out-DateTime` | `text` |  Nullable |
+| `Check-Out-Location` | `text` |  Nullable |
+| `Tracking(Km)` | `numeric` |  Nullable |
+| `Product` | `text` |  Nullable |
+| `Visit Purpose` | `text` |  Nullable |
+| `Customer` | `text` |  Nullable |
+| `Customer's Company` | `text` |  Nullable |
+| `Customer's Industry` | `text` |  Nullable |
+| `Customer's Address` | `text` |  Nullable |
+| `Visit Report Name` | `text` |  Nullable |
+| `Customize Fields` | `text` |  Nullable |
+| `Report Customize Fields` | `text` |  Nullable |
+
+## Table `total_visit`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `name` | `varchar` |  |
+| `total_visit` | `int4` |  |
+| `created_at` | `timestamptz` |  Nullable |
+
+## Table `leads_tracker`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `int8` | Primary |
+| `Timestamp` | `date` |  Nullable |
+| `LD-Lead-No` | `text` |  |
+| `What_Did_The_Customer_say?` | `text` |  Nullable |
+| `Enquiry_Received_Status` | `text` |  Nullable |
+| `Enquiry_Received_Date` | `date` |  Nullable |
+| `Enquiry_for_State` | `text` |  Nullable |
+| `Project_Name` | `text` |  Nullable |
+| `Enquiry_Type` | `text` |  Nullable |
+| `Enquiry_Approach` | `text` |  Nullable |
+| `Item_Name1` | `text` |  Nullable |
+| `Quantity1` | `text` |  Nullable |
+| `Item_Name2` | `text` |  Nullable |
+| `Quantity2` | `text` |  Nullable |
+| `Item_Name3` | `text` |  Nullable |
+| `Quantity3` | `text` |  Nullable |
+| `Item_Name4` | `text` |  Nullable |
+| `Quantity4` | `text` |  Nullable |
+| `Item_Name5` | `text` |  Nullable |
+| `Quantity5` | `text` |  Nullable |
+| `Next_Action` | `text` |  Nullable |
+| `Next_Call_Date` | `date` |  Nullable |
+| `Next_Call_Time` | `time` |  Nullable |
+| `Leads_Tracking_Status` | `text` |  Nullable |
+| `SC_Name` | `text` |  Nullable |
+| `Calling_Days` | `text` |  Nullable |
+| `Company_Name` | `text` |  Nullable |
+| `Item_Qty` | `text` |  Nullable |
+| `Total_Qty` | `text` |  Nullable |
+| `lead_status` | `text` |  Nullable |
+| `Project_Approximate_Value` | `text` |  Nullable |
+| `other_remarks` | `text` |  Nullable |
+
+## Table `leads_to_order`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `Timestamp` | `text` |  Nullable |
+| `LD-Lead-No` | `text` |  Nullable Unique |
+| `Lead_Receiver_Name` | `text` |  Nullable |
+| `Lead_Source` | `text` |  Nullable |
+| `Company_Name` | `text` |  Nullable |
+| `Phone_Number` | `text` |  Nullable |
+| `Salesperson_Name` | `text` |  Nullable |
+| `Location` | `text` |  Nullable |
+| `Email_Address` | `text` |  Nullable |
+| `State` | `text` |  Nullable |
+| `Address` | `text` |  Nullable |
+| `Person_name_1` | `text` |  Nullable |
+| `Designation_1` | `text` |  Nullable |
+| `Phone_Number_1` | `text` |  Nullable |
+| `Person_Name_2` | `text` |  Nullable |
+| `Designation_2` | `text` |  Nullable |
+| `Phone_Number_2` | `text` |  Nullable |
+| `Person_Name_3` | `text` |  Nullable |
+| `Designation_3` | `text` |  Nullable |
+| `Phone_Number_3` | `text` |  Nullable |
+| `NOB` | `text` |  Nullable |
+| `GST_Number` | `text` |  Nullable |
+| `Customer_Registration Form` | `text` |  Nullable |
+| `Credit _Access` | `text` |  Nullable |
+| `Credit_Days` | `text` |  Nullable |
+| `Credit_Limit` | `text` |  Nullable |
+| `Additional_Notes` | `text` |  Nullable |
+| `Planned` | `text` |  Nullable |
+| `Actual` | `text` |  Nullable |
+| `Delay` | `text` |  Nullable |
+| `Status` | `text` |  Nullable |
+| `What_Did_The_Customer say?` | `text` |  Nullable |
+| `Enquiry_Received_Status` | `text` |  Nullable |
+| `Enquiry_Received_Date` | `text` |  Nullable |
+| `Enquiry_for_State` | `text` |  Nullable |
+| `Project_Name` | `text` |  Nullable |
+| `Enquiry_Type` | `text` |  Nullable |
+| `Enquiry_Approach` | `text` |  Nullable |
+| `Project_Approximate_Value` | `text` |  Nullable |
+| `Item_Name1` | `text` |  Nullable |
+| `Quantity1` | `text` |  Nullable |
+| `Item_Name2` | `text` |  Nullable |
+| `Quantity2` | `text` |  Nullable |
+| `Item_Name3` | `text` |  Nullable |
+| `Quantity3` | `text` |  Nullable |
+| `Item_Name4` | `text` |  Nullable |
+| `Quantity4` | `text` |  Nullable |
+| `Item_Name5` | `text` |  Nullable |
+| `Quantity5` | `text` |  Nullable |
+| `Next_Action` | `text` |  Nullable |
+| `Next_Call_Date` | `date` |  Nullable |
+| `Next_Call_Time` | `time` |  Nullable |
+| `Planned1` | `text` |  Nullable |
+| `Actual1` | `date` |  Nullable |
+| `Delay1` | `text` |  Nullable |
+| `Enquiry_Status` | `text` |  Nullable |
+| `What_Did_Customer_Say` | `text` |  Nullable |
+| `Current_Stage` | `text` |  Nullable |
+| `Send_Quotation_No.` | `text` |  Nullable |
+| `Quotation_Shared_By` | `text` |  Nullable |
+| `Quotation_Number` | `text` |  Nullable |
+| `Quotation_Value_With_Tax` | `text` |  Nullable |
+| `Quotation_Upload` | `text` |  Nullable |
+| `Quotation_Remarks` | `text` |  Nullable |
+| `Quotation_Validator_Name` | `text` |  Nullable |
+| `Quotation_Send_Status` | `text` |  Nullable |
+| `Quotation_Validation_Remark` | `text` |  Nullable |
+| `Send_FAQ_Video` | `text` |  Nullable |
+| `Send_Product_Video` | `text` |  Nullable |
+| `Send_Offer_Video` | `text` |  Nullable |
+| `Send_Product_Catalog` | `text` |  Nullable |
+| `Send_Product_Image` | `text` |  Nullable |
+| `Is_Order_Received?_Status` | `text` |  Nullable |
+| `Acceptance_Via` | `text` |  Nullable |
+| `Payment_Mode` | `text` |  Nullable |
+| `Payment_Terms _In_Days` | `text` |  Nullable |
+| `Offer` | `text` |  Nullable |
+| `Acceptance_File_Upload` | `text` |  Nullable |
+| `REMARK` | `text` |  Nullable |
+| `Order_Lost_Apology_Video` | `text` |  Nullable |
+| `If_No_Then_Get_Relevant_Reason_Status` | `text` |  Nullable |
+| `If_No_Then_Get_Relevant_Reason_Remark` | `text` |  Nullable |
+| `CUSTOMER_ORDER_HOLD_REASON_CATEGORY` | `text` |  Nullable |
+| `HOLDING_DATE` | `text` |  Nullable |
+| `HOLD_REMARK` | `text` |  Nullable |
+| `SC_Name` | `text` |  Nullable |
+| `Calling_Days` | `text` |  Nullable |
+| `Leads_Tracking_Status` | `text` |  Nullable |
+| `Order_No` | `text` |  Nullable |
+| `Transport_Mode` | `text` |  Nullable |
+| `CONVEYED_FOR_REGISTRATION_FORM` | `text` |  Nullable |
+| `Total Order Qty` | `text` |  Nullable |
+| `Item/qty` | `text` |  Nullable |
+| `Amount With Tax` | `text` |  Nullable |
+| `Destination` | `text` |  Nullable |
+| `Po Number` | `text` |  Nullable |
+| `Quotation_Value_Without_Tax` | `text` |  Nullable |
+| `Next Call Date_1` | `date` |  Nullable |
+| `Next Call Time_1` | `time` |  Nullable |
+| `Calling Days_1` | `text` |  Nullable |
+| `id` | `int8` | Primary |
+| `timestamp_text_backup` | `text` |  Nullable |
+| `Sales_Type` | `text` |  Nullable |
+| `handle_person` | `text` |  Nullable |
+| `approved_by` | `text` |  Nullable |
+
+## Table `enquiry_to_order`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `timestamp` | `timestamp` |  Nullable |
+| `enquiry_no` | `text` |  Nullable |
+| `lead_source` | `text` |  Nullable |
+| `company_name` | `text` |  Nullable |
+| `phone_number` | `varchar` |  Nullable |
+| `sales_person_name` | `text` |  Nullable |
+| `location` | `text` |  Nullable |
+| `email` | `text` |  Nullable |
+| `shipping_address` | `text` |  Nullable |
+| `enquiry_receiver_name` | `text` |  Nullable |
+| `enquiry_assign_to_project` | `text` |  Nullable |
+| `gst_number` | `varchar` |  Nullable |
+| `enquiry_date` | `text` |  Nullable |
+| `enquiry_for_state` | `text` |  Nullable |
+| `project_name` | `text` |  Nullable |
+| `sales_type` | `text` |  Nullable |
+| `enquiry_approach` | `text` |  Nullable |
+| `item_name1` | `text` |  Nullable |
+| `quantity1` | `int4` |  Nullable |
+| `item_name2` | `text` |  Nullable |
+| `quantity2` | `int4` |  Nullable |
+| `item_name3` | `text` |  Nullable |
+| `quantity3` | `int4` |  Nullable |
+| `item_name4` | `text` |  Nullable |
+| `quantity4` | `int4` |  Nullable |
+| `item_name5` | `text` |  Nullable |
+| `quantity5` | `int4` |  Nullable |
+| `item_name6` | `text` |  Nullable |
+| `quantity6` | `int4` |  Nullable |
+| `item_name7` | `text` |  Nullable |
+| `quantity7` | `int4` |  Nullable |
+| `item_name8` | `text` |  Nullable |
+| `quantity8` | `int4` |  Nullable |
+| `item_name9` | `text` |  Nullable |
+| `quantity9` | `int4` |  Nullable |
+| `item_name10` | `text` |  Nullable |
+| `quantity10` | `int4` |  Nullable |
+| `planned1` | `timestamp` |  Nullable |
+| `actual1` | `timestamp` |  Nullable |
+| `delay1` | `text` |  Nullable |
+| `enquiry_status` | `text` |  Nullable |
+| `customer_feedback` | `text` |  Nullable |
+| `current_stage` | `text` |  Nullable |
+| `send_quotation_no` | `text` |  Nullable |
+| `quotation_shared_by` | `text` |  Nullable |
+| `quotation_number` | `text` |  Nullable |
+| `quotation_value_without_tax` | `text` |  Nullable |
+| `quotation_value_with_tax` | `text` |  Nullable |
+| `quotation_upload` | `text` |  Nullable |
+| `quotation_remarks` | `text` |  Nullable |
+| `quotation_validator_name` | `text` |  Nullable |
+| `quotation_send_status` | `text` |  Nullable |
+| `quotation_validation_remark` | `text` |  Nullable |
+| `send_faq_video` | `bool` |  Nullable |
+| `send_product_video` | `bool` |  Nullable |
+| `send_offer_video` | `bool` |  Nullable |
+| `send_product_catalog` | `bool` |  Nullable |
+| `send_product_image` | `bool` |  Nullable |
+| `next_call_date` | `date` |  Nullable |
+| `next_call_time` | `time` |  Nullable |
+| `is_order_received_status` | `text` |  Nullable |
+| `acceptance_via` | `text` |  Nullable |
+| `payment_mode` | `text` |  Nullable |
+| `payment_terms_days` | `text` |  Nullable |
+| `offer` | `text` |  Nullable |
+| `acceptance_file_upload` | `text` |  Nullable |
+| `remark` | `text` |  Nullable |
+| `order_lost_apology_video` | `text` |  Nullable |
+| `if_no_reason_status` | `text` |  Nullable |
+| `if_no_reason_remark` | `text` |  Nullable |
+| `customer_order_hold_reason_category` | `text` |  Nullable |
+| `holding_date` | `date` |  Nullable |
+| `hold_remark` | `text` |  Nullable |
+| `transport_mode` | `text` |  Nullable |
+| `conveyed_for_registration_form` | `bool` |  Nullable |
+| `sales_coordinator_name` | `text` |  Nullable |
+| `calling_days` | `text` |  Nullable |
+| `order_no` | `text` |  Nullable |
+| `amount_with_gst` | `numeric` |  Nullable |
+| `item_qty` | `text` |  Nullable |
+| `total_qty` | `text` |  Nullable |
+| `destination` | `text` |  Nullable |
+| `po_number` | `text` |  Nullable |
+| `created_at` | `timestamp` |  Nullable |
+| `approved_by` | `text` |  Nullable |
+
+## Table `enquiry_tracker`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `Timestamp` | `date` |  Nullable |
+| `Enquiry No.` | `text` |  Nullable |
+| `Enquiry Status` | `text` |  Nullable |
+| `What Did Customer Say` | `text` |  Nullable |
+| `Current Stage` | `text` |  Nullable |
+| `Send Quotation No.` | `text` |  Nullable |
+| `Quotation Shared By` | `text` |  Nullable |
+| `Quotation Number` | `text` |  Nullable |
+| `Quotation Value Without Tax` | `text` |  Nullable |
+| `Quotation Value With Tax` | `text` |  Nullable |
+| `Quotation Upload` | `text` |  Nullable |
+| `Quotation Remarks` | `text` |  Nullable |
+| `Quotation Validator Name` | `text` |  Nullable |
+| `Quotation Send Status` | `text` |  Nullable |
+| `Quotation Validation Remark` | `text` |  Nullable |
+| `Send Faq Video` | `text` |  Nullable |
+| `Send Product Video` | `text` |  Nullable |
+| `Send Offer Video` | `text` |  Nullable |
+| `Send Product Catalog` | `text` |  Nullable |
+| `Send Product Image` | `text` |  Nullable |
+| `Next Call Date` | `date` |  Nullable |
+| `Next Call Time` | `text` |  Nullable |
+| `Is Order Received? Status` | `text` |  Nullable |
+| `Acceptance Via` | `text` |  Nullable |
+| `Payment Mode` | `text` |  Nullable |
+| `Payment Terms (In Days)` | `text` |  Nullable |
+| `Transport Mode` | `text` |  Nullable |
+| `CONVEYED FOR REGISTRATION FORM` | `text` |  Nullable |
+| `Offer` | `text` |  Nullable |
+| `Acceptance File Upload` | `text` |  Nullable |
+| `Remark` | `text` |  Nullable |
+| `Order Lost Apology Video` | `text` |  Nullable |
+| `If No Then Get Relevant Reason Status` | `text` |  Nullable |
+| `If No Then Get Relevant Reason Remark` | `text` |  Nullable |
+| `Customer Order Hold Reason Category` | `text` |  Nullable |
+| `Holding Date` | `date` |  Nullable |
+| `Hold Remark` | `text` |  Nullable |
+| `Sales Cordinator` | `text` |  Nullable |
+| `Followup Status` | `text` |  Nullable |
+| `Credit Days` | `int4` |  Nullable |
+| `Credit Limit` | `text` |  Nullable |
+| `Calling Days` | `text` |  Nullable |
+| `Order No.` | `text` |  Nullable |
+| `Destination` | `text` |  Nullable |
+| `PO Number` | `text` |  Nullable |
+| `id` | `uuid` | Primary |
+
+## Table `client_master`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `uuid` | `uuid` | Primary |
+| `created_at` | `timestamptz` |  |
+| `company_name` | `text` |  |
+| `client_name` | `text` |  Nullable |
+| `client_mobile_number` | `text` |  Nullable |
+| `state` | `text` |  Nullable |
+| `billing_address` | `text` |  Nullable |
+| `gst_number` | `text` |  Nullable |
+| `company_group_name` | `text` |  Nullable |
+| `sc_name` | `text` |  Nullable |
+| `crm_name` | `text` |  Nullable |
+| `state_code` | `text` |  Nullable |
+| `credit_days` | `int4` |  Nullable |
+| `credit_limit` | `numeric` |  Nullable |
+| `updated_at` | `timestamptz` |  Nullable |
+| `client_code` | `text` |  Nullable Unique |
+| `isRelevant` | `bool` |  |
+
+## Table `SC_management`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `uuid` | `uuid` | Primary |
+| `key` | `text` |  |
+| `value` | `text` |  Nullable |
+| `category` | `text` |  Nullable |
+| `isActive` | `bool` |  |
+| `created_at` | `timestamptz` |  |
+| `updated_at` | `timestamptz` |  |
+
+## Table `dropdown`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `id` | `uuid` | Primary |
+| `category` | `text` |  |
+| `value` | `text` |  |
+| `created_at` | `timestamptz` |  |
+
+## Table `items`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `uuid` | `uuid` | Primary |
+| `item_name` | `text` |  Unique |
+| `item_code` | `text` |  Nullable |
+| `rate` | `numeric` |  Nullable |
+| `description` | `text` |  Nullable |
+
+
+## Table `consignor_details`
+
+### Columns
+
+| Name | Type | Constraints |
+|------|------|-------------|
+| `uuid` | `uuid` | Primary |
+| `state` | `text` |  Nullable |
+| `state_code` | `text` |  Nullable |
+| `data` | `jsonb` |  Nullable |
+| `address` | `text` |  Nullable |
+| `gstin` | `varchar` |  Nullable |
+| `msme_num` | `text` |  Nullable |
+| `pan_num` | `varchar` |  Nullable |
+| `reference_name` | `text` |  Nullable |
+| `contact_num` | `int8` |  Nullable |
+
+## Custom Types / Enums
+
+### `usertype`
+
+`ADMIN` | `USER`
+
+### `enable_reminder`
+
+`yes` | `no`
+
+### `userType`
+
+`user` | `admin`

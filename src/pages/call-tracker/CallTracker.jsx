@@ -2,12 +2,14 @@
 
 import { useState, useEffect, useContext, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { SearchIcon, ArrowRightIcon } from "../../components/Icons";
+import { SearchIcon, ArrowRightIcon, EyeIcon } from "../../components/Icons";
 import { AuthContext } from "../../App";
 import supabase from "../../utils/supabase";
 import SearchableDropdown from "../../components/SearchableDropdown";
 import DataTable from "../../components/DataTable";
 import CallTrackerFilter from "../../components/call-tracker/CallTrackerFilter";
+import NewCallTracker from "./CallTrackerForm";
+import { formatDateToDDMMYYYY } from "../../utils/formatDate";
 
 const slideIn = "animate-in slide-in-from-right duration-300";
 const slideOut = "animate-out slide-out-to-right duration-300";
@@ -122,24 +124,28 @@ function CallTracker() {
   });
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
 
+  // Modal states for Call Now and Details
+  const [selectedDetailsRow, setSelectedDetailsRow] = useState(null);
+  const [selectedCallNowRow, setSelectedCallNowRow] = useState(null);
+
   // Pending column visibility (checked = visible by default)
   const [pendingVisibleColumns, setPendingVisibleColumns] = useState({
     actions: true,
     edit: true,
-    lastFollowUpDate: true,
-    noOfFollowUps: true,
-    lastFollowUpStatus: true,
-    nextCallDate: true,
     leadId: true,
     companyName: true,
-    nextAction: true,
     personName: true,
     phoneNumber: true,
     leadSource: true,
     location: true,
     customerSay: true,
     enquiryStatus: true,
+    lastFollowUpDate: true,
+    noOfFollowUps: true,
+    lastFollowUpStatus: true,
     assignedTo: true,
+    nextAction: true,
+    nextCallDate: true,
     handlePerson: true,
     email: true,
     state: false,
@@ -161,16 +167,15 @@ function CallTracker() {
     creditLimit: false,
     additionalNotes: false,
     groupName: false,
+    details: true,
   });
   const [showPendingColumnDropdown, setShowPendingColumnDropdown] = useState(false);
 
   const pendingColumnOptions = [
     { key: "actions", label: "Actions" },
     { key: "edit", label: "Edit" },
-    { key: "nextCallDate", label: "Next Call Date" },
     { key: "leadId", label: "Lead No." },
     { key: "companyName", label: "Company Name" },
-    { key: "nextAction", label: "Next Action" },
     { key: "personName", label: "Person Name" },
     { key: "phoneNumber", label: "Phone No." },
     { key: "leadSource", label: "Enquiry Source" },
@@ -183,6 +188,8 @@ function CallTracker() {
     { key: "noOfFollowUps", label: "No. of FollowUps" },
     { key: "lastFollowUpStatus", label: "Last FollowUp Status" },
     { key: "assignedTo", label: "Assigned To" },
+    { key: "nextAction", label: "Next Action" },
+    { key: "nextCallDate", label: "Next Call Date" },
     { key: "state", label: "State" },
     { key: "address", label: "Address" },
     { key: "personName1", label: "Person Name 1" },
@@ -202,6 +209,7 @@ function CallTracker() {
     { key: "creditLimit", label: "Credit Limit" },
     { key: "additionalNotes", label: "Additional Notes" },
     { key: "groupName", label: "Group Name" },
+    { key: "details", label: "Details" },
   ];
 
   // Helper functions
@@ -249,41 +257,7 @@ function CallTracker() {
     }
   };
 
-  const formatDateToDDMMYYYY = (dateValue) => {
-    if (!dateValue) return "";
-
-    try {
-      if (typeof dateValue === "string" && dateValue.includes("-")) {
-        const [year, month, day] = dateValue.split("-");
-        return `${day.padStart(2, "0")}/${month.padStart(2, "0")}/${year}`;
-      }
-
-      if (typeof dateValue === "string" && dateValue.startsWith("Date(")) {
-        const dateString = dateValue.substring(5, dateValue.length - 1);
-        const [year, month, day] = dateString
-          .split(",")
-          .map((part) => Number.parseInt(part.trim()));
-
-        return `${day.toString().padStart(2, "0")}/${(month + 1)
-          .toString()
-          .padStart(2, "0")}/${year}`;
-      }
-
-      const date = new Date(dateValue);
-      if (!isNaN(date.getTime())) {
-        return `${date.getDate().toString().padStart(2, "0")}/${(
-          date.getMonth() + 1
-        )
-          .toString()
-          .padStart(2, "0")}/${date.getFullYear()}`;
-      }
-
-      return dateValue;
-    } catch (error) {
-      console.error("Error formatting date:", error);
-      return dateValue;
-    }
-  };
+  // Uses imported formatDateToDDMMYYYY from src/utils/formatDate
 
   // ✅ Filter History tab using Timestamp (not calling_days)
   const checkDateFilterHistory = (followUp, filterType) => {
@@ -427,7 +401,7 @@ function CallTracker() {
         });
 
         const { error } = await supabase
-          .from("leads_to_order")
+          .from("leads")
           .update(pendingUpdateData)
           .eq("id", editedData.id);
 
@@ -516,38 +490,38 @@ function CallTracker() {
 
       // Update both tables in parallel
       const [updateTrackerResult, updateLeadsOrderResult] = await Promise.allSettled([
-        // Update leads_tracker table
+        // Update call_tracker_for_leads table
         supabase
-          .from("leads_tracker")
+          .from("call_tracker_for_leads")
           .update(updateData)
           .eq("id", editedData.id),
 
-        // Update leads_to_order table using LD-Lead-No
+        // Update leads table using lead_no
         supabase
-          .from("leads_to_order")
+          .from("leads")
           .update(leadsToOrderUpdateData)
-          .eq("LD-Lead-No", leadNo)
+          .eq("lead_no", leadNo)
       ]);
 
-      // Check for errors in leads_tracker update
+      // Check for errors in call_tracker_for_leads update
       if (updateTrackerResult.status === 'rejected') {
-        throw new Error(`Error updating leads_tracker: ${updateTrackerResult.reason.message}`);
+        throw new Error(`Error updating call_tracker_for_leads: ${updateTrackerResult.reason.message}`);
       }
 
       const trackerError = updateTrackerResult.value.error;
       if (trackerError) {
-        throw new Error(`leads_tracker update failed: ${trackerError.message}`);
+        throw new Error(`call_tracker_for_leads update failed: ${trackerError.message}`);
       }
 
-      // Check for errors in leads_to_order update
+      // Check for errors in leads update
       if (updateLeadsOrderResult.status === 'rejected') {
-        console.warn(`Warning: Error updating leads_to_order: ${updateLeadsOrderResult.reason.message}`);
-        // Continue anyway as leads_tracker was updated successfully
+        console.warn(`Warning: Error updating leads: ${updateLeadsOrderResult.reason.message}`);
+        // Continue anyway as call_tracker_for_leads was updated successfully
       } else {
         const leadsOrderError = updateLeadsOrderResult.value.error;
         if (leadsOrderError) {
-          console.warn(`Warning: leads_to_order update failed: ${leadsOrderError.message}`);
-          // Continue anyway as leads_tracker was updated successfully
+          console.warn(`Warning: leads update failed: ${leadsOrderError.message}`);
+          // Continue anyway as call_tracker_for_leads was updated successfully
         }
       }
 
@@ -560,10 +534,10 @@ function CallTracker() {
     } catch (error) {
       console.error("Error updating:", error);
 
-      // If leads_tracker update failed but leads_to_order succeeded,
+      // If call_tracker_for_leads update failed but leads succeeded,
       // show a different message
-      if (error.message.includes('leads_tracker') && !error.message.includes('leads_to_order')) {
-        alert(`Partially updated: leads_to_order was updated but leads_tracker failed: ${error.message}`);
+      if (error.message.includes('call_tracker_for_leads') && !error.message.includes('leads')) {
+        alert(`Partially updated: leads was updated but call_tracker_for_leads failed: ${error.message}`);
       } else {
         alert(`Error updating: ${error.message}`);
       }
@@ -677,13 +651,13 @@ function CallTracker() {
 
       // Query for today's count
       let todayQuery = supabase
-        .from("leads_tracker")
+        .from("call_tracker_for_leads")
         .select("*", { count: "exact", head: true })
         .eq("Timestamp", todayStr);
 
       // Query for older count
       let olderQuery = supabase
-        .from("leads_tracker")
+        .from("call_tracker_for_leads")
         .select("*", { count: "exact", head: true })
         .lt("Timestamp", todayStr);
 
@@ -714,23 +688,23 @@ function CallTracker() {
     if (!isAdmin()) return; // Only admins need to see all SC names
 
     try {
-      // Fetch unique SC names from leads_to_order for pending tab
+      // Fetch unique SC names from leads for pending tab
       const { data: pendingScNames, error: pendingError } = await supabase
-        .from("leads_to_order")
-        .select("SC_Name")
-        .not("SC_Name", "is", null)
-        .not("SC_Name", "eq", "");
+        .from("leads")
+        .select("salesperson_name")
+        .not("salesperson_name", "is", null)
+        .not("salesperson_name", "eq", "");
 
       if (pendingError) {
         console.error("Error fetching pending SC names:", pendingError);
       }
 
-      // Fetch unique SC names from leads_tracker for history tab
+      // Fetch unique SC names from call_tracker_for_leads for history tab
       const { data: historyScNames, error: historyError } = await supabase
-        .from("leads_tracker")
-        .select("SC_Name")
-        .not("SC_Name", "is", null)
-        .not("SC_Name", "eq", "");
+        .from("call_tracker_for_leads")
+        .select("sc_name")
+        .not("sc_name", "is", null)
+        .not("sc_name", "eq", "");
 
       if (historyError) {
         console.error("Error fetching history SC names:", historyError);
@@ -738,11 +712,11 @@ function CallTracker() {
 
       // Extract and deduplicate SC names for each tab
       const uniquePendingNames = Array.from(
-        new Set((pendingScNames || []).map(item => item.SC_Name).filter(Boolean))
+        new Set((pendingScNames || []).map(item => item.salesperson_name || item.SC_Name).filter(Boolean))
       ).sort();
 
       const uniqueHistoryNames = Array.from(
-        new Set((historyScNames || []).map(item => item.SC_Name).filter(Boolean))
+        new Set((historyScNames || []).map(item => item.sc_name || item.SC_Name).filter(Boolean))
       ).sort();
 
       setUniqueScNames({
@@ -761,42 +735,102 @@ function CallTracker() {
       let allQuery, firstQuery, multiQuery;
 
       if (activeTab === "pending") {
-        const baseQuery = () => supabase
-          .from("leads_to_order")
-          .select("*", { count: "exact", head: true })
-          .not("Planned", "is", null)
-          .is("Actual", null);
+          // Fetch all tracker leads with status to find latest per lead
+          let allTrackerRecords = [];
+          let fetchMoreTracker = true;
+          let currentFromTracker = 0;
+          
+          while (fetchMoreTracker) {
+              const { data, error } = await supabase
+                .from("call_tracker_for_leads")
+                .select("lead_id, enquiry_received_status, created_at, sc_name")
+                .order("created_at", { ascending: false })
+                .range(currentFromTracker, currentFromTracker + 999);
+              
+              if (error) break;
+              if (data && data.length > 0) {
+                 allTrackerRecords = [...allTrackerRecords, ...data];
+                 currentFromTracker += 1000;
+                 if (data.length < 1000) fetchMoreTracker = false;
+              } else {
+                 fetchMoreTracker = false;
+              }
+          }
 
-        allQuery = baseQuery();
-        firstQuery = baseQuery().or('Enquiry_Received_Status.is.null,Enquiry_Received_Status.eq.""');
-        multiQuery = baseQuery().ilike("Enquiry_Received_Status", "%expected%");
+          const latestTrackerPerLead = new Map();
+          allTrackerRecords.forEach(row => {
+              if (row.lead_id && !latestTrackerPerLead.has(row.lead_id)) {
+                  latestTrackerPerLead.set(row.lead_id, row);
+              }
+          });
+
+          const existingLeadIds = Array.from(latestTrackerPerLead.keys());
+
+          const scCol = "salesperson_name";
+          let group1Query = supabase
+            .from("leads")
+            .select("id")
+            .not("planned_at", "is", null);
+
+          if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+            group1Query = group1Query.in(scCol, scNameFilter);
+          } else if (!isAdmin() && currentUser && currentUser.username) {
+            const usernamesToFilter = getUsernamesToFilter();
+            group1Query = group1Query.in(scCol, usernamesToFilter);
+          }
+
+          const { data: g1Leads } = await group1Query;
+          const existingIdsSet = new Set(existingLeadIds);
+          const g1Count = (g1Leads || []).filter(row => !existingIdsSet.has(row.id)).length;
+
+          // Group 2 calculation in memory
+          let group2Data = Array.from(latestTrackerPerLead.values()).filter(record => 
+              !record.enquiry_received_status || record.enquiry_received_status.toLowerCase() !== 'yes'
+          );
+
+          if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+              group2Data = group2Data.filter(r => r.sc_name && scNameFilter.includes(r.sc_name));
+          } else if (!isAdmin() && currentUser && currentUser.username) {
+              const usernamesToFilter = getUsernamesToFilter();
+              group2Data = group2Data.filter(r => r.sc_name && usernamesToFilter.includes(r.sc_name));
+          }
+
+          const totalPending = (g1Count || 0) + group2Data.length;
+
+          setFilterTypeCounts({
+            all: totalPending,
+            first: totalPending,
+            multi: totalPending,
+          });
+          return; // Early return since pending is calculated
       } else {
         const baseQuery = () => supabase
-          .from("leads_tracker")
+          .from("call_tracker_for_leads")
           .select("*", { count: "exact", head: true });
 
         allQuery = baseQuery();
-        firstQuery = baseQuery().or('Enquiry_Received_Status.is.null,Enquiry_Received_Status.eq."",Enquiry_Received_Status.eq."New"');
-        multiQuery = baseQuery().ilike("Enquiry_Received_Status", "%expected%");
+        firstQuery = baseQuery().or('enquiry_received_status.is.null,enquiry_received_status.eq."",enquiry_received_status.eq."New"');
+        multiQuery = baseQuery().ilike("enquiry_received_status", "%expected%");
 
         // Apply Company Filter to history counts for consistency
         if (companyFilter && companyFilter.length > 0) {
-          allQuery = allQuery.in("Company_Name", companyFilter);
-          firstQuery = firstQuery.in("Company_Name", companyFilter);
-          multiQuery = multiQuery.in("Company_Name", companyFilter);
+          allQuery = allQuery.in("company_name", companyFilter);
+          firstQuery = firstQuery.in("company_name", companyFilter);
+          multiQuery = multiQuery.in("company_name", companyFilter);
         }
       }
 
       // Apply SC Name Filter
+      const scCol = activeTab === "pending" ? "salesperson_name" : "sc_name";
       if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-        allQuery = allQuery.in("SC_Name", scNameFilter);
-        firstQuery = firstQuery.in("SC_Name", scNameFilter);
-        multiQuery = multiQuery.in("SC_Name", scNameFilter);
+        allQuery = allQuery.in(scCol, scNameFilter);
+        firstQuery = firstQuery.in(scCol, scNameFilter);
+        multiQuery = multiQuery.in(scCol, scNameFilter);
       } else if (!isAdmin() && currentUser && currentUser.username) {
         const usernamesToFilter = getUsernamesToFilter();
-        allQuery = allQuery.in("SC_Name", usernamesToFilter);
-        firstQuery = firstQuery.in("SC_Name", usernamesToFilter);
-        multiQuery = multiQuery.in("SC_Name", usernamesToFilter);
+        allQuery = allQuery.in(scCol, usernamesToFilter);
+        firstQuery = firstQuery.in(scCol, usernamesToFilter);
+        multiQuery = multiQuery.in(scCol, usernamesToFilter);
       }
 
       const [allRes, firstRes, multiRes] = await Promise.all([
@@ -829,7 +863,6 @@ function CallTracker() {
   const fetchFollowUpData = useCallback(
     async (page = 1, isLoadMore = false, searchTerm = "") => {
       try {
-
         if (isLoadMore) {
           setIsLoadingMore(true);
         } else {
@@ -841,236 +874,244 @@ function CallTracker() {
         const to = from + itemsPerPage - 1;
 
         if (activeTab === "pending") {
-          let pendingQuery = supabase
-            .from("leads_to_order")
-            .select("*", { count: "exact" })
-            .not("Planned", "is", null)
-            .is("Actual", null);
+          // Fetch chunked data for call_tracker_for_leads to find latest per lead
+          let allTrackerRecords = [];
+          let currentFromTracker = 0;
+          let fetchMoreTracker = true;
+          
+          while (fetchMoreTracker) {
+              const { data, error } = await supabase
+                .from("call_tracker_for_leads")
+                .select("*")
+                .order("created_at", { ascending: false })
+                .range(currentFromTracker, currentFromTracker + 999);
+              
+              if (error) {
+                 console.error("Error fetching tracker records:", error);
+                 break;
+              }
+              if (data && data.length > 0) {
+                 allTrackerRecords = [...allTrackerRecords, ...data];
+                 currentFromTracker += 1000;
+                 if (data.length < 1000) fetchMoreTracker = false;
+              } else {
+                 fetchMoreTracker = false;
+              }
+          }
 
+          const latestTrackerPerLead = new Map();
+          allTrackerRecords.forEach(row => {
+              if (row.lead_id && !latestTrackerPerLead.has(row.lead_id)) {
+                  latestTrackerPerLead.set(row.lead_id, row);
+              }
+          });
 
-          // Apply search filter to the query BEFORE pagination
+          const existingLeadIds = Array.from(latestTrackerPerLead.keys());
+
+          // Group 1 Query: leads where planned_at IS NOT NULL
+          let group1Query = supabase
+            .from("leads")
+            .select("*")
+            .not("planned_at", "is", null);
+
           if (searchTerm) {
-            pendingQuery = pendingQuery.or(
-              `Company_Name.ilike.%${searchTerm}%,"LD-Lead-No".ilike.%${searchTerm}%,Salesperson_Name.ilike.%${searchTerm}%,Phone_Number.ilike.%${searchTerm}%,Lead_Source.ilike.%${searchTerm}%,Location.ilike.%${searchTerm}%,"What_Did_The_Customer say?".ilike.%${searchTerm}%,Enquiry_Received_Status.ilike.%${searchTerm}%,SC_Name.ilike.%${searchTerm}%`
+            group1Query = group1Query.or(
+              `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,salesperson_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
             );
           }
 
-          // Apply Filter Type (First Followup / Expected)
-          if (filterType === "first") {
-            pendingQuery = pendingQuery.or('Enquiry_Received_Status.is.null,Enquiry_Received_Status.eq.""');
-          } else if (filterType === "multi") {
-            pendingQuery = pendingQuery.ilike("Enquiry_Received_Status", "%expected%");
-          }
-
-          // Apply user filter if not admin
           if (!isAdmin() && currentUser && currentUser.username) {
             const usernamesToFilter = getUsernamesToFilter();
-            pendingQuery = pendingQuery.in("SC_Name", usernamesToFilter);
+            group1Query = group1Query.in("salesperson_name", usernamesToFilter);
           }
 
-          // Apply SC name filter for admin
           if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-            pendingQuery = pendingQuery.in("SC_Name", scNameFilter);
+            group1Query = group1Query.in("salesperson_name", scNameFilter);
           }
 
-          // Add sorting by lead number (LD-Lead-No) in ascending order
-          pendingQuery = pendingQuery.order("id", { ascending: true });
+          // Execute Group 1 Query
+          let { data: g1DataRaw, error: g1Err } = await group1Query;
+          if (g1Err) console.error("Error fetching group 1 leads:", g1Err);
 
-          // Fetch all data in chunks of 500
-          let allData = [];
-          let currentFrom = 0;
-          const chunkSize = 500;
-          let fetchMore = true;
-          let totalRecordsCount = 0;
+          // Filter out existingLeadIds in JS to avoid URL length limits
+          const existingIdsSet = new Set(existingLeadIds);
+          const g1Data = (g1DataRaw || []).filter(row => !existingIdsSet.has(row.id));
 
-          while (fetchMore) {
-            const { data, error, count } = await pendingQuery.range(currentFrom, currentFrom + chunkSize - 1);
-            if (error) throw error;
-            if (count !== null) totalRecordsCount = count;
-            
-            if (data && data.length > 0) {
-              allData = [...allData, ...data];
-              currentFrom += chunkSize;
-              if (data.length < chunkSize) fetchMore = false;
-            } else {
-              fetchMore = false;
-            }
+          // Group 2 Data: latest tracker records where enquiry_received_status != 'yes'
+          let g2Data = Array.from(latestTrackerPerLead.values()).filter(record => 
+              !record.enquiry_received_status || record.enquiry_received_status.toLowerCase() !== 'yes'
+          );
+
+          // Apply filters to Group 2 in memory
+          if (searchTerm) {
+              const lowerTerm = searchTerm.toLowerCase();
+              g2Data = g2Data.filter(r => 
+                  (r.what_did_customer_say && r.what_did_customer_say.toLowerCase().includes(lowerTerm)) ||
+                  (r.sc_name && r.sc_name.toLowerCase().includes(lowerTerm)) ||
+                  (r.enquiry_received_status && r.enquiry_received_status.toLowerCase().includes(lowerTerm))
+              );
           }
-          
-          const data = allData;
-          const count = totalRecordsCount;
 
-          const filteredPending = (data || []).map((row) => ({
-            timestamp: row.Next_Call_Date
-              ? formatDateToDDMMYYYY(row.Next_Call_Date)
-              : "",
+          if (!isAdmin() && currentUser && currentUser.username) {
+              const usernamesToFilter = getUsernamesToFilter();
+              g2Data = g2Data.filter(r => r.sc_name && usernamesToFilter.includes(r.sc_name));
+          } else if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+              g2Data = g2Data.filter(r => r.sc_name && scNameFilter.includes(r.sc_name));
+          }
+
+          // For Group 2, fetch parent lead info
+          const g2LeadIds = Array.from(new Set(g2Data.map(r => r.lead_id).filter(Boolean)));
+          const leadsMap = {};
+          if (g2LeadIds.length > 0) {
+            const { data: g2Leads } = await supabase.from("leads").select("*").in("id", g2LeadIds);
+            (g2Leads || []).forEach(lead => {
+              leadsMap[lead.id] = lead;
+            });
+          }
+
+          // Map Group 1 (New leads never called before)
+          const mappedG1 = (g1Data || []).map(row => ({
+            timestamp: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
             id: row.id || "",
-            leadId: row["LD-Lead-No"] || "",
-            companyName: row["Company_Name"] || "",
-            personName: row["Salesperson_Name"] || "",
-            phoneNumber: row["Phone_Number"] || "",
-            leadSource: row["Lead_Source"] || "",
-            receiverName: row["Lead_Receiver_Name"] || "",
-            enquiryType: row["Enquiry_Type"] || "",
-            location: row["Location"] || "",
-            customerSay: row["What_Did_The_Customer say?"] || "",
-            enquiryStatus: row["Enquiry_Status"] || "",
-            enquiryReceivedStatus: row["Enquiry_Received_Status"] || "",
-            createdAt: row["Created_At"] || "",
-            nextCallDate: row["Next_Call_Date"] || "",
-            callingDays: row["Calling_Days"] || "",
-            priority: determinePriority(row["Lead_Source"] || ""),
-            assignedTo: row["SC_Name"] || row["assigned_user"] || "",
-            nextAction: row["Next_Action"] || "",
-            lastFollowUpDate: "", // will be enriched below
-            // New customer detail columns
-            Email_Address: row["Email_Address"] || "",
-            State: row["State"] || "",
-            Address: row["Address"] || "",
-            Person_name_1: row["Person_name_1"] || "",
-            Designation_1: row["Designation_1"] || "",
-            Phone_Number_1: row["Phone_Number_1"] || "",
-            Person_Name_2: row["Person_Name_2"] || "",
-            Designation_2: row["Designation_2"] || "",
-            Phone_Number_2: row["Phone_Number_2"] || "",
-            Person_Name_3: row["Person_Name_3"] || "",
-            Designation_3: row["Designation_3"] || "",
-            Phone_Number_3: row["Phone_Number_3"] || "",
-            NOB: row["NOB"] || "",
-            GST_Number: row["GST_Number"] || "",
-            Customer_Registration_Form: row["Customer_Registration Form"] || "",
-            Credit_Access: row["Credit _Access"] || "",
-            Credit_Days: row["Credit_Days"] || "",
-            Credit_Limit: row["Credit_Limit"] || "",
-            Additional_Notes: row["Additional_Notes"] || "",
-            handlePerson: row["handle_person"] || "",
-            groupName: row["Group_Name"] || "",
-            noOfFollowUps: 0, // will be enriched below
-            lastFollowUpStatus: "", // will be enriched below
+            leadId: row.lead_no || "",
+            companyName: row.company_name || "",
+            personName: row.salesperson_name || "",
+            phoneNumber: row.phone_number || "",
+            leadSource: row.lead_source || "",
+            receiverName: row.lead_receiver_name || "",
+            enquiryType: row.sales_type || "",
+            location: row.location || "",
+            customerSay: row.additional_notes || "",
+            enquiryStatus: row.lead_status || "",
+            createdAt: row.created_at || "",
+            nextCallDate: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
+            nextAction: "",
+            priority: determinePriority(row.lead_source || ""),
+            assignedTo: row.salesperson_name || "",
+            handlePerson: row.handle_person || "",
+            Email_Address: row.email_address || "",
+            State: row.state || "",
+            Address: row.address || "",
+            NOB: row.nob || "",
+            GST_Number: row.gst_number || "",
+            Customer_Registration_Form: row.customer_registration_form || "",
+            Credit_Access: row.credit_access || "",
+            Credit_Days: row.credit_days || "",
+            Credit_Limit: row.credit_limit || "",
+            Additional_Notes: row.additional_notes || "",
+            noOfFollowUps: 0,
+            lastFollowUpStatus: "",
+            lastFollowUpDate: "",
           }));
 
-          // Fetch most-recent Timestamp from leads_tracker per Lead_No
-          try {
-            const leadIds = [...new Set(filteredPending.map(r => r.leadId).filter(Boolean))];
-            if (leadIds.length > 0) {
-              const { data: trackerData } = await supabase
-                .from("leads_tracker")
-                .select('"LD-Lead-No", "Timestamp", "Enquiry_Received_Status"')
-                .in('"LD-Lead-No"', leadIds)
-                .order("Timestamp", { ascending: false }); // most recent first
+          // Calculate accurate noOfFollowUps for Pending tab from allTrackerRecords
+          const noOfFollowUpsMap = {};
+          allTrackerRecords.forEach(row => {
+             noOfFollowUpsMap[row.lead_id] = (noOfFollowUpsMap[row.lead_id] || 0) + 1;
+          });
 
-              if (trackerData && trackerData.length > 0) {
-                // Build map: first occurrence per lead = the most recent (latest) Timestamp
-                const lastFollowUpMap = {};
-                trackerData.forEach(tr => {
-                  const leadNo = tr["LD-Lead-No"];
-                  const ts = tr["Timestamp"];
-                  const status = tr["Enquiry_Received_Status"];
-                  if (!leadNo || !ts) return;
-                  if (!lastFollowUpMap[leadNo]) {
-                    lastFollowUpMap[leadNo] = {
-                      date: ts,
-                      status: status || "",
-                      count: 1
-                    }; // keep only the first = most recent
-                  } else {
-                    lastFollowUpMap[leadNo].count += 1;
-                  }
-                });
-                // Enrich each pending row
-                filteredPending.forEach(row => {
-                  if (row.leadId && lastFollowUpMap[row.leadId]) {
-                    row.lastFollowUpDate = formatDateToDDMMYYYY(lastFollowUpMap[row.leadId].date);
-                    row.noOfFollowUps = lastFollowUpMap[row.leadId].count;
-                    row.lastFollowUpStatus = lastFollowUpMap[row.leadId].status;
-                  }
-                });
-              }
-            }
-          } catch (trackerErr) {
-            console.warn("Could not fetch last follow-up dates:", trackerErr);
-          }
+          // Map Group 2 (Existing call_tracker entries where enquiry_received_status != 'yes')
+          const mappedG2 = g2Data.map(row => {
+            const parentLead = leadsMap[row.lead_id] || {};
+            const compName = (parentLead.company_name || row.company_name || "").trim();
+            const leadNo = parentLead.lead_no || row.lead_id || "";
+            return {
+              timestamp: row.next_call_date ? formatDateToDDMMYYYY(row.next_call_date) : (row.created_at ? formatDateToDDMMYYYY(row.created_at) : ""),
+              id: parentLead.id || row.lead_id || row.id,
+              leadId: leadNo,
+              companyName: parentLead.company_name || "",
+              personName: parentLead.salesperson_name || "",
+              phoneNumber: parentLead.phone_number || "",
+              leadSource: parentLead.lead_source || "",
+              receiverName: parentLead.lead_receiver_name || "",
+              enquiryType: row.enquiry_type || parentLead.sales_type || "",
+              location: parentLead.location || "",
+              customerSay: row.what_did_customer_say || parentLead.additional_notes || "",
+              enquiryStatus: row.enquiry_received_status || parentLead.lead_status || "",
+              createdAt: row.created_at || "",
+              nextCallDate: row.next_call_date ? formatDateToDDMMYYYY(row.next_call_date) : "",
+              nextAction: row.next_action || "",
+              priority: determinePriority(parentLead.lead_source || ""),
+              assignedTo: row.sc_name || parentLead.salesperson_name || "",
+              handlePerson: parentLead.handle_person || "",
+              Email_Address: parentLead.email_address || "",
+              State: row.enquiry_for_state || parentLead.state || "",
+              Address: parentLead.address || "",
+              NOB: row.project_name || parentLead.nob || "",
+              GST_Number: parentLead.gst_number || "",
+              Customer_Registration_Form: parentLead.customer_registration_form || "",
+              Credit_Access: parentLead.credit_access || "",
+              Credit_Days: parentLead.credit_days || "",
+              Credit_Limit: parentLead.credit_limit || "",
+              Additional_Notes: row.other_remarks || parentLead.additional_notes || "",
+              noOfFollowUps: noOfFollowUpsMap[row.lead_id] || 1,
+              lastFollowUpStatus: row.enquiry_received_status || "",
+              lastFollowUpDate: row.created_at ? formatDateToDDMMYYYY(row.created_at) : "",
+              callingCount: "-", // Pending tab typically doesn't need to do expensive lookups for these
+              enquiryCallingCount: "-",
+              companyCount: "-",
+            };
+          });
 
-          if (isLoadMore) {
-            setPendingFollowUps((prev) => [...prev, ...filteredPending]);
-          } else {
-            setPendingFollowUps(filteredPending);
-          }
-
-          // Check if there's more data based on count and current data length
-          const totalCount = count || 0;
-          const currentDataLength = isLoadMore
-            ? pendingFollowUps.length + filteredPending.length
-            : filteredPending.length;
-
-          const hasMore = currentDataLength < totalCount;
-          setHasMorePending(hasMore);
+          const combinedPending = [...mappedG1, ...mappedG2];
+          setPendingFollowUps(combinedPending);
+          setHasMorePending(false);
 
         } else {
-          // History tab data fetching
+          // History tab data fetching from call_tracker_for_leads
           let historyQuery = supabase
-            .from("leads_tracker")
+            .from("call_tracker_for_leads")
             .select("*", { count: "exact" });
 
-          // Apply search filter to the query BEFORE pagination
           if (searchTerm) {
             historyQuery = historyQuery.or(
-              `"LD-Lead-No".ilike.%${searchTerm}%,"What_Did_The_Customer say?".ilike.%${searchTerm}%,Leads_Tracking_Status.ilike.%${searchTerm}%,Enquiry_Received_Status.ilike.%${searchTerm}%,Enquiry_for_State.ilike.%${searchTerm}%,Project_Name.ilike.%${searchTerm}%,Enquiry_Type.ilike.%${searchTerm}%,Next_Action.ilike.%${searchTerm}%,SC_Name.ilike.%${searchTerm}%`
+              `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,next_action.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
             );
-            // historyQuery = historyQuery.or(
-            //   `"LD-Lead-No".ilike.%${searchTerm}%`
-            // );
           }
 
           // Apply user filter if not admin
           if (!isAdmin() && currentUser && currentUser.username) {
             const usernamesToFilter = getUsernamesToFilter();
-            historyQuery = historyQuery.in("SC_Name", usernamesToFilter);
+            historyQuery = historyQuery.in("sc_name", usernamesToFilter);
           }
 
           // Apply SC name filter for admin
           if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-            historyQuery = historyQuery.in("SC_Name", scNameFilter);
+            historyQuery = historyQuery.in("sc_name", scNameFilter);
           }
-
 
           // Apply Company Name Filter
           if (companyFilter && companyFilter.length > 0) {
-            // Handle precise matching or trim matching if necessary
-            historyQuery = historyQuery.in("Company_Name", companyFilter);
+            historyQuery = historyQuery.in("company_name", companyFilter);
           }
 
           // Apply Filter Type (First Followup / Expected)
           if (filterType === "first") {
-            historyQuery = historyQuery.or('Enquiry_Received_Status.is.null,Enquiry_Received_Status.eq."",Enquiry_Received_Status.eq."New"');
+            historyQuery = historyQuery.or('enquiry_received_status.is.null,enquiry_received_status.eq."",enquiry_received_status.eq."New"');
           } else if (filterType === "multi") {
-            historyQuery = historyQuery.ilike("Enquiry_Received_Status", "%expected%");
+            historyQuery = historyQuery.ilike("enquiry_received_status", "%expected%");
           }
 
-          // Apply date filter at database level
+          // Apply date filter
           if (dateFilter === "today") {
             const today = new Date();
-            const todayStr = `${today.getFullYear()}-${String(
-              today.getMonth() + 1
-            ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-            historyQuery = historyQuery.eq("Timestamp", todayStr);
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+            historyQuery = historyQuery.gte("created_at", todayStr);
           } else if (dateFilter === "older") {
             const today = new Date();
-            const todayStr = `${today.getFullYear()}-${String(
-              today.getMonth() + 1
-            ).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-            historyQuery = historyQuery.lt("Timestamp", todayStr);
+            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+            historyQuery = historyQuery.lt("created_at", todayStr);
           }
 
-          // Apply date range filter
           if (startDate) {
-            historyQuery = historyQuery.gte("Timestamp", startDate);
+            historyQuery = historyQuery.gte("created_at", startDate);
           }
           if (endDate) {
-            historyQuery = historyQuery.lte("Timestamp", endDate);
+            historyQuery = historyQuery.lte("created_at", endDate);
           }
 
-          // Fetch all data in chunks of 500
+          historyQuery = historyQuery.order("created_at", { ascending: false });
+
           let allData = [];
           let currentFrom = 0;
           const chunkSize = 500;
@@ -1094,221 +1135,122 @@ function CallTracker() {
           const data = allData;
           const count = totalRecordsCount;
 
-          // Update filtered count
           if (!isLoadMore) {
             setFilteredCount(count || 0);
           }
 
-          // Fetch Company Counts
-          const companyCountsMap = {};
-          if (data && data.length > 0) {
-            const uniqueCompanyNames = [...new Set(data.map(item => item["Company_Name"]).filter(Boolean))];
+          // Fetch parent lead details by lead_id
+          const leadIds = [...new Set((data || []).map((item) => item.lead_id).filter(Boolean))];
+          const leadsMap = {};
+          const uniqueLeadNosHistory = new Set();
+          
+          if (leadIds.length > 0) {
+            try {
+              const { data: leadsData } = await supabase
+                .from("leads")
+                .select("id, lead_no, company_name, salesperson_name, phone_number, handle_person, lead_source, lead_receiver_name")
+                .in("id", leadIds);
 
-            if (uniqueCompanyNames.length > 0) {
-              try {
-                let countQuery = supabase
-                  .from("leads_tracker")
-                  .select('"Company_Name"');
-
-                countQuery = countQuery.in('"Company_Name"', uniqueCompanyNames);
-
-                // Apply SC name filter if needed (to be consistent with what user sees)
-                if (!isAdmin() && currentUser && currentUser.username) {
-                  const usernamesToFilter = getUsernamesToFilter();
-                  countQuery = countQuery.in("SC_Name", usernamesToFilter);
-                }
-
-
-                if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-                  countQuery = countQuery.in("SC_Name", scNameFilter);
-                }
-
-                // Apply Filter Type to Count Query
-                if (filterType === "first") {
-                  countQuery = countQuery.or('Enquiry_Received_Status.is.null,Enquiry_Received_Status.eq."",Enquiry_Received_Status.eq."New"');
-                } else if (filterType === "multi") {
-                  countQuery = countQuery.ilike("Enquiry_Received_Status", "%expected%");
-                }
-
-                // Apply Date Filters to Count Query
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-                // Consolidate date filter logic matching the main query patterns
-                if (startDate) {
-                  countQuery = countQuery.gte("Timestamp", startDate);
-                }
-                if (endDate) {
-                  countQuery = countQuery.lte("Timestamp", endDate);
-                }
-
-                if (dateFilter === "today" && !startDate && !endDate) {
-                  const formattedToday = `${today.getDate().toString().padStart(2, "0")}/${(today.getMonth() + 1).toString().padStart(2, "0")}/${today.getFullYear()}`;
-                  countQuery = countQuery.eq("Timestamp", todayStr);
-                } else if (dateFilter === "older" && !startDate && !endDate) {
-                  countQuery = countQuery.lt("Timestamp", todayStr);
-                }
-
-                const { data: countData, error: countError } = await countQuery;
-
-                if (!countError && countData) {
-                  countData.forEach(item => {
-                    const name = (item["Company_Name"] || "").trim(); // Normalize name
-                    companyCountsMap[name] = (companyCountsMap[name] || 0) + 1;
-                  });
-                }
-              } catch (err) {
-                console.error("Error fetching company counts:", err);
+              if (leadsData) {
+                leadsData.forEach((lead) => {
+                  leadsMap[lead.id] = lead;
+                  if (lead.lead_no) uniqueLeadNosHistory.add(lead.lead_no);
+                });
               }
+            } catch (err) {
+              console.error("Error fetching leads for history tab:", err);
             }
           }
 
-          // Fetch Enquiry Calling Counts (New Logic)
+          // Fetch Company Counts
+          const companyCountsMap = {};
+          const uniqueCompanyNames = [...new Set((data || []).map(item => item.company_name || (leadsMap[item.lead_id] && leadsMap[item.lead_id].company_name)).filter(Boolean))];
+          if (uniqueCompanyNames.length > 0) {
+              const { data: countData } = await supabase
+                .from("call_tracker_for_leads")
+                .select("company_name")
+                .in("company_name", uniqueCompanyNames);
+              (countData || []).forEach(item => {
+                const name = (item.company_name || "").trim();
+                companyCountsMap[name] = (companyCountsMap[name] || 0) + 1;
+              });
+          }
+
+          // Fetch Enquiry Calling Counts
           const enquiryCountsMap = {};
-          if (data && data.length > 0) {
-            const uniqueLeadNos = [...new Set(data.map(item => item["LD-Lead-No"]).filter(Boolean))];
-
-            if (uniqueLeadNos.length > 0) {
-              try {
-                let enquiryCountQuery = supabase
-                  .from("enquiry_tracker")
-                  .select('"Enquiry No."');
-
-                enquiryCountQuery = enquiryCountQuery.in('"Enquiry No."', uniqueLeadNos);
-
-                // Apply Date Filters to Enquiry Count Query (matching historyQuery logic)
-                const today = new Date();
-                const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-
-                if (startDate) {
-                  enquiryCountQuery = enquiryCountQuery.gte("Timestamp", startDate);
-                }
-                if (endDate) {
-                  enquiryCountQuery = enquiryCountQuery.lte("Timestamp", endDate);
-                }
-
-                if (dateFilter === "today" && !startDate && !endDate) {
-                  enquiryCountQuery = enquiryCountQuery.eq("Timestamp", todayStr);
-                } else if (dateFilter === "older" && !startDate && !endDate) {
-                  enquiryCountQuery = enquiryCountQuery.lt("Timestamp", todayStr);
-                }
-
-                const { data: enquiryCountData, error: enquiryCountError } = await enquiryCountQuery;
-
-                if (!enquiryCountError && enquiryCountData) {
-                  enquiryCountData.forEach(item => {
-                    const leadNo = item["Enquiry No."];
-                    enquiryCountsMap[leadNo] = (enquiryCountsMap[leadNo] || 0) + 1;
-                  });
-                }
-              } catch (err) {
-                console.error("Error fetching enquiry counts:", err);
-              }
-            }
+          if (uniqueLeadNosHistory.size > 0) {
+              const { data: enqCountData } = await supabase
+                .from("enquiries")
+                .select("lead_no")
+                .in("lead_no", Array.from(uniqueLeadNosHistory));
+              (enqCountData || []).forEach(item => {
+                const ln = item.lead_no;
+                enquiryCountsMap[ln] = (enquiryCountsMap[ln] || 0) + 1;
+              });
           }
 
           // Fetch Follow-Ups Total Counts for History tab
           const historyFollowUpsCountMap = {};
           const historyLastStatusMap = {};
-          if (data && data.length > 0) {
-            const uniqueLeadNosHistory = [...new Set(data.map(item => item["LD-Lead-No"]).filter(Boolean))];
-
-            if (uniqueLeadNosHistory.length > 0) {
-              try {
-                const { data: trackerCountData, error: trackerCountError } = await supabase
-                  .from("leads_tracker")
-                  .select('"LD-Lead-No", "Enquiry_Received_Status", "Timestamp"')
-                  .in('"LD-Lead-No"', uniqueLeadNosHistory)
-                  .order("Timestamp", { ascending: false });
-
-                if (!trackerCountError && trackerCountData) {
-                  trackerCountData.forEach(item => {
-                    const leadNo = item["LD-Lead-No"];
-                    historyFollowUpsCountMap[leadNo] = (historyFollowUpsCountMap[leadNo] || 0) + 1;
-                    if (!historyLastStatusMap[leadNo]) {
-                      historyLastStatusMap[leadNo] = item["Enquiry_Received_Status"] || "";
-                    }
-                  });
-                }
-              } catch (err) {
-                console.error("Error fetching history total counts:", err);
+          if (leadIds.length > 0) {
+            const { data: trackerCountData } = await supabase
+              .from("call_tracker_for_leads")
+              .select("lead_id, enquiry_received_status, created_at")
+              .in("lead_id", leadIds)
+              .order("created_at", { ascending: false });
+              
+            (trackerCountData || []).forEach(item => {
+              const lid = item.lead_id;
+              historyFollowUpsCountMap[lid] = (historyFollowUpsCountMap[lid] || 0) + 1;
+              if (!historyLastStatusMap[lid]) {
+                historyLastStatusMap[lid] = item.enquiry_received_status || "";
               }
-            }
+            });
           }
 
-          // We need to fetch Phone_Number, Salesperson_Name, and handle_person from leads_to_order
-          const leadsDataMap = {};
-          if (data && data.length > 0) {
-            const uniqueLeadNosHistory = [...new Set(data.map(item => item["LD-Lead-No"]).filter(Boolean))];
-            if (uniqueLeadNosHistory.length > 0) {
-              try {
-                const { data: leadsData } = await supabase
-                  .from("leads_to_order")
-                  .select('"LD-Lead-No", "Salesperson_Name", "Phone_Number", "handle_person"')
-                  .in('"LD-Lead-No"', uniqueLeadNosHistory);
-                
-                if (leadsData) {
-                  leadsData.forEach(lead => {
-                    leadsDataMap[lead["LD-Lead-No"]] = {
-                      personName: lead["Salesperson_Name"] || "",
-                      phoneNumber: lead["Phone_Number"] || "",
-                      handlePerson: lead["handle_person"] || ""
-                    };
-                  });
-                }
-              } catch (err) {
-                console.error("Error fetching leads_to_order data for history:", err);
-              }
-            }
-          }
-
-          const filteredHistory = (data || []).map((row) => ({
-            id: row.id,
-            timestamp: row["Timestamp"]
-              ? formatDateToDDMMYYYY(row["Timestamp"])
-              : "",
-            leadNo: row["LD-Lead-No"] || "",
-            personName: leadsDataMap[row["LD-Lead-No"]]?.personName || "",
-            phoneNumber: leadsDataMap[row["LD-Lead-No"]]?.phoneNumber || "",
-            handlePerson: leadsDataMap[row["LD-Lead-No"]]?.handlePerson || "",
-            noOfFollowUps: historyFollowUpsCountMap[row["LD-Lead-No"]] || 0,
-            lastFollowUpStatus: historyLastStatusMap[row["LD-Lead-No"]] || "",
-            companyName: row["Company_Name"] || "",
-            companyCount: companyCountsMap[(row["Company_Name"] || "").trim()] || 0,
-            enquiryCallingCount: enquiryCountsMap[row["LD-Lead-No"]] || 0, // Map the new count
-            customerSay: row["What_Did_The_Customer_say?"] || "",
-            status: row["Leads_Tracking_Status"] || "",
-            enquiryStatus: row["Enquiry_Received_Status"] || "",
-            enquiryReceivedStatus: row["Enquiry_Received_Status"] || "",
-            enquiryReceivedDate: row["Enquiry_Received_Date"]
-              ? formatDateToDDMMYYYY(row["Enquiry_Received_Date"])
-              : "",
-            enquiryState: row["Enquiry_for_State"] || "",
-            projectName: row["Project_Name"] || "",
-            salesType: row["Enquiry_Type"] || "",
-            requiredProductDate: "",
-            projectApproxValue: row["Project_Approximate_Value"] || "",
-            itemName1: row["Item_Name1"] || "",
-            quantity1: row["Quantity1"] || "",
-            itemName2: row["Item_Name2"] || "",
-            quantity2: row["Quantity2"] || "",
-            itemName3: row["Item_Name3"] || "",
-            quantity3: row["Quantity3"] || "",
-            itemName4: row["Item_Name4"] || "",
-            quantity4: row["Quantity4"] || "",
-            itemName5: row["Item_Name5"] || "",
-            quantity5: row["Quantity5"] || "",
-            nextAction: row["Next_Action"] || "",
-            nextCallDate: row["Next_Call_Date"]
-              ? formatDateToDDMMYYYY(row["Next_Call_Date"])
-              : "",
-            nextCallTime: row["Next_Call_Time"]
-              ? formatNextCallTime(row["Next_Call_Time"])
-              : "",
-            historyDateFilter: "",
-            assignedTo: row.SC_Name || row.assigned_user || "",
-            itemQty: row.Item_Qty || "",
-          }));
+          const filteredHistory = (data || []).map((row) => {
+            const parentLead = leadsMap[row.lead_id] || {};
+            const compName = (parentLead.company_name || row.company_name || "").trim();
+            const leadNo = parentLead.lead_no || row.lead_id || "";
+            return {
+              id: row.id,
+              leadId: parentLead.lead_no || row.lead_id || "",
+              leadNo: parentLead.lead_no || "",
+              companyName: parentLead.company_name || row.company_name || "",
+              personName: parentLead.salesperson_name || "",
+              phoneNumber: parentLead.phone_number || "",
+              handlePerson: parentLead.handle_person || "",
+              customerSay: row.what_did_customer_say || "",
+              status: row.enquiry_received_status || "",
+              enquiryStatus: row.enquiry_received_status || "",
+              enquiryReceivedStatus: row.enquiry_received_status || "",
+              enquiryReceivedDate: row.enquiry_received_date
+                ? formatDateToDDMMYYYY(row.enquiry_received_date)
+                : "",
+              enquiryState: row.enquiry_for_state || "",
+              projectName: row.project_name || "",
+              salesType: row.enquiry_type || "",
+              projectApproxValue: row.project_approximate_value || "",
+              nextAction: row.next_action || "",
+              nextCallDate: row.next_call_date
+                ? formatDateToDDMMYYYY(row.next_call_date)
+                : "",
+              nextCallTime: row.next_call_time
+                ? formatNextCallTime(row.next_call_time)
+                : "",
+              assignedTo: row.sc_name || "",
+              timestamp: row.created_at
+                ? formatDateToDDMMYYYY(row.created_at)
+                : "",
+              delay: row.delay || "",
+              plannedAt: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
+              companyCount: companyCountsMap[compName] || 0,
+              callingCount: companyCountsMap[compName] || 0,
+              enquiryCallingCount: enquiryCountsMap[leadNo] || 0,
+              noOfFollowUps: historyFollowUpsCountMap[row.lead_id] || 0,
+              lastFollowUpStatus: historyLastStatusMap[row.lead_id] || "",
+            };
+          });
 
           if (isLoadMore) {
             setHistoryFollowUps((prev) => [...prev, ...filteredHistory]);
@@ -1316,15 +1258,12 @@ function CallTracker() {
             setHistoryFollowUps(filteredHistory);
           }
 
-          // Check if there's more data based on count and current data length
           const totalCount = count || 0;
           const currentDataLength = isLoadMore
             ? historyFollowUps.length + filteredHistory.length
             : filteredHistory.length;
 
-          const hasMore = currentDataLength < totalCount;
-          setHasMoreHistory(hasMore);
-
+          setHasMoreHistory(currentDataLength < totalCount);
         }
       } catch (error) {
         console.error("Error fetching follow-up data:", error);
@@ -1396,23 +1335,23 @@ function CallTracker() {
   useEffect(() => {
     const fetchAllCompanyNames = async () => {
       try {
-        // Fetch from leads_tracker (History)
+        // Fetch from call_tracker_for_leads (History)
         const { data: historyData, error: historyError } = await supabase
-          .from("leads_tracker")
-          .select('"Company_Name"');
+          .from("call_tracker_for_leads")
+          .select("*");
 
         let companies = [];
         if (!historyError && historyData) {
-          companies = historyData.map(item => item["Company_Name"]).filter(Boolean);
+          companies = historyData.map(item => item.company_name || item["Company_Name"]).filter(Boolean);
         }
 
-        // Optional: Fetch from leads_to_order (Pending) if needed to be comprehensive
+        // Fetch from leads (Pending)
         const { data: pendingData, error: pendingError } = await supabase
-          .from("leads_to_order")
-          .select("Company_Name");
+          .from("leads")
+          .select("company_name");
 
         if (!pendingError && pendingData) {
-          companies = [...companies, ...pendingData.map(item => item.Company_Name).filter(Boolean)];
+          companies = [...companies, ...pendingData.map(item => item.company_name || item["Company_Name"]).filter(Boolean)];
         }
 
         const uniqueCompanies = [...new Set(companies)].sort();
@@ -1673,15 +1612,25 @@ function CallTracker() {
         return (
           <td key="actions" className="sticky left-0 z-10 bg-white px-3 sm:px-4 py-3 sm:py-4 text-sm font-medium border-r border-gray-200">
             <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-2">
-              <Link
-                state={followUp.assignedTo}
-                to={`/call-tracker/form?leadId=${followUp.leadId}&leadNo=${followUp.leadId}`}
+              <button
+                onClick={() => setSelectedCallNowRow(followUp)}
+                className="w-full sm:w-auto px-2 sm:px-3 py-1 text-xs border border-purple-200 text-purple-600 hover:bg-purple-50 rounded-md transition-colors whitespace-nowrap"
               >
-                <button className="w-full sm:w-auto px-2 sm:px-3 py-1 text-xs border border-purple-200 text-purple-600 hover:bg-purple-50 rounded-md transition-colors whitespace-nowrap">
-                  Call Now <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
-                </button>
-              </Link>
+                Call Now <ArrowRightIcon className="ml-1 h-3 w-3 inline" />
+              </button>
             </div>
+          </td>
+        );
+      case "details":
+        return (
+          <td key="details" className="px-3 sm:px-4 py-3 sm:py-4 text-sm text-gray-500 whitespace-nowrap text-center">
+            <button
+              onClick={() => setSelectedDetailsRow(followUp)}
+              title="View Details"
+              className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-purple-50 rounded-full transition-colors inline-flex items-center justify-center"
+            >
+              <EyeIcon className="h-4 w-4" />
+            </button>
           </td>
         );
       case "edit":
@@ -3027,6 +2976,124 @@ function CallTracker() {
           />
         )}
       </div>
+
+      {/* Details Modal */}
+      {selectedDetailsRow && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full overflow-hidden border border-gray-100">
+            <div className="bg-gradient-to-r from-purple-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div>
+                <h3 className="text-lg font-bold text-white">Lead Details</h3>
+                <p className="text-purple-100 text-xs">{selectedDetailsRow.leadId}</p>
+              </div>
+              <button
+                onClick={() => setSelectedDetailsRow(null)}
+                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="p-6 space-y-4 max-h-[75vh] overflow-y-auto text-sm">
+              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-100">
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Company Name</span>
+                  <span className="font-semibold text-gray-900">{selectedDetailsRow.companyName || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Person Name</span>
+                  <span className="font-medium text-gray-800">{selectedDetailsRow.personName || "—"}</span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-100">
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Phone Number</span>
+                  <span className="font-medium text-gray-800">{selectedDetailsRow.phoneNumber || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Total Follow-ups</span>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold bg-purple-100 text-purple-800">
+                    {selectedDetailsRow.noOfFollowUps || 0}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 pb-3 border-b border-gray-100">
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Last Call Date</span>
+                  <span className="font-medium text-gray-800">{formatDateToDDMMYYYY(selectedDetailsRow.lastFollowUpDate || selectedDetailsRow.timestamp) || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-xs font-semibold text-gray-400 block uppercase">Last Follow-up Status</span>
+                  <span className="font-medium text-gray-800">{selectedDetailsRow.lastFollowUpStatus || selectedDetailsRow.enquiryStatus || "—"}</span>
+                </div>
+              </div>
+
+              <div className="pb-3 border-b border-gray-100">
+                <span className="text-xs font-semibold text-gray-400 block uppercase mb-1">What We Talked About (Customer Say)</span>
+                <p className="text-gray-700 bg-gray-50 p-3 rounded-lg text-xs leading-relaxed border border-gray-100">
+                  {selectedDetailsRow.customerSay || "No previous notes available."}
+                </p>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 text-xs">
+                <div>
+                  <span className="text-gray-400 block font-medium">Assigned To</span>
+                  <span className="text-gray-700">{selectedDetailsRow.assignedTo || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block font-medium">Handle Person</span>
+                  <span className="text-gray-700">{selectedDetailsRow.handlePerson || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block font-medium">Next Action</span>
+                  <span className="text-gray-700">{selectedDetailsRow.nextAction || "—"}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400 block font-medium">Next Call Date</span>
+                  <span className="text-gray-700">{formatDateToDDMMYYYY(selectedDetailsRow.nextCallDate) || "—"}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-gray-50 px-6 py-3 border-t border-gray-100 flex justify-end">
+              <button
+                onClick={() => setSelectedDetailsRow(null)}
+                className="px-4 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium text-xs rounded-md transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Call Now Form Modal */}
+      {selectedCallNowRow && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60 p-4 animate-in fade-in duration-200 overflow-y-auto">
+          <div className="relative bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto my-8">
+            <button
+              onClick={() => setSelectedCallNowRow(null)}
+              className="absolute top-3 right-3 z-10 p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-colors"
+              title="Close"
+            >
+              ✕
+            </button>
+            <NewCallTracker
+              initialLeadId={selectedCallNowRow.leadId}
+              initialLeadNo={selectedCallNowRow.leadId}
+              isModal={true}
+              onClose={(refreshed) => {
+                setSelectedCallNowRow(null);
+                if (refreshed) {
+                  fetchFollowUpData(historyPage, false, searchTerm);
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

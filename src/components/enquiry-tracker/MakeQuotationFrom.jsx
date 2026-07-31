@@ -41,8 +41,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
         const { count, error } = await supabase
           .from('enquiry_tracker')
           .select('*', { count: 'exact', head: true })
-          .eq('Enquiry No.', enquiryNo)
-          .in('Current Stage', ['Make Quotation', 'make-quotation']);
+          .in('current_stage', ['Make Quotation', 'make-quotation']);
 
         if (error) throw error;
         
