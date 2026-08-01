@@ -83,12 +83,12 @@ function DashboardCharts({ scNameFilter = "all", startDate, endDate }) {
         // Apply SC Name Filter
         if (isAdmin()) {
           if (scNameFilter !== "all") {
-            leadsCountQuery = leadsCountQuery.eq('salesperson_name', scNameFilter)
+            leadsCountQuery = leadsCountQuery.eq('sc_name', scNameFilter)
           }
         } else if (currentUser?.username) {
           // Standard user filter
           const usernamesToFilter = getUsernamesToFilter()
-          leadsCountQuery = leadsCountQuery.in('salesperson_name', usernamesToFilter)
+          leadsCountQuery = leadsCountQuery.in('sc_name', usernamesToFilter)
         }
 
         // Apply Date Filter

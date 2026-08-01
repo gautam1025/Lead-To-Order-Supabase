@@ -815,7 +815,7 @@ function NewEnquiryTracker() {
           if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
             const { data: ld } = await supabase
               .from("leads")
-              .select("handle_person, company_name, salesperson_name, phone_number, email_address, location, state, address, gst_number")
+              .select("sc_name, company_name, person_name, phone_number, email_address, location, state, address, gst_number")
               .eq("lead_no", formData.enquiryNo)
               .maybeSingle();
             leadData = ld;
@@ -828,26 +828,26 @@ function NewEnquiryTracker() {
             enqData = ed;
           }
 
-          resolvedHandlePerson = leadData?.handle_person;
+          resolvedHandlePerson = leadData?.sc_name || leadData?.handle_person;
 
           if (!resolvedHandlePerson) {
             // Resolve round-robin
             const { data: lastAssigned } = await supabase
               .from("leads")
-              .select("handle_person")
-              .in("handle_person", ["Nikita", "Priya"])
+              .select("sc_name")
+              .in("sc_name", ["Nikita", "Priya"])
               .order("created_at", { ascending: false })
               .limit(1);
 
-            if (lastAssigned && lastAssigned.length > 0 && lastAssigned[0].handle_person) {
-              resolvedHandlePerson = lastAssigned[0].handle_person === "Nikita" ? "Priya" : "Nikita";
+            if (lastAssigned && lastAssigned.length > 0 && lastAssigned[0].sc_name) {
+              resolvedHandlePerson = lastAssigned[0].sc_name === "Nikita" ? "Priya" : "Nikita";
             } else {
               resolvedHandlePerson = "Nikita";
             }
           }
 
           // Insert / Update client_master
-          const clientName = leadData?.salesperson_name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
+          const clientName = leadData?.person_name || leadData?.salesperson_name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
           const compName = leadData?.company_name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
 
 

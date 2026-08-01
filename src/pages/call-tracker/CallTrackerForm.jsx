@@ -396,7 +396,8 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
       // 3. Prepare update data for leads table
       const updateData = {
         lead_source: leadSource || null,
-        salesperson_name: salesPersonName || scName || null,
+        person_name: salesPersonName || null,
+        sc_name: scName || salesPersonName || null,
         company_name: companyName || null,
         phone_number: phoneNumber || null,
         location: billingLocation || null,

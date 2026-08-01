@@ -2709,7 +2709,7 @@ const handleSaveClick = async (index) => {
           return query.in("sales_coordinator_name", usernamesToFilter);
         } else if (role === "user" && currentUser?.username && table === "leads") {
           const usernamesToFilter = getUsernamesToFilter();
-          return query.in("salesperson_name", usernamesToFilter);
+          return query.in("sc_name", usernamesToFilter);
         }
         return query;
       };

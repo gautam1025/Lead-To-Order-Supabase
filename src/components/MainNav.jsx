@@ -38,6 +38,10 @@ function MainNav({ logout, setMobileMenuOpen }) {
       title: "Lead Master",
       description: "Manage lead source configurations"
     }
+    if (path.startsWith("/master/sc-distribution")) return {
+      title: "SC Distribution",
+      description: "Manage automatic Sales Coordinator assignments and round-robin rules"
+    }
     if (path.startsWith("/master/client")) return {
       title: "Client Master",
       description: "Manage client master list"

@@ -176,7 +176,7 @@ function Report() {
                 .select("*");
 
             if (filters.scName !== "all") {
-                leadsQuery = leadsQuery.eq("salesperson_name", filters.scName);
+                leadsQuery = leadsQuery.eq("sc_name", filters.scName);
             }
 
             const { data: leadsData, error: leadsError } = await leadsQuery;
@@ -519,7 +519,7 @@ function Report() {
                 .select("*");
 
             if (scPipelineFilters.scName !== "all") {
-                leadsQuery = leadsQuery.eq("salesperson_name", scPipelineFilters.scName);
+                leadsQuery = leadsQuery.eq("sc_name", scPipelineFilters.scName);
             }
 
             const { data: leadsData, error: leadsError } = await leadsQuery;

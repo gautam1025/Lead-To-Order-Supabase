@@ -229,7 +229,8 @@ function ExcelImportModal({ onClose, onSaved }) {
           lead_source: row.source || "",
           company_name: row.companyName || "",
           phone_number: row.phoneNumber || "",
-          salesperson_name: row.personName || row.scName || "",
+          person_name: row.personName || "",
+          sc_name: row.scName || row.handlePerson || "",
           location: row.location || "",
           email_address: row.email || "",
           state: row.state || "",
@@ -242,7 +243,6 @@ function ExcelImportModal({ onClose, onSaved }) {
           credit_access: "",
           credit_days: null,
           credit_limit: null,
-          handle_person: row.handlePerson || "",
         };
       });
 
@@ -480,9 +480,6 @@ function Leads() {
   const [showScNameDropdown, setShowScNameDropdown] = useState(false);
   const scDropdownRef = useRef(null);
 
-  const [activeScRules, setActiveScRules] = useState([]);
-  const [activeScCategory, setActiveScCategory] = useState(null);
-
   // Client Master records state & Dropdown refs
   const [clientMasterRecords, setClientMasterRecords] = useState([]);
   
@@ -513,13 +510,6 @@ function Leads() {
         await fetchDropdownData();
         await fetchClientMasterData();
         await generateNextLeadNumber();
-        
-        // Fetch SC Management Rules
-        const { data: scRulesData } = await supabase.from('SC_management').select('*').eq('isActive', true);
-        if (scRulesData && scRulesData.length > 0) {
-          setActiveScRules(scRulesData);
-          setActiveScCategory(scRulesData[0].category);
-        }
       } catch (error) {
         console.error("Error during initial data fetch:", error);
       } finally {
@@ -547,39 +537,53 @@ function Leads() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Auto-assign SC Name based on active category
+  // Auto-assign SC Name when Company Name is NOT in client_master
   useEffect(() => {
-    if (!activeScCategory || activeScRules.length === 0) return;
+    const assignScForUnregisteredCompany = async () => {
+      if (!formData.nob) return;
 
-    let currentValueToMatch = null;
-    switch (activeScCategory) {
-      case "Lead Source":
-        currentValueToMatch = formData.source;
-        break;
-      case "NOB":
-        currentValueToMatch = formData.nob;
-        break;
-      case "State":
-        currentValueToMatch = formData.state;
-        break;
-      case "Group Name":
-        currentValueToMatch = formData.groupName;
-        break;
-      case "Sales Type":
-        currentValueToMatch = formData.salesType;
-        break;
-      default:
-        break;
-    }
+      // Check if current company exists in client_master
+      const isCompanyInMaster = clientMasterRecords.some(
+        (c) => (c.company_name || "").toLowerCase().trim() === (formData.companyName || "").toLowerCase().trim() && formData.companyName?.trim() !== ""
+      );
 
-    if (currentValueToMatch) {
-      const matchedRule = activeScRules.find(rule => rule.key === currentValueToMatch);
-      if (matchedRule) {
-        setSearchScName(matchedRule.value);
-        setFormData(prev => ({ ...prev, scName: matchedRule.value }));
+      if (!isCompanyInMaster && formData.companyName?.trim()) {
+        const isReseller = formData.nob.trim().toUpperCase() === "RESELLER";
+        let targetScName = null;
+
+        if (isReseller) {
+          const { data: resData } = await supabase
+            .from("sc_distribution")
+            .select("sc_name")
+            .eq("rule_group", "RESELLER")
+            .eq("is_active", true)
+            .order("sequence_order", { ascending: true })
+            .limit(1);
+          if (resData && resData[0]?.sc_name) {
+            targetScName = resData[0].sc_name;
+          }
+        } else {
+          const { data: otherData } = await supabase
+            .from("sc_distribution")
+            .select("sc_name")
+            .eq("rule_group", "OTHER")
+            .eq("is_active", true)
+            .eq("is_next_in_line", true)
+            .limit(1);
+          if (otherData && otherData[0]?.sc_name) {
+            targetScName = otherData[0].sc_name;
+          }
+        }
+
+        if (targetScName) {
+          setSearchScName(targetScName);
+          setFormData((prev) => ({ ...prev, scName: targetScName }));
+        }
       }
-    }
-  }, [formData.source, formData.nob, formData.state, formData.groupName, formData.salesType, activeScCategory, activeScRules]);
+    };
+
+    assignScForUnregisteredCompany();
+  }, [formData.nob, formData.companyName, clientMasterRecords]);
 
   const fetchDropdownData = async () => {
     // Helper: fetch all values for a given category from the normalized dropdown table
@@ -822,6 +826,7 @@ function Leads() {
 
     try {
       // 1. Check if company exists in client_master
+      let wasNewCompany = false;
       const compNameTrimmed = (formData.companyName || "").trim();
       if (compNameTrimmed) {
         const { data: existingClient, error: clientCheckErr } = await supabase
@@ -831,6 +836,7 @@ function Leads() {
           .maybeSingle();
 
         if (!clientCheckErr && !existingClient) {
+          wasNewCompany = true;
           // Insert new row into client_master
           const newClientPayload = {
             company_name: compNameTrimmed,
@@ -895,7 +901,8 @@ function Leads() {
         lead_source: formData.source || "",
         company_name: formData.companyName || "",
         phone_number: formData.phoneNumber || "",
-        salesperson_name: formData.salespersonName || "",
+        person_name: formData.salespersonName || "",
+        sc_name: formData.scName || "",
         location: formData.location || "",
         email_address: formData.email || "",
         state: formData.state || "",
@@ -912,6 +919,33 @@ function Leads() {
 
       const { error } = await supabase.from("leads").insert([leadData]);
       if (error) throw error;
+
+      // 3. Perform SC Round-Robin Turn Rotation if company was brand new and NOB != RESELLER
+      if (wasNewCompany && (formData.nob || "").trim().toUpperCase() !== "RESELLER") {
+        try {
+          const { data: pool } = await supabase
+            .from("sc_distribution")
+            .select("id, is_next_in_line")
+            .eq("rule_group", "OTHER")
+            .eq("is_active", true)
+            .order("sequence_order", { ascending: true })
+            .order("created_at", { ascending: true });
+
+          if (pool && pool.length > 0) {
+            const currentIndex = pool.findIndex((item) => item.is_next_in_line);
+            const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % pool.length : 0;
+            const currentItem = currentIndex !== -1 ? pool[currentIndex] : null;
+            const nextItem = pool[nextIndex];
+
+            if (currentItem && currentItem.id !== nextItem.id) {
+              await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", currentItem.id);
+            }
+            await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
+          }
+        } catch (rrErr) {
+          console.error("Error advancing SC round-robin pointer:", rrErr);
+        }
+      }
 
       showNotification("Lead created successfully", "success");
       setFormData({
@@ -1088,42 +1122,18 @@ function Leads() {
                 </select>
               </div>
 
-              <div className="space-y-1 relative" ref={scDropdownRef}>
+              <div className="space-y-1">
                 <label htmlFor="scName" className="block text-xs font-semibold text-gray-700">
-                  SC Name
+                  SC Name <span className="text-xs text-gray-500 font-normal">(Auto-assigned)</span>
                 </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    id="scName"
-                    value={searchScName}
-                    onChange={(e) => {
-                      setSearchScName(e.target.value);
-                      setShowScNameDropdown(true);
-                    }}
-                    onFocus={() => setShowScNameDropdown(true)}
-                    className="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
-                    placeholder="Type to search SC Name"
-                  />
-                  <div className="absolute inset-y-0 right-0 flex items-center pr-2 pointer-events-none text-gray-400">
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                  </div>
-                </div>
-                {showScNameDropdown && filteredScNames.length > 0 && (
-                  <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-56 overflow-y-auto">
-                    {filteredScNames.map((name, index) => (
-                      <div
-                        key={index}
-                        className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${formData.scName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'}`}
-                        onClick={() => handleScNameChange(name)}
-                      >
-                        {name}
-                      </div>
-                    ))}
-                  </div>
-                )}
+                <input
+                  type="text"
+                  id="scName"
+                  value={formData.scName || searchScName || ""}
+                  readOnly
+                  className="w-full px-3 py-1.5 border border-gray-200 rounded-md bg-gray-100 text-gray-600 text-sm cursor-not-allowed font-medium shadow-inner"
+                  placeholder="Auto-assigned"
+                />
               </div>
             </div>
 

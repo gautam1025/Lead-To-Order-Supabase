@@ -21,6 +21,7 @@ export const TABLES = {
 
   CLIENT_MASTER: 'client_master',
   SC_MANAGEMENT: 'SC_management',
+  SC_DISTRIBUTION: 'sc_distribution',
   DROPDOWN: 'dropdown',
   ITEMS: 'items',
   LOGIN: 'login',

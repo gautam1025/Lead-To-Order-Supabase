@@ -358,39 +358,25 @@ function CallTracker() {
     try {
       if (activeTab === "pending") {
         const pendingUpdateData = {
-          "Next_Call_Date": convertDateToYYYYMMDD(editedData.timestamp),
-          "LD-Lead-No": editedData.leadId,
-          "Company_Name": editedData.companyName,
-          "Salesperson_Name": editedData.personName,
-          "Phone_Number": editedData.phoneNumber,
-          "Lead_Source": editedData.leadSource,
-          "Lead_Receiver_Name": editedData.receiverName,
-          "Enquiry_Type": editedData.enquiryType,
-          "Location": editedData.location,
-          "What_Did_The_Customer say?": editedData.customerSay,
-          "Enquiry_Status": editedData.enquiryStatus,
-          "SC_Name": editedData.assignedTo,
-          "Email_Address": editedData.Email_Address,
-          "State": editedData.State,
-          "Address": editedData.Address,
-          "Person_name_1": editedData.Person_name_1,
-          "Designation_1": editedData.Designation_1,
-          "Phone_Number_1": editedData.Phone_Number_1,
-          "Person_Name_2": editedData.Person_Name_2,
-          "Designation_2": editedData.Designation_2,
-          "Phone_Number_2": editedData.Phone_Number_2,
-          "Person_Name_3": editedData.Person_Name_3,
-          "Designation_3": editedData.Designation_3,
-          "Phone_Number_3": editedData.Phone_Number_3,
-          "NOB": editedData.NOB,
-          "GST_Number": editedData.GST_Number,
-          "Customer_Registration Form": editedData.Customer_Registration_Form,
-          "Credit _Access": editedData.Credit_Access,
-          "Credit_Days": editedData.Credit_Days,
-          "Credit_Limit": editedData.Credit_Limit,
-          "Additional_Notes": editedData.Additional_Notes,
-          "Next_Action": editedData.nextAction,
-          "handle_person": editedData.handlePerson
+          planned_at: editedData.timestamp ? new Date(convertDateToYYYYMMDD(editedData.timestamp)).toISOString() : undefined,
+          company_name: editedData.companyName,
+          person_name: editedData.personName,
+          phone_number: editedData.phoneNumber,
+          lead_source: editedData.leadSource,
+          lead_receiver_name: editedData.receiverName,
+          sales_type: editedData.enquiryType,
+          location: editedData.location,
+          additional_notes: editedData.customerSay || editedData.Additional_Notes,
+          sc_name: editedData.handlePerson || editedData.assignedTo,
+          email_address: editedData.Email_Address,
+          state: editedData.State,
+          address: editedData.Address,
+          nob: editedData.NOB,
+          gst_number: editedData.GST_Number,
+          customer_registration_form: editedData.Customer_Registration_Form,
+          credit_access: editedData.Credit_Access,
+          credit_days: editedData.Credit_Days ? Number(editedData.Credit_Days) : undefined,
+          credit_limit: editedData.Credit_Limit ? Number(editedData.Credit_Limit) : undefined,
         };
 
         // Remove undefined/null values
@@ -414,32 +400,20 @@ function CallTracker() {
         return;
       }
 
-      // Existing logic for History tab
-      // Map the JavaScript field names to actual database column names
+      // Logic for History tab (update call_tracker_for_leads)
       const updateData = {
-        Company_Name: editedData.companyName,
-        "What_Did_The_Customer_say?": editedData.customerSay,
-        Leads_Tracking_Status: editedData.status,
-        Enquiry_Received_Status: editedData.enquiryStatus,
-        Enquiry_Received_Date: convertDateToYYYYMMDD(editedData.enquiryReceivedDate),
-        Enquiry_for_State: editedData.enquiryState,
-        Project_Name: editedData.projectName,
-        Enquiry_Type: editedData.salesType,
-        Project_Approximate_Value: editedData.projectApproxValue,
-        Item_Name1: editedData.itemName1,
-        Quantity1: editedData.quantity1,
-        Item_Name2: editedData.itemName2,
-        Quantity2: editedData.quantity2,
-        Item_Name3: editedData.itemName3,
-        Quantity3: editedData.quantity3,
-        Item_Name4: editedData.itemName4,
-        Quantity4: editedData.quantity4,
-        Item_Name5: editedData.itemName5,
-        Quantity5: editedData.quantity5,
-        Next_Action: editedData.nextAction,
-        Next_Call_Date: convertDateToYYYYMMDD(editedData.nextCallDate),
-        Next_Call_Time: convertTimeTo24Hour(editedData.nextCallTime),
-        Item_Qty: editedData.itemQty,
+        company_name: editedData.companyName,
+        what_did_customer_say: editedData.customerSay,
+        enquiry_received_status: editedData.enquiryStatus || editedData.status,
+        enquiry_received_date: convertDateToYYYYMMDD(editedData.enquiryReceivedDate),
+        enquiry_for_state: editedData.enquiryState,
+        project_name: editedData.projectName,
+        enquiry_type: editedData.salesType,
+        project_approximate_value: editedData.projectApproxValue ? Number(editedData.projectApproxValue) : null,
+        next_action: editedData.nextAction,
+        next_call_date: convertDateToYYYYMMDD(editedData.nextCallDate),
+        next_call_time: convertTimeTo24Hour(editedData.nextCallTime),
+        sc_name: editedData.handlePerson || editedData.assignedTo,
       };
 
       // Remove undefined/null values
@@ -449,98 +423,22 @@ function CallTracker() {
         }
       });
 
-      // Get the lead number for updating leads_to_order table
-      const leadNo = editedData.leadNo;
+      const { error: trackerError } = await supabase
+        .from("call_tracker_for_leads")
+        .update(updateData)
+        .eq("id", editedData.id);
 
-      if (!leadNo) {
-        throw new Error("Lead number is required for updating leads_to_order table");
-      }
-
-      // Define the fields to update in leads_to_order
-      const leadsToOrderUpdateData = {
-        "Status": editedData.status,
-        "What_Did_The_Customer say?": editedData.customerSay,
-        "Enquiry_Received_Status": editedData.enquiryStatus,
-        "Enquiry_Received_Date": convertDateToYYYYMMDD(editedData.enquiryReceivedDate),
-        "Enquiry_for_State": editedData.enquiryState,
-        "Project_Name": editedData.projectName,
-        "Enquiry_Type": editedData.salesType,
-        "Project_Approximate_Value": editedData.projectApproxValue,
-        "Item_Name1": editedData.itemName1,
-        "Quantity1": editedData.quantity1,
-        "Item_Name2": editedData.itemName2,
-        "Quantity2": editedData.quantity2,
-        "Item_Name3": editedData.itemName3,
-        "Quantity3": editedData.quantity3,
-        "Item_Name4": editedData.itemName4,
-        "Quantity4": editedData.quantity4,
-        "Item_Name5": editedData.itemName5,
-        "Quantity5": editedData.quantity5,
-        "Next_Action": editedData.nextAction,
-        "Next_Call_Date": convertDateToYYYYMMDD(editedData.nextCallDate),
-        "Next_Call_Time": convertTimeTo24Hour(editedData.nextCallTime),
-      };
-
-      // Remove undefined/null values from leads_to_order update
-      Object.keys(leadsToOrderUpdateData).forEach((key) => {
-        if (leadsToOrderUpdateData[key] === undefined || leadsToOrderUpdateData[key] === null) {
-          delete leadsToOrderUpdateData[key];
-        }
-      });
-
-      // Update both tables in parallel
-      const [updateTrackerResult, updateLeadsOrderResult] = await Promise.allSettled([
-        // Update call_tracker_for_leads table
-        supabase
-          .from("call_tracker_for_leads")
-          .update(updateData)
-          .eq("id", editedData.id),
-
-        // Update leads table using lead_no
-        supabase
-          .from("leads")
-          .update(leadsToOrderUpdateData)
-          .eq("lead_no", leadNo)
-      ]);
-
-      // Check for errors in call_tracker_for_leads update
-      if (updateTrackerResult.status === 'rejected') {
-        throw new Error(`Error updating call_tracker_for_leads: ${updateTrackerResult.reason.message}`);
-      }
-
-      const trackerError = updateTrackerResult.value.error;
       if (trackerError) {
         throw new Error(`call_tracker_for_leads update failed: ${trackerError.message}`);
       }
 
-      // Check for errors in leads update
-      if (updateLeadsOrderResult.status === 'rejected') {
-        console.warn(`Warning: Error updating leads: ${updateLeadsOrderResult.reason.message}`);
-        // Continue anyway as call_tracker_for_leads was updated successfully
-      } else {
-        const leadsOrderError = updateLeadsOrderResult.value.error;
-        if (leadsOrderError) {
-          console.warn(`Warning: leads update failed: ${leadsOrderError.message}`);
-          // Continue anyway as call_tracker_for_leads was updated successfully
-        }
-      }
-
-      alert("Updated successfully in both tables!");
-
-      // Refresh data
+      alert("Updated successfully!");
       fetchFollowUpData(historyPage, false, searchTerm);
       setEditingRowId(null);
       setEditedData({});
     } catch (error) {
       console.error("Error updating:", error);
-
-      // If call_tracker_for_leads update failed but leads succeeded,
-      // show a different message
-      if (error.message.includes('call_tracker_for_leads') && !error.message.includes('leads')) {
-        alert(`Partially updated: leads was updated but call_tracker_for_leads failed: ${error.message}`);
-      } else {
-        alert(`Error updating: ${error.message}`);
-      }
+      alert(`Error updating: ${error.message}`);
     }
   };
 
@@ -691,9 +589,7 @@ function CallTracker() {
       // Fetch unique SC names from leads for pending tab
       const { data: pendingScNames, error: pendingError } = await supabase
         .from("leads")
-        .select("salesperson_name")
-        .not("salesperson_name", "is", null)
-        .not("salesperson_name", "eq", "");
+        .select("sc_name, person_name");
 
       if (pendingError) {
         console.error("Error fetching pending SC names:", pendingError);
@@ -712,7 +608,7 @@ function CallTracker() {
 
       // Extract and deduplicate SC names for each tab
       const uniquePendingNames = Array.from(
-        new Set((pendingScNames || []).map(item => item.salesperson_name || item.SC_Name).filter(Boolean))
+        new Set((pendingScNames || []).map(item => item.sc_name || item.person_name).filter(Boolean))
       ).sort();
 
       const uniqueHistoryNames = Array.from(
@@ -766,7 +662,7 @@ function CallTracker() {
 
           const existingLeadIds = Array.from(latestTrackerPerLead.keys());
 
-          const scCol = "salesperson_name";
+          const scCol = "sc_name";
           let group1Query = supabase
             .from("leads")
             .select("id")
@@ -821,7 +717,7 @@ function CallTracker() {
       }
 
       // Apply SC Name Filter
-      const scCol = activeTab === "pending" ? "salesperson_name" : "sc_name";
+      const scCol = "sc_name";
       if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
         allQuery = allQuery.in(scCol, scNameFilter);
         firstQuery = firstQuery.in(scCol, scNameFilter);
@@ -916,17 +812,17 @@ function CallTracker() {
 
           if (searchTerm) {
             group1Query = group1Query.or(
-              `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,salesperson_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
+              `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
             );
           }
 
           if (!isAdmin() && currentUser && currentUser.username) {
             const usernamesToFilter = getUsernamesToFilter();
-            group1Query = group1Query.in("salesperson_name", usernamesToFilter);
+            group1Query = group1Query.in("sc_name", usernamesToFilter);
           }
 
           if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-            group1Query = group1Query.in("salesperson_name", scNameFilter);
+            group1Query = group1Query.in("sc_name", scNameFilter);
           }
 
           // Execute Group 1 Query
@@ -975,7 +871,7 @@ function CallTracker() {
             id: row.id || "",
             leadId: row.lead_no || "",
             companyName: row.company_name || "",
-            personName: row.salesperson_name || "",
+            personName: row.person_name || row.salesperson_name || "",
             phoneNumber: row.phone_number || "",
             leadSource: row.lead_source || "",
             receiverName: row.lead_receiver_name || "",
@@ -987,8 +883,8 @@ function CallTracker() {
             nextCallDate: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
             nextAction: "",
             priority: determinePriority(row.lead_source || ""),
-            assignedTo: row.salesperson_name || "",
-            handlePerson: row.handle_person || "",
+            assignedTo: row.sc_name || row.handle_person || row.salesperson_name || "",
+            handlePerson: row.sc_name || row.handle_person || "",
             Email_Address: row.email_address || "",
             State: row.state || "",
             Address: row.address || "",
@@ -1020,7 +916,7 @@ function CallTracker() {
               id: parentLead.id || row.lead_id || row.id,
               leadId: leadNo,
               companyName: parentLead.company_name || "",
-              personName: parentLead.salesperson_name || "",
+              personName: parentLead.person_name || parentLead.salesperson_name || "",
               phoneNumber: parentLead.phone_number || "",
               leadSource: parentLead.lead_source || "",
               receiverName: parentLead.lead_receiver_name || "",
@@ -1032,8 +928,8 @@ function CallTracker() {
               nextCallDate: row.next_call_date ? formatDateToDDMMYYYY(row.next_call_date) : "",
               nextAction: row.next_action || "",
               priority: determinePriority(parentLead.lead_source || ""),
-              assignedTo: row.sc_name || parentLead.salesperson_name || "",
-              handlePerson: parentLead.handle_person || "",
+              assignedTo: row.sc_name || parentLead.sc_name || parentLead.handle_person || parentLead.salesperson_name || "",
+              handlePerson: row.sc_name || parentLead.sc_name || parentLead.handle_person || "",
               Email_Address: parentLead.email_address || "",
               State: row.enquiry_for_state || parentLead.state || "",
               Address: parentLead.address || "",
@@ -1148,7 +1044,7 @@ function CallTracker() {
             try {
               const { data: leadsData } = await supabase
                 .from("leads")
-                .select("id, lead_no, company_name, salesperson_name, phone_number, handle_person, lead_source, lead_receiver_name")
+                .select("id, lead_no, company_name, person_name, phone_number, sc_name, lead_source, lead_receiver_name")
                 .in("id", leadIds);
 
               if (leadsData) {
@@ -1217,9 +1113,9 @@ function CallTracker() {
               leadId: parentLead.lead_no || row.lead_id || "",
               leadNo: parentLead.lead_no || "",
               companyName: parentLead.company_name || row.company_name || "",
-              personName: parentLead.salesperson_name || "",
+              personName: parentLead.person_name || parentLead.salesperson_name || "",
               phoneNumber: parentLead.phone_number || "",
-              handlePerson: parentLead.handle_person || "",
+              handlePerson: row.sc_name || parentLead.sc_name || parentLead.handle_person || "",
               customerSay: row.what_did_customer_say || "",
               status: row.enquiry_received_status || "",
               enquiryStatus: row.enquiry_received_status || "",

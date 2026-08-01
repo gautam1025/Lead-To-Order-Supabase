@@ -50,11 +50,11 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
         // Apply SC Name Filter
         if (isAdmin()) {
           if (scNameFilter !== "all") {
-            leadsCountQuery = leadsCountQuery.eq('salesperson_name', scNameFilter)
+            leadsCountQuery = leadsCountQuery.eq('sc_name', scNameFilter)
           }
         } else if (currentUser?.username) {
           const usernamesToFilter = getUsernamesToFilter()
-          leadsCountQuery = leadsCountQuery.in('salesperson_name', usernamesToFilter)
+          leadsCountQuery = leadsCountQuery.in('sc_name', usernamesToFilter)
         }
 
         // Apply Date Filter
@@ -81,11 +81,11 @@ function DashboardMetrics({ scNameFilter = "all", startDate, endDate }) {
 
         if (isAdmin()) {
           if (scNameFilter !== "all") {
-            pendingFollowupsQuery = pendingFollowupsQuery.eq('salesperson_name', scNameFilter)
+            pendingFollowupsQuery = pendingFollowupsQuery.eq('sc_name', scNameFilter)
           }
         } else if (currentUser?.username) {
           const usernamesToFilter = getUsernamesToFilter()
-          pendingFollowupsQuery = pendingFollowupsQuery.in('salesperson_name', usernamesToFilter)
+          pendingFollowupsQuery = pendingFollowupsQuery.in('sc_name', usernamesToFilter)
         }
 
         if (startDate) {

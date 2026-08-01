@@ -16,6 +16,7 @@ import Footer from "./components/Footer"
 import Notification from "./components/Notification"
 import Sidebar from "./components/Sidebar"
 import LeadMaster from "./pages/Master/LeadMaster"
+import ScDistributionMaster from "./pages/Master/ScDistributionMaster"
 import ClientMaster from "./pages/Master/ClientMaster"
 import Dropdowns from "./pages/Master/Dropdowns"
 import Consignors from "./pages/Master/Consignors"
@@ -138,7 +139,7 @@ function App() {
         const { data: userLeads, error: userLeadsError } = await supabase
           .from('leads')
           .select('*')
-          .in('salesperson_name', usernamesToFetch)
+          .in('sc_name', usernamesToFetch)
           .order('created_at', { ascending: false })
           .limit(100);
 
@@ -395,6 +396,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <LeadMaster />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/sc-distribution"
+                    element={
+                      <ProtectedRoute>
+                        <ScDistributionMaster />
                       </ProtectedRoute>
                     }
                   />
