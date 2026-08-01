@@ -79,11 +79,33 @@ const QuotationForm = ({
           .from("consignor_details")
           .select("state, state_code, data, address, gstin, msme_num, pan_num, reference_name, contact_num");
 
-        // 2. Fetch consignee companies from client_master table
-        const { data: clientMasterData, error: clientMasterError } = await supabase
-          .from("client_master")
-          .select("company_name, billing_address, state, client_name, client_mobile_number, gst_number, state_code")
-          .eq("isRelevant", true);
+        // 2. Fetch consignee companies from client_master table in chunks of 500 records
+        const fetchClientMaster = async () => {
+          let allClients = [];
+          let from = 0;
+          const step = 500;
+          let fetchMore = true;
+
+          while (fetchMore) {
+            const { data, error } = await supabase
+              .from("client_master")
+              .select("company_name, billing_address, state, client_name, client_mobile_number, gst_number, state_code")
+              .eq("isRelevant", true)
+              .range(from, from + step - 1);
+
+            if (error) throw error;
+
+            if (data && data.length > 0) {
+              allClients = [...allClients, ...data];
+              from += step;
+              if (data.length < step) fetchMore = false;
+            } else {
+              fetchMore = false;
+            }
+          }
+          return { data: allClients, error: null };
+        };
+        const { data: clientMasterData, error: clientMasterError } = await fetchClientMaster();
 
         // 3. Fetch items from items table in chunks
         const fetchItems = async () => {
