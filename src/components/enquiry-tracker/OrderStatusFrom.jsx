@@ -15,7 +15,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
   const [quotationNumbers, setQuotationNumbers] = useState([])
   const [isLoadingQuotations, setIsLoadingQuotations] = useState(false)
   const [creditDaysOptions, setCreditDaysOptions] = useState(["30", "45", "60", "90"])
-  const [creditLimitOptions, setCreditLimitOptions] = useState(["10000", "25000", "50000", "100000"])
   const [approvedByOptions, setApprovedByOptions] = useState([])
 
   // State for items fetched from Make_Quotation table
@@ -56,7 +55,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           { data: ptData, error: ptErr },
           { data: tmData, error: tmErr },
           { data: cdData, error: cdErr },
-          { data: clData, error: clErr },
         ] = await Promise.all([
           fetchCategory("acceptance_via"),
           fetchCategory("payment_mode"),
@@ -65,7 +63,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           fetchCategory("payment_terms"),
           fetchCategory("transport_mode"),
           fetchCategory("credit_days"),
-          fetchCategory("credit_limit"),
         ]);
 
         const toValues = (arr) =>
@@ -78,7 +75,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         if (ptData?.length) setPaymentTermsOptions(toValues(ptData));
         if (tmData?.length) setTransportModeOptions(toValues(tmData));
         if (cdData?.length) setCreditDaysOptions(toValues(cdData));
-        if (clData?.length) setCreditLimitOptions(toValues(clData));
 
       } catch (err) {
         console.error("Error fetching order status dropdowns:", err);
@@ -89,7 +85,6 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         setPaymentTermsOptions(["30", "45", "60", "90"]);
         setTransportModeOptions(["Road", "Air", "Sea", "Rail"]);
         setCreditDaysOptions(["30", "45", "60", "90"]);
-        setCreditLimitOptions(["10000", "25000", "50000", "100000"]);
       }
     };
 
@@ -105,25 +100,38 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
       try {
         setIsLoadingQuotations(true);
 
-        let tableName, columnName, filterColumn;
+        const isLead = String(enquiryNo || '').toUpperCase().startsWith('LD-');
+        let recordUuid = null;
 
-        if (activeTab === "pending") {
-          tableName = "leads_to_order";
-          columnName = "Quotation_Number";
-          filterColumn = "LD-Lead-No";
-        } else if (activeTab === "directEnquiry") {
-          tableName = "enquiry_to_order";
-          columnName = "quotation_number";
-          filterColumn = "enquiry_no";
+        if (isLead) {
+          const { data: leadData } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("lead_no", enquiryNo)
+            .maybeSingle();
+          if (leadData) recordUuid = leadData.id;
         } else {
-          console.error("Invalid active tab:", activeTab);
+          const { data: enqData } = await supabase
+            .from("enquiries")
+            .select("id")
+            .eq("enquiry_no", enquiryNo)
+            .maybeSingle();
+          if (enqData) recordUuid = enqData.id;
+        }
+
+        if (!recordUuid) {
+          setQuotationNumbers([]);
           return;
         }
 
+        const tableName = isLead ? "enquiry_tracker_for_leads" : "enquiry_tracker";
+        const foreignKeyCol = isLead ? "lead_id" : "enquiry_id";
+
         const { data, error } = await supabase
           .from(tableName)
-          .select(columnName)
-          .eq(filterColumn, enquiryNo);
+          .select("quotation_number")
+          .eq(foreignKeyCol, recordUuid)
+          .not("quotation_number", "is", null);
 
         if (error) {
           console.error(`Supabase error fetching from ${tableName}:`, error);
@@ -131,7 +139,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         }
 
         if (data && data.length > 0) {
-          const uniqueQuotations = [...new Set(data.map(item => item[columnName]).filter(item => item))];
+          const uniqueQuotations = [...new Set(data.map(item => item.quotation_number).filter(Boolean))];
           setQuotationNumbers(uniqueQuotations);
 
           // Auto-select only if we don't already have a value
@@ -534,18 +542,17 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               <label htmlFor="creditLimit" className="block text-sm font-medium text-gray-700">
                 Credit Limit
               </label>
-              <select
+              <input
+                type="number"
+                step="1"
+                min="0"
                 id="creditLimit"
                 name="creditLimit"
+                placeholder="Enter credit limit"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 value={formData.creditLimit || ""}
                 onChange={handleChange}
-              >
-                <option value="">Select credit limit</option>
-                {creditLimitOptions.map((option, index) => (
-                  <option key={index} value={option}>{option}</option>
-                ))}
-              </select>
+              />
             </div>
 
             <div className="space-y-2">

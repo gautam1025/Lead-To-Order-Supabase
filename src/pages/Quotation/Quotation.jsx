@@ -145,7 +145,7 @@ function Quotation() {
       }
 
       query = query
-        .order("Timestamp", { ascending: false })
+        .order("created_at", { ascending: false })
         .range(currentOffset, currentOffset + 49);
 
       const { data, error } = await query;
@@ -157,7 +157,7 @@ function Quotation() {
         return;
       }
 
-      const newQuotations = data ? data.map((row) => row.Quotation_No).filter(Boolean) : [];
+      const newQuotations = data ? data.map((row) => row.quotation_no || row.Quotation_No).filter(Boolean) : [];
       
       setExistingQuotations(prev => append ? [...prev, ...newQuotations] : newQuotations);
       setHasMore(newQuotations.length === 50);
@@ -580,7 +580,29 @@ function Quotation() {
 
       // Try insert with retries on unique constraint (concurrent save)
       let authoritativeQuotationNo = null;
+      let authoritativeQuotationId = null;
       let lastError = null;
+
+      // Look up consignor and consignee UUIDs
+      let consignorId = null;
+      if (quotationData.consignorName) {
+        const { data: cData } = await supabase
+          .from("consignor_details")
+          .select("uuid")
+          .ilike("reference_name", quotationData.consignorName)
+          .maybeSingle();
+        consignorId = cData?.uuid || null;
+      }
+
+      let consigneeId = null;
+      if (quotationData.consigneeName) {
+        const { data: clData } = await supabase
+          .from("client_master")
+          .select("uuid")
+          .ilike("company_name", quotationData.consigneeName)
+          .maybeSingle();
+        consigneeId = clData?.uuid || null;
+      }
 
       // Extract prefix from current quotation number to maintain consistency
       const extractPrefix = (quotationNo) => {
@@ -596,72 +618,52 @@ function Quotation() {
       const currentPrefix = extractPrefix(candidateNo);
 
       if (isRevising && selectedQuotation) {
-        // If already a revision, keep it, else start with -01
         const partsInit = candidateNo.split("-");
         if (partsInit.length === 4) {
           candidateNo = `${candidateNo}-01`;
         }
       }
-      // No else block - use existing quotationNo as is
 
       for (let attempt = 0; attempt < 5; attempt++) {
-        // On attempts > 0, adjust candidate number
         if (attempt > 0) {
           if (isRevising && selectedQuotation) {
-            // Increment the revision number from the last attempted candidate
             candidateNo = nextRevision(candidateNo);
           } else {
-            // For base quotation, increment within same prefix
             const parts = candidateNo.split("-");
             if (parts.length === 4) {
               const lastNumber = parseInt(parts[3], 10);
               const newNumber = (lastNumber + 1).toString().padStart(3, "0");
               candidateNo = `${currentPrefix}-${newNumber}`;
             } else {
-              // Fallback: fetch latest but keep prefix
               candidateNo = await getNextQuotationNumber(currentPrefix.split("-")[0]);
             }
           }
         }
 
-        // Prepare data for Supabase
+        // Prepare snake_case data for refactored make_quotations table
         const quotationRecord = {
-          Quotation_No: candidateNo,
-          Quotation_Date: convertDateToISO(quotationData.date),
-          Prepared_By: quotationData.preparedBy,
-          Consigner_State: quotationData.consignorState,
-          Reference_Name: quotationData.consignorName,
-          Address: quotationData.consignorAddress,
-          Mobile: quotationData.consignorMobile,
-          Phone: quotationData.consignorPhone,
-          GSTIN: quotationData.consignorGSTIN,
-          State_Code: quotationData.consignorStateCode,
-          Company_Name: quotationData.consigneeName,
-          Consignee_Address: quotationData.consigneeAddress,
-          Ship_To: quotationData.shipTo || quotationData.consigneeAddress,
-          State: quotationData.consigneeState,
-          Contact_Name: quotationData.consigneeContactName,
-          Contact_No: quotationData.consigneeContactNo,
-          Consignee_GSTIN: quotationData.consigneeGSTIN,
-          Consignee_State_Code: quotationData.consigneeStateCode,
-          MSME_No: quotationData.msmeNumber,
-          Validity: quotationData.validity,
-          Payment_Terms: quotationData.paymentTerms,
-          Delivery: quotationData.delivery,
-          Freight: quotationData.freight,
-          Insurance: quotationData.insurance,
-          Taxes: quotationData.taxes,
-          Notes: quotationData.notes.filter((note) => note.trim()).join("|"),
-          Account_No: quotationData.accountNo,
-          Bank_Name: quotationData.bankName,
-          Bank_Address: quotationData.bankAddress,
-          IFSC_Code: quotationData.ifscCode,
-          Email: quotationData.email,
-          Website: quotationData.website,
-          Pan: quotationData.pan,
-          Items: quotationData.items,
-          Divine_Empire_10th_Anniversary_Special_Offer: specialOffersString,
-          Grand_Total: parseFloat(finalGrandTotal),
+          quotation_no: candidateNo,
+          quotation_date: convertDateToISO(quotationData.date),
+          prepared_by: quotationData.preparedBy || null,
+          consignor_id: consignorId,
+          consignee_client_id: consigneeId,
+          ship_to_address: quotationData.shipTo || quotationData.consigneeAddress || null,
+          consignee_contact_name: quotationData.consigneeContactName || null,
+          consignee_contact_no: quotationData.consigneeContactNo || null,
+          validity: quotationData.validity || null,
+          payment_terms: quotationData.paymentTerms || null,
+          delivery: quotationData.delivery || null,
+          freight: quotationData.freight || null,
+          insurance: quotationData.insurance || null,
+          taxes: quotationData.taxes || null,
+          notes: quotationData.notes ? quotationData.notes.filter((note) => note && note.trim()).join("|") : null,
+          account_no: quotationData.accountNo || null,
+          bank_name: quotationData.bankName || null,
+          bank_address: quotationData.bankAddress || null,
+          ifsc_code: quotationData.ifscCode || null,
+          items: quotationData.items || [],
+          special_offer: specialOffersString || null,
+          grand_total: parseFloat(finalGrandTotal) || 0,
         };
 
         const { data, error } = await supabase
@@ -669,21 +671,21 @@ function Quotation() {
           .insert([quotationRecord])
           .select();
 
-        if (!error) {
-          authoritativeQuotationNo = data && data[0] && (data[0].quotation_no || data[0].Quotation_No) ? (data[0].quotation_no || data[0].Quotation_No) : candidateNo;
+        if (!error && data && data.length > 0) {
+          authoritativeQuotationNo = data[0].quotation_no || candidateNo;
+          authoritativeQuotationId = data[0].id || null;
           break;
         }
 
         lastError = error;
         const isUniqueViolation =
-          (error.code && error.code === "23505") ||
-          (error.message && error.message.toLowerCase().includes("duplicate key value")) ||
-          (error.message && error.message.includes("quotation_no_unique"));
+          (error?.code && error.code === "23505") ||
+          (error?.message && error.message.toLowerCase().includes("duplicate key value")) ||
+          (error?.message && error.message.includes("quotation_no_unique"));
         if (!isUniqueViolation) {
-          throw new Error("Error saving quotation: " + error.message);
+          throw new Error("Error saving quotation: " + (error?.message || "Database insert failed"));
         }
 
-        // Small jittered delay before retry
         await new Promise((res) => setTimeout(res, 100 + Math.random() * 200));
       }
 
@@ -691,9 +693,39 @@ function Quotation() {
         throw new Error("Error saving quotation: " + (lastError?.message || "unique constraint conflict"));
       }
 
+      // Insert line items into make_quotation_items
+      if (authoritativeQuotationId) {
+        const itemsPayload = (quotationData.items || [])
+          .filter((it) => it && (it.name || it.code || Number(it.amount) > 0))
+          .map((it) => ({
+            quotation_id: authoritativeQuotationId,
+            quotation_no: authoritativeQuotationNo,
+            item_code: it.code || null,
+            item_name: it.name || "Item",
+            description: it.description || null,
+            quantity: Number(it.qty) || 0,
+            unit: it.units || "Nos",
+            rate: Number(it.rate) || 0,
+            gst_percent: Number(it.gst) || 0,
+            discount: Number(it.discount) || 0,
+            amount: Number(it.amount) || 0,
+            is_freight: Boolean(it.isFreight),
+          }));
+
+        if (itemsPayload.length > 0) {
+          const { error: itemsError } = await supabase
+            .from("make_quotation_items")
+            .insert(itemsPayload);
+
+          if (itemsError) {
+            console.error("Error saving quotation line items:", itemsError.message);
+          }
+        }
+      }
+
       // Now generate PDF using the authoritative number
       const pdfDataUri = await generatePDFFromData(
-        { ...quotationData, Quotation_No: authoritativeQuotationNo },
+        { ...quotationData, Quotation_No: authoritativeQuotationNo, quotation_no: authoritativeQuotationNo },
         selectedReferences,
         specialDiscount,
         hiddenColumns,
@@ -729,13 +761,11 @@ function Quotation() {
       }
 
       if (uploadedPdfUrl) {
-        // Update the record with the Pdf_Url
         await supabase
           .from("make_quotations")
           .update({ pdf_url: uploadedPdfUrl })
           .eq("quotation_no", authoritativeQuotationNo);
 
-        // Set the PDF URL for reference
         setPdfUrl(uploadedPdfUrl);
       }
 

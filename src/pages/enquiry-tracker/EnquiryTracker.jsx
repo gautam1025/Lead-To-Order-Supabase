@@ -418,21 +418,15 @@ function EnquiryTracker() {
   // Function to fetch all existing order numbers
   const fetchExistingOrderNumbers = async () => {
     try {
-      const [trackerRes, leadsRes, directRes] = await Promise.all([
+      const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
         supabase
           .from("enquiry_tracker")
-          .select('"Order No."')
-          .not('"Order No."', 'is', null)
-          .order('Timestamp', { ascending: false })
+          .select('order_no')
+          .not('order_no', 'is', null)
+          .order('created_at', { ascending: false })
           .limit(1000),
         supabase
-          .from("leads")
-          .select('Order_No')
-          .not('Order_No', 'is', null)
-          .order('id', { ascending: false })
-          .limit(1000),
-        supabase
-          .from("enquiries")
+          .from("enquiry_tracker_for_leads")
           .select('order_no')
           .not('order_no', 'is', null)
           .order('created_at', { ascending: false })
@@ -440,9 +434,8 @@ function EnquiryTracker() {
       ]);
 
       const allNumbers = [
-        ...(trackerRes.data || []).map(item => item["Order No."]),
-        ...(leadsRes.data || []).map(item => item.Order_No),
-        ...(directRes.data || []).map(item => item.order_no)
+        ...(trackerEnqRes.data || []).map(item => item.order_no),
+        ...(trackerLeadsRes.data || []).map(item => item.order_no)
       ];
 
       return allNumbers.filter(no => no && typeof no === 'string' && no.trim() !== "");
@@ -566,7 +559,7 @@ const handleSaveClick = async (index) => {
         });
 
         const { data: updatedData, error } = await supabase
-          .from("enquiry_to_order")
+          .from("enquiries")
           .update(directEnquiryUpdateData)
           .eq("id", updateId)
           .select();
@@ -611,52 +604,15 @@ const handleSaveClick = async (index) => {
       }
 
       const pendingUpdateData = {
-        "LD-Lead-No": editedData.lead_no,
-        "Lead_Receiver_Name": editedData.Lead_Receiver_Name,
-        "Lead_Source": editedData.Lead_Source,
-        "Phone_Number": editedData.Phone_Number,
-        "Salesperson_Name": editedData.salesperson_Name,
-        "Company_Name": editedData.Company_Name,
-        "Current_Stage": editedData.Current_Stage || editedData.currentStage,
-        "Calling_Days": editedData.Calling_Days,
-        "SC_Name": editedData.sc_name,
-        "What_Did_The_Customer say?": editedData.What_Did_The_Customer_Say,
-        "Enquiry_Received_Status": editedData.Enquiry_Received_Status,
-        "Enquiry_Received_Date": convertDateToYYYYMMDD(editedData.Enquiry_Received_Date),
-        "Enquiry_for_State": editedData.Enquiry_for_State,
-        "Project_Name": editedData.Project_Name,
-        "Enquiry_Type": editedData.Enquiry_Type,
-        "Enquiry_Approach": editedData.Enquiry_Approach,
-        "Project_Approximate_Value": editedData.Project_Approximate_Value,
-        "Next_Action": editedData.Next_Action,
-        "Next_Call_Date": convertDateToYYYYMMDD(editedData.Next_Call_Date_Field),
-        "Next_Call_Time": convertTimeTo24Hour(editedData.Next_Call_Time),
+        lead_no: editedData.lead_no || editedData.leadNo,
+        lead_receiver_name: editedData.Lead_Receiver_Name || editedData.leadReceiverName,
+        lead_source: editedData.Lead_Source || editedData.leadSource,
+        phone_number: editedData.Phone_Number || editedData.phoneNo,
+        salesperson_name: editedData.salesperson_Name || editedData.salespersonName || editedData.sc_name,
+        company_name: editedData.Company_Name || editedData.companyName,
+        state: editedData.Enquiry_for_State || editedData.enquiryForState,
+        sales_type: editedData.Enquiry_Type || editedData.enquiryType
       };
-
-      if (editedData.orderStatus?.toLowerCase() === "yes") {
-        Object.assign(pendingUpdateData, {
-          "Actual1": new Date().toISOString().slice(0, 10),
-          "Is_Order_Received?_Status": editedData.orderStatus,
-          "Order_No": editedData.Order_No || editedData.order_no || await generateNextOrderNumber(),
-          "Acceptance_Via": editedData.acceptanceVia,
-          "Payment_Mode": editedData.paymentMode,
-          "Destination": editedData.destination,
-          "Po Number": editedData.poNumber,
-          "Payment_Terms _In_Days": editedData.paymentTerms,
-          "Transport_Mode": editedData.transportMode,
-          "Credit_Limit": editedData.creditLimit,
-          "Credit_Days": editedData.creditDays,
-          "CONVEYED_FOR_REGISTRATION_FORM": editedData.conveyedForRegistration === "yes",
-          "Offer": editedData.orderVideo,
-          "Acceptance_File_Upload": editedData.acceptanceFile,
-          "REMARK": editedData.orderRemark,
-          ...leadItemUpdates,
-          ...(leadItems.length > 0 ? {
-            "Total Order Qty": String(leadTotalQty),
-            "Item/qty": leadItemQtyJson,
-          } : {})
-        });
-      }
 
       // Remove undefined/null values
       Object.keys(pendingUpdateData).forEach((key) => {
@@ -669,7 +625,7 @@ const handleSaveClick = async (index) => {
       console.log("Updating record with ID:", updateId);
 
       const { data: updatedData, error } = await supabase
-        .from("leads_to_order")
+        .from("leads")
         .update(pendingUpdateData)
         .eq("id", updateId)
         .select();
@@ -764,10 +720,10 @@ const handleSaveClick = async (index) => {
       console.log("Updating record with ID:", updateId);
 
       const { data: updatedData, error } = await supabase
-        .from("enquiry_to_order")
-        .update(directEnquiryUpdateData)
-        .eq("id", updateId)
-        .select();
+          .from("enquiries")
+          .update(directEnquiryUpdateData)
+          .eq("id", updateId)
+          .select();
 
       if (error) {
         console.error("Direct Enquiry update error:", error);
@@ -783,42 +739,48 @@ const handleSaveClick = async (index) => {
       return;
     }
 
-    // Handle History tab - existing logic for enquiry_tracker
+    // Handle History tab - existing logic for enquiry_tracker / enquiry_tracker_for_leads
+    const parseNumericField = (val) => {
+      if (val === "" || val === undefined || val === null) return null;
+      const num = parseFloat(val);
+      return isNaN(num) ? null : num;
+    };
+
     const updateData = {
-      "Enquiry Status": editedData.enquiryStatus,
-      "What Did Customer Say": editedData.customerFeedback,
-      "Current Stage": editedData.currentStage,
-      "Send Quotation No.": editedData.sendQuotationNo,
-      "Quotation Shared By": editedData.quotationSharedBy,
-      "Quotation Number": editedData.quotationNumber,
-      "Quotation Value Without Tax": editedData.valueWithoutTax,
-      "Quotation Value With Tax": editedData.valueWithTax,
-      "Quotation Copy": editedData.quotationUpload,
-      "Quotation Remarks": editedData.quotationRemarks,
-      "Quotation Validator Name": editedData.validatorName,
-      "Quotation Send Status": editedData.sendStatus,
-      "Quotation Validation Remark": editedData.validationRemark,
-      "Send Faq Video": editedData.faqVideo,
-      "Send Product Video": editedData.productVideo,
-      "Send Offer Video": editedData.offerVideo,
-      "Send Product Catalog": editedData.productCatalog,
-      "Send Product Image": editedData.productImage,
-      "Next Call Date": convertDateToYYYYMMDD(editedData.nextCallDate),
-      "Next Call Time": convertTimeTo24Hour(editedData.nextCallTime),
-      "Is Order Received? Status": editedData.orderStatus,
-      "Acceptance Via": editedData.acceptanceVia,
-      "Payment Mode": editedData.paymentMode,
-      "Payment Terms (In Days)": editedData.paymentTerms,
-      "Transport Mode": editedData.transportMode,
-      "CONVEYED FOR REGISTRATION FORM": editedData.registrationFrom,
-      "Acceptance File Upload": editedData.acceptanceFile,
-      Remark: editedData.orderRemark,
-      "Order Lost Apology Video": editedData.apologyVideo,
-      "If No Then Get Relevant Reason Status": editedData.reasonStatus,
-      "If No Then Get Relevant Reason Remark": editedData.reasonRemark,
-      "Customer Order Hold Reason Category": editedData.holdReason,
-      "Holding Date": convertDateToYYYYMMDD(editedData.holdingDate),
-      "Hold Remark": editedData.holdRemark,
+      enquiry_status: editedData.enquiryStatus,
+      what_did_customer_say: editedData.customerFeedback,
+      current_stage: editedData.currentStage,
+      send_quotation_no: editedData.sendQuotationNo,
+      quotation_shared_by: editedData.quotationSharedBy,
+      quotation_number: editedData.quotationNumber,
+      quotation_value_without_tax: parseNumericField(editedData.valueWithoutTax),
+      quotation_value_with_tax: parseNumericField(editedData.valueWithTax),
+      quotation_upload: editedData.quotationUpload,
+      quotation_remarks: editedData.quotationRemarks,
+      quotation_validator_name: editedData.validatorName,
+      quotation_send_status: editedData.sendStatus,
+      quotation_validation_remark: editedData.validationRemark,
+      send_faq_video: editedData.faqVideo === "Yes" || editedData.faqVideo === true || editedData.faqVideo === "yes",
+      send_product_video: editedData.productVideo === "Yes" || editedData.productVideo === true || editedData.productVideo === "yes",
+      send_offer_video: editedData.offerVideo === "Yes" || editedData.offerVideo === true || editedData.offerVideo === "yes",
+      send_product_catalog: editedData.productCatalog === "Yes" || editedData.productCatalog === true || editedData.productCatalog === "yes",
+      send_product_image: editedData.productImage === "Yes" || editedData.productImage === true || editedData.productImage === "yes",
+      next_call_date: convertDateToYYYYMMDD(editedData.nextCallDate),
+      next_call_time: convertTimeTo24Hour(editedData.nextCallTime),
+      is_order_received_status: editedData.orderStatus,
+      acceptance_via: editedData.acceptanceVia,
+      payment_mode: editedData.paymentMode,
+      payment_terms_days: parseNumericField(editedData.paymentTerms),
+      transport_mode: editedData.transportMode,
+      conveyed_for_registration_form: editedData.registrationFrom === "Yes" || editedData.registrationFrom === true || editedData.registrationFrom === "yes",
+      acceptance_file_upload: editedData.acceptanceFile,
+      remark: editedData.orderRemark,
+      order_lost_apology_video: editedData.apologyVideo,
+      if_no_reason_status: editedData.reasonStatus,
+      if_no_reason_remark: editedData.reasonRemark,
+      customer_order_hold_reason_category: editedData.holdReason,
+      holding_date: convertDateToYYYYMMDD(editedData.holdingDate),
+      hold_remark: editedData.holdRemark,
     };
 
     // Remove undefined/null values
@@ -839,225 +801,20 @@ const handleSaveClick = async (index) => {
     const isLeadNumber = identifier.toUpperCase().startsWith('LD-');
     const isEnquiryNumber = identifier.toUpperCase().startsWith('EN-');
 
-    // Always update enquiry_tracker
-    const updatePromises = [
-      supabase
-        .from("enquiry_tracker")
-        .update(updateData)
-        .eq("id", editedData.id)
-    ];
+    // Update tracking table
+    const tableName = isLeadNumber ? "enquiry_tracker_for_leads" : "enquiry_tracker";
+    const { error } = await supabase
+      .from(tableName)
+      .update(updateData)
+      .eq("id", editedData.id);
 
-    let leadsOrderUpdate = null;
-    let enquiryOrderUpdate = null;
-
-    // If it's a lead number (LD-01), update leads_to_order
-    if (isLeadNumber) {
-      // Define the fields to update in leads_to_order table
-      const leadsToOrderUpdateData = {
-        "Enquiry_Status": editedData.enquiryStatus,
-        "What_Did_Customer_Say": editedData.customerFeedback,
-        "Current_Stage": editedData.currentStage,
-        "Send_Quotation_No.": editedData.sendQuotationNo,
-        "Quotation_Shared_By": editedData.quotationSharedBy,
-        "Quotation_Number": editedData.quotationNumber,
-        "Quotation_Value_With_Tax": editedData.valueWithTax,
-        "Quotation_Upload": editedData.quotationUpload,
-        "Quotation_Remarks": editedData.quotationRemarks,
-        "Quotation_Validator_Name": editedData.validatorName,
-        "Quotation_Send_Status": editedData.sendStatus,
-        "Quotation_Validation_Remark": editedData.validationRemark,
-        "Send_FAQ_Video": editedData.faqVideo,
-        "Send_Product_Video": editedData.productVideo,
-        "Send_Offer_Video": editedData.offerVideo,
-        "Send_Product_Catalog": editedData.productCatalog,
-        "Send_Product_Image": editedData.productImage,
-        "Is_Order_Received?_Status": editedData.orderStatus,
-        "Acceptance_Via": editedData.acceptanceVia,
-        "Payment_Mode": editedData.paymentMode,
-        "Payment_Terms _In_Days": editedData.paymentTerms,
-        "Offer": editedData.offer || "",
-        "Acceptance_File_Upload": editedData.acceptanceFile,
-        "REMARK": editedData.orderRemark,
-        "Order_Lost_Apology_Video": editedData.apologyVideo,
-        "If_No_Then_Get_Relevant_Reason_Status": editedData.reasonStatus,
-        "If_No_Then_Get_Relevant_Reason_Remark": editedData.reasonRemark,
-        "CUSTOMER_ORDER_HOLD_REASON_CATEGORY": editedData.holdReason,
-        "HOLDING_DATE": convertDateToYYYYMMDD(editedData.holdingDate),
-        "HOLD_REMARK": editedData.holdRemark,
-        "Leads_Tracking_Status": editedData.status || "",
-        "Order_No": editedData.order_no || "",
-        "Transport_Mode": editedData.transportMode,
-        "CONVEYED_FOR_REGISTRATION_FORM": editedData.registrationFrom,
-        "Quotation_Value_Without_Tax": editedData.valueWithoutTax,
-        "Next Call Date_1": convertDateToYYYYMMDD(editedData.nextCallDate),
-        "Next Call Time_1": convertTimeTo24Hour(editedData.nextCallTime),
-      };
-
-      if (editedData.orderStatus?.toLowerCase() === "yes" || editedData.orderStatus?.toLowerCase() === "no") {
-        leadsToOrderUpdateData.Actual1 = new Date().toISOString();
-      }
-
-      // Remove undefined/null values
-      Object.keys(leadsToOrderUpdateData).forEach((key) => {
-        if (leadsToOrderUpdateData[key] === undefined || leadsToOrderUpdateData[key] === null) {
-          delete leadsToOrderUpdateData[key];
-        }
-      });
-
-      leadsOrderUpdate = supabase
-        .from("leads_to_order")
-        .update(leadsToOrderUpdateData)
-        .eq('"LD-Lead-No"', identifier); // Exact match on LD-Lead-No
-    }
-
-    // If it's an enquiry number (EN-01), update enquiry_to_order
-    if (isEnquiryNumber) {
-      // Helper function to convert empty string to null for numeric fields
-      const parseNumericField = (value) => {
-        if (value === "" || value === undefined || value === null) return null;
-        // Try to parse as number
-        const num = parseFloat(value);
-        return isNaN(num) ? null : num;
-      };
-
-      // Define the fields to update in enquiry_to_order table
-      const enquiryToOrderUpdateData = {
-        enquiry_status: editedData.enquiryStatus,
-        customer_feedback: editedData.customerFeedback,
-        current_stage: editedData.currentStage,
-        send_quotation_no: editedData.sendQuotationNo,
-        quotation_shared_by: editedData.quotationSharedBy,
-        quotation_number: editedData.quotationNumber,
-        // Fix: Convert numeric fields properly
-        quotation_value_without_tax: parseNumericField(editedData.valueWithoutTax),
-        quotation_value_with_tax: parseNumericField(editedData.valueWithTax),
-        quotation_upload: editedData.quotationUpload,
-        quotation_remarks: editedData.quotationRemarks,
-        quotation_validator_name: editedData.validatorName,
-        quotation_send_status: editedData.sendStatus,
-        quotation_validation_remark: editedData.validationRemark,
-        send_faq_video: editedData.faqVideo === "Yes" || editedData.faqVideo === "yes" || editedData.faqVideo === true,
-        send_product_video: editedData.productVideo === "Yes" || editedData.productVideo === "yes" || editedData.productVideo === true,
-        send_offer_video: editedData.offerVideo === "Yes" || editedData.offerVideo === "yes" || editedData.offerVideo === true,
-        send_product_catalog: editedData.productCatalog === "Yes" || editedData.productCatalog === "yes" || editedData.productCatalog === true,
-        send_product_image: editedData.productImage === "Yes" || editedData.productImage === "yes" || editedData.productImage === true,
-        next_call_date: convertDateToYYYYMMDD(editedData.nextCallDate),
-        next_call_time: convertTimeTo24Hour(editedData.nextCallTime),
-        is_order_received_status: editedData.orderStatus,
-        acceptance_via: editedData.acceptanceVia,
-        payment_mode: editedData.paymentMode,
-        // Fix: Convert numeric field properly
-        payment_terms_days: parseNumericField(editedData.paymentTerms),
-        acceptance_file_upload: editedData.acceptanceFile,
-        remark: editedData.orderRemark,
-        order_lost_apology_video: editedData.apologyVideo,
-        if_no_reason_status: editedData.reasonStatus,
-        if_no_reason_remark: editedData.reasonRemark,
-        customer_order_hold_reason_category: editedData.holdReason,
-        holding_date: convertDateToYYYYMMDD(editedData.holdingDate),
-        hold_remark: editedData.holdRemark,
-        transport_mode: editedData.transportMode,
-        conveyed_for_registration_form: editedData.registrationFrom === "Yes" || editedData.registrationFrom === "yes" || editedData.registrationFrom === true,
-        order_no: editedData.order_no || "",
-        // Fix: Convert numeric field properly
-        amount_with_gst: parseNumericField(editedData.valueWithTax),
-        destination: editedData.destination || "",
-        po_number: editedData.po_number || "",
-      };
-
-      if (editedData.orderStatus?.toLowerCase() === "yes" || editedData.orderStatus?.toLowerCase() === "no") {
-        enquiryToOrderUpdateData.actual1 = new Date().toISOString();
-      }
-
-      // Remove undefined/null values
-      Object.keys(enquiryToOrderUpdateData).forEach((key) => {
-        if (enquiryToOrderUpdateData[key] === undefined || enquiryToOrderUpdateData[key] === null) {
-          delete enquiryToOrderUpdateData[key];
-        }
-      });
-
-      // FIX: Use ilike for case-insensitive matching
-      const normalizedIdentifier = identifier.trim().toUpperCase();
-      
-      // Debug: Check if record exists
-      console.log("Looking for enquiry_no:", normalizedIdentifier);
-      
-      // First check if the record exists
-      const { data: existingRecord, error: checkError } = await supabase
-        .from("enquiry_to_order")
-        .select("enquiry_no")
-        .ilike("enquiry_no", `%${normalizedIdentifier}%`)
-        .limit(1);
-        
-      if (checkError) {
-        console.error("Error checking record existence:", checkError);
-      }
-      
-      if (!existingRecord || existingRecord.length === 0) {
-        console.log(`Record ${normalizedIdentifier} not found in enquiry_to_order`);
-        // Set a flag to indicate record doesn't exist
-        enquiryOrderSuccess = false;
-        successMessage += " Note: enquiry_to_order record not found.";
-      } else {
-        console.log(`Found record: ${existingRecord[0].enquiry_no}`);
-        enquiryOrderUpdate = supabase
-          .from("enquiry_to_order")
-          .update(enquiryToOrderUpdateData)
-          .ilike("enquiry_no", normalizedIdentifier);
-      }
-    }
-
-    // Add conditional updates to promises array
-    if (leadsOrderUpdate) updatePromises.push(leadsOrderUpdate);
-    if (enquiryOrderUpdate) updatePromises.push(enquiryOrderUpdate);
-
-    // Execute all relevant updates
-    const results = await Promise.allSettled(updatePromises);
-
-    // Check results
-    let successMessage = "Updated successfully in enquiry_tracker";
-    let enquiryTrackerSuccess = false;
-    let leadsOrderSuccess = false;
-    let enquiryOrderSuccess = false;
-
-    results.forEach((result, idx) => {
-      if (result.status === 'fulfilled' && !result.value.error) {
-        if (idx === 0) {
-          enquiryTrackerSuccess = true;
-        } else if (isLeadNumber && idx === 1) {
-          leadsOrderSuccess = true;
-          successMessage += " and leads_to_order";
-        } else if (isEnquiryNumber && idx === 1) {
-          enquiryOrderSuccess = true;
-          successMessage += " and enquiry_to_order";
-        }
-      } else if (result.status === 'fulfilled' && result.value.error) {
-        console.error(`Update ${idx} error:`, result.value.error);
-        if (idx === 1 && isEnquiryNumber) {
-          if (result.value.error.message && result.value.error.message.includes("invalid input syntax for type numeric")) {
-            alert(`Error: Invalid numeric value. Please check quotation values and payment terms. They should be numbers only.`);
-          }
-        }
-      }
-    });
-
-    successMessage += "!";
-
-    // Add warnings if some updates failed
-    if (!enquiryTrackerSuccess) {
-      alert("Error: Failed to update enquiry_tracker");
+    if (error) {
+      alert(`Error updating ${tableName}: ${error.message}`);
+      console.error(`Error updating ${tableName}:`, error);
       return;
     }
 
-    if (isLeadNumber && !leadsOrderSuccess) {
-      successMessage += " Note: leads_to_order was not updated (record may not exist).";
-    }
-
-    if (isEnquiryNumber && !enquiryOrderSuccess) {
-      successMessage += " Note: enquiry_to_order was not updated (record may not exist or had invalid data).";
-    }
-
-    alert(successMessage);
+    alert("Updated successfully!");
 
     // Refresh data
     fetchHistoryData(1, searchTerm, false, getDateFiltersFromCallingDays());
@@ -1685,23 +1442,34 @@ const handleSaveClick = async (index) => {
 
     try {
       // 1. Existing lead_ids in enquiry_tracker_for_leads
-      const { data: existingTrackerLeads } = await supabase
+      const { data: trackerLeads } = await supabase
         .from("enquiry_tracker_for_leads")
-        .select("lead_id")
-        .not("lead_id", "is", null);
+        .select("*")
+        .order("created_at", { ascending: true });
 
-      const existingLeadIds = Array.from(
-        new Set((existingTrackerLeads || []).map((r) => r.lead_id).filter(Boolean))
-      );
+      const latestLeadLogMap = {};
+      const closedLeadIds = new Set();
 
-      // Query call_tracker_for_leads where planned_at IS NOT NULL and lead_id NOT IN (existingLeadIds)
+      (trackerLeads || []).forEach((log) => {
+        if (log.lead_id) {
+          latestLeadLogMap[log.lead_id] = log;
+          if (log.is_order_received_status && String(log.is_order_received_status).trim() !== "") {
+            closedLeadIds.add(log.lead_id);
+          }
+        }
+      });
+
+      const existingClosedLeadIds = Array.from(closedLeadIds);
+
+      // Query call_tracker_for_leads where planned_at IS NOT NULL and lead_id NOT IN closed list
       let callTrackerQuery = supabase
         .from("call_tracker_for_leads")
         .select("*", { count: "exact" })
-        .not("planned_at", "is", null);
+        .not("planned_at", "is", null)
+        .order("created_at", { ascending: false });
 
-      if (existingLeadIds.length > 0) {
-        callTrackerQuery = callTrackerQuery.not("lead_id", "in", `(${existingLeadIds.join(",")})`);
+      if (existingClosedLeadIds.length > 0) {
+        callTrackerQuery = callTrackerQuery.not("lead_id", "in", `(${existingClosedLeadIds.join(",")})`);
       }
 
       if (searchTerm) {
@@ -1720,23 +1488,34 @@ const handleSaveClick = async (index) => {
       }
 
       // 2. Existing enquiry_ids in enquiry_tracker
-      const { data: existingTrackerEnquiries } = await supabase
+      const { data: trackerEnquiries } = await supabase
         .from("enquiry_tracker")
-        .select("enquiry_id")
-        .not("enquiry_id", "is", null);
+        .select("*")
+        .order("created_at", { ascending: true });
 
-      const existingEnquiryIds = Array.from(
-        new Set((existingTrackerEnquiries || []).map((r) => r.enquiry_id).filter(Boolean))
-      );
+      const latestEnquiryLogMap = {};
+      const closedEnquiryIds = new Set();
 
-      // Query enquiries where planned_at IS NOT NULL and id NOT IN (existingEnquiryIds)
+      (trackerEnquiries || []).forEach((log) => {
+        if (log.enquiry_id) {
+          latestEnquiryLogMap[log.enquiry_id] = log;
+          if (log.is_order_received_status && String(log.is_order_received_status).trim() !== "") {
+            closedEnquiryIds.add(log.enquiry_id);
+          }
+        }
+      });
+
+      const existingClosedEnquiryIds = Array.from(closedEnquiryIds);
+
+      // Query enquiries where planned_at IS NOT NULL and id NOT IN closed list
       let enquiriesQuery = supabase
         .from("enquiries")
         .select("*", { count: "exact" })
-        .not("planned_at", "is", null);
+        .not("planned_at", "is", null)
+        .order("created_at", { ascending: false });
 
-      if (existingEnquiryIds.length > 0) {
-        enquiriesQuery = enquiriesQuery.not("id", "in", `(${existingEnquiryIds.join(",")})`);
+      if (existingClosedEnquiryIds.length > 0) {
+        enquiriesQuery = enquiriesQuery.not("id", "in", `(${existingClosedEnquiryIds.join(",")})`);
       }
 
       if (searchTerm) {
@@ -1762,10 +1541,18 @@ const handleSaveClick = async (index) => {
       const callTrackerData = callTrackerRes.data || [];
       const enquiriesData = enquiriesRes.data || [];
 
-      // Fetch parent leads details for callTrackerData
-      const parentLeadIds = Array.from(
-        new Set(callTrackerData.map((r) => r.lead_id).filter(Boolean))
-      );
+      // Deduplicate callTrackerData by lead_id (keep most recent)
+      const seenLeadIds = new Set();
+      const dedupedCallTracker = [];
+      for (const item of callTrackerData) {
+        if (item.lead_id && !seenLeadIds.has(item.lead_id)) {
+          seenLeadIds.add(item.lead_id);
+          dedupedCallTracker.push(item);
+        }
+      }
+
+      // Fetch parent leads details for dedupedCallTracker
+      const parentLeadIds = Array.from(seenLeadIds);
       const leadsMap = {};
       if (parentLeadIds.length > 0) {
         const { data: leadsData } = await supabase
@@ -1778,15 +1565,16 @@ const handleSaveClick = async (index) => {
         });
       }
 
-      const transformedCallTracker = callTrackerData.map((item) => {
+      const transformedCallTracker = dedupedCallTracker.map((item) => {
         const parentLead = leadsMap[item.lead_id] || {};
+        const latestLog = latestLeadLogMap[item.lead_id] || {};
         return {
           id: item.id,
           dbId: item.id,
           leadIdVal: item.lead_id,
           tableSource: "call_tracker_for_leads",
           sourceType: "lead",
-          timestamp: formatDateToDDMMYYYY(item.created_at) || "",
+          timestamp: formatDateToDDMMYYYY(latestLog.created_at || item.created_at) || "",
           leadNo: parentLead.lead_no || "",
           lead_no: parentLead.lead_no || "",
           leadReceiverName: parentLead.lead_receiver_name || "",
@@ -1794,14 +1582,14 @@ const handleSaveClick = async (index) => {
           phoneNo: parentLead.phone_number || "",
           salespersonName: parentLead.salesperson_name || "",
           companyName: parentLead.company_name || item.company_name || "",
-          currentStage: "Enquiry Tracker",
-          callingDate: item.created_at ? formatDateToDDMMYYYY(item.created_at) : "",
+          currentStage: latestLog.current_stage || "Enquiry Tracker",
+          callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.created_at ? formatDateToDDMMYYYY(item.created_at) : ""),
           priority: determinePriority(parentLead.lead_source || ""),
           assignedTo: item.sc_name || parentLead.salesperson_name || "",
-          nextCallDate: item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : "",
-          nextCallTime: item.next_call_time || "",
-          customerSay: item.what_did_customer_say || "",
-          enquiryStatus: item.enquiry_received_status || "",
+          nextCallDate: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
+          nextCallTime: latestLog.next_call_time || item.next_call_time || "",
+          customerSay: latestLog.what_did_customer_say || item.what_did_customer_say || "",
+          enquiryStatus: latestLog.enquiry_status || item.enquiry_received_status || "",
           enquiryReceivedStatus: item.enquiry_received_status || "",
           enquiryReceivedDate: item.enquiry_received_date
             ? formatDateToDDMMYYYY(item.enquiry_received_date)
@@ -1812,40 +1600,43 @@ const handleSaveClick = async (index) => {
           enquiryApproach: item.enquiry_approach || "",
           projectApproximateValue: item.project_approximate_value || "",
           nextAction: item.next_action || "",
-          plannedAt: item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : "",
+          plannedAt: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
         };
       });
 
-      const transformedEnquiries = enquiriesData.map((item) => ({
-        id: item.id,
-        dbId: item.id,
-        enquiryIdVal: item.id,
-        tableSource: "enquiries",
-        sourceType: "enquiry",
-        timestamp: formatDateToDDMMYYYY(item.created_at || item.enquiry_date) || "",
-        leadNo: item.enquiry_no || "",
-        lead_no: item.enquiry_no || "",
-        leadReceiverName: item.enquiry_receiver_name || "",
-        leadSource: item.lead_source || "",
-        phoneNo: item.phone_number || "",
-        salespersonName: item.sales_person_name || "",
-        companyName: item.company_name || "",
-        currentStage: "Enquiry Tracker",
-        callingDate: item.enquiry_date ? formatDateToDDMMYYYY(item.enquiry_date) : "",
-        priority: determinePriority(item.lead_source || ""),
-        assignedTo: item.sales_coordinator_name || "",
-        nextCallDate: item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : "",
-        nextCallTime: "",
-        customerSay: "",
-        enquiryStatus: "Direct Enquiry",
-        enquiryReceivedStatus: "Direct Enquiry",
-        enquiryReceivedDate: formatDateToDDMMYYYY(item.enquiry_date) || "",
-        enquiryForState: item.enquiry_for_state || "",
-        projectName: item.project_name || "",
-        enquiryType: item.sales_type || "",
-        enquiryApproach: item.enquiry_approach || "",
-        plannedAt: item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : "",
-      }));
+      const transformedEnquiries = enquiriesData.map((item) => {
+        const latestLog = latestEnquiryLogMap[item.id] || {};
+        return {
+          id: item.id,
+          dbId: item.id,
+          enquiryIdVal: item.id,
+          tableSource: "enquiries",
+          sourceType: "enquiry",
+          timestamp: formatDateToDDMMYYYY(latestLog.created_at || item.created_at || item.enquiry_date) || "",
+          leadNo: item.enquiry_no || "",
+          lead_no: item.enquiry_no || "",
+          leadReceiverName: item.enquiry_receiver_name || "",
+          leadSource: item.lead_source || "",
+          phoneNo: item.phone_number || "",
+          salespersonName: item.sales_person_name || "",
+          companyName: item.company_name || "",
+          currentStage: latestLog.current_stage || "Enquiry Tracker",
+          callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.enquiry_date ? formatDateToDDMMYYYY(item.enquiry_date) : ""),
+          priority: determinePriority(item.lead_source || ""),
+          assignedTo: item.sales_coordinator_name || "",
+          nextCallDate: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
+          nextCallTime: latestLog.next_call_time || "",
+          customerSay: latestLog.what_did_customer_say || latestLog.customer_feedback || "",
+          enquiryStatus: latestLog.enquiry_status || "Direct Enquiry",
+          enquiryReceivedStatus: "Direct Enquiry",
+          enquiryReceivedDate: formatDateToDDMMYYYY(item.enquiry_date) || "",
+          enquiryForState: item.enquiry_for_state || "",
+          projectName: item.project_name || "",
+          enquiryType: item.sales_type || "",
+          enquiryApproach: item.enquiry_approach || "",
+          plannedAt: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
+        };
+      });
 
       const allCombined = [...transformedCallTracker, ...transformedEnquiries];
       const totalCount = (callTrackerRes.count || 0) + (enquiriesRes.count || 0);
@@ -1873,8 +1664,6 @@ const handleSaveClick = async (index) => {
     }
   };
 
-  // Replace your existing fetchHistoryData function with this:
-  // 1. Fix the column name issue in fetchHistoryData
   const fetchHistoryData = async (
     page = 1,
     searchTerm = "",
@@ -1888,112 +1677,103 @@ const handleSaveClick = async (index) => {
     const from = (page - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
 
-    let query = supabase
-      .from("enquiry_tracker")
-      .select("*", { count: "exact" })
-      .order('"Enquiry No."', { ascending: true })
-      .range(from, to);
+    try {
+      let trackerQuery = supabase
+        .from("enquiry_tracker")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(500);
 
-    // Add date filtering for history data
-    if (dateFilters.today) {
-      const today = new Date().toISOString().split("T")[0];
-      query = query
-        .gte('"Next Call Date"', today)
-        .lt(
-          '"Next Call Date"',
-          new Date(Date.now() + 86400000).toISOString().split("T")[0]
-        );
-    } else if (dateFilters.older) {
-      const today = new Date().toISOString().split("T")[0];
-      query = query.lt('"Next Call Date"', today);
-    }
+      let leadsTrackerQuery = supabase
+        .from("enquiry_tracker_for_leads")
+        .select("*")
+        .order("created_at", { ascending: false })
+        .limit(500);
 
-    // Replace the search functionality in your fetchHistoryData function
-    if (searchTerm) {
-      query = query.or(
-        `"Enquiry No.".ilike.%${searchTerm}%,"What Did Customer Say".ilike.%${searchTerm}%,"Current Stage".ilike.%${searchTerm}%,"Quotation Number".ilike.%${searchTerm}%,"Quotation Shared By".ilike.%${searchTerm}%,"Quotation Remarks".ilike.%${searchTerm}%,"Quotation Validator Name".ilike.%${searchTerm}%,"Quotation Send Status".ilike.%${searchTerm}%,"Quotation Validation Remark".ilike.%${searchTerm}%,"Is Order Received? Status".ilike.%${searchTerm}%,"Acceptance Via".ilike.%${searchTerm}%,"Payment Mode".ilike.%${searchTerm}%,"Payment Terms (In Days)".ilike.%${searchTerm}%,"Transport Mode".ilike.%${searchTerm}%,"CONVEYED FOR REGISTRATION FORM".ilike.%${searchTerm}%,"Remark".ilike.%${searchTerm}%,"If No Then Get Relevant Reason Status".ilike.%${searchTerm}%,"If No Then Get Relevant Reason Remark".ilike.%${searchTerm}%,"Customer Order Hold Reason Category".ilike.%${searchTerm}%,"Hold Remark".ilike.%${searchTerm}%`
-      );
-    }
+      if (dateFilters.today) {
+        const today = new Date().toISOString().split("T")[0];
+        const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+        trackerQuery = trackerQuery.gte("next_call_date", today).lt("next_call_date", tomorrow);
+        leadsTrackerQuery = leadsTrackerQuery.gte("next_call_date", today).lt("next_call_date", tomorrow);
+      } else if (dateFilters.older) {
+        const today = new Date().toISOString().split("T")[0];
+        trackerQuery = trackerQuery.lt("next_call_date", today);
+        leadsTrackerQuery = leadsTrackerQuery.lt("next_call_date", today);
+      }
 
-    if (!isAdmin() && currentUser && currentUser.username) {
-      const usernamesToFilter = getUsernamesToFilter();
-      query = query.in("Sales Cordinator", usernamesToFilter);
-    }
+      const [trackerRes, leadsTrackerRes] = await Promise.all([
+        trackerQuery,
+        leadsTrackerQuery
+      ]);
 
-    // Apply SC name filter for admin
-    if (isAdmin() && scNameFilter !== "all") {
-      query = query.eq("Sales Cordinator", scNameFilter);
-    }
+      if (trackerRes.error) console.error("Error fetching enquiry_tracker:", trackerRes.error.message);
+      if (leadsTrackerRes.error) console.error("Error fetching enquiry_tracker_for_leads:", leadsTrackerRes.error.message);
 
-    const { data, error, count } = await query;
+      const trackerRows = (trackerRes.data || []).map(item => ({ ...item, isLead: false }));
+      const leadsTrackerRows = (leadsTrackerRes.data || []).map(item => ({ ...item, isLead: true }));
 
-    if (error) {
-      console.error("Error fetching enquiry tracker:", error.message);
-      setIsLoading(false);
-      return [];
-    } else {
-      const historyRows = data || [];
-      const ldNos = historyRows
-        .map(i => i["Enquiry No."])
-        .filter(no => no && no.toUpperCase().startsWith("LD-"));
-      const enqNos = historyRows
-        .map(i => i["Enquiry No."])
-        .filter(no => no && !no.toUpperCase().startsWith("LD-"));
+      let allLogs = [...trackerRows, ...leadsTrackerRows];
+      allLogs.sort((a, b) => new Date(b.created_at || b.Timestamp || 0) - new Date(a.created_at || a.Timestamp || 0));
+
+      const leadIds = Array.from(new Set(allLogs.filter(i => i.isLead && i.lead_id).map(i => i.lead_id)));
+      const enqIds = Array.from(new Set(allLogs.filter(i => !i.isLead && i.enquiry_id).map(i => i.enquiry_id)));
 
       let leadsMap = {};
       let enqMap = {};
 
-      if (ldNos.length > 0) {
+      if (leadIds.length > 0) {
         const { data: ldData } = await supabase
-          .from("leads_to_order")
+          .from("leads")
           .select("*")
-          .in("LD-Lead-No", ldNos);
+          .in("id", leadIds);
         if (ldData) {
           ldData.forEach(row => {
-            leadsMap[row["LD-Lead-No"]] = row;
+            leadsMap[row.id] = row;
+            if (row.lead_no) leadsMap[row.lead_no] = row;
           });
         }
       }
 
-      if (enqNos.length > 0) {
+      if (enqIds.length > 0) {
         const { data: enqData } = await supabase
-          .from("enquiry_to_order")
+          .from("enquiries")
           .select("*")
-          .in("enquiry_no", enqNos);
+          .in("id", enqIds);
         if (enqData) {
           enqData.forEach(row => {
-            enqMap[row.enquiry_no] = row;
+            enqMap[row.id] = row;
+            if (row.enquiry_no) enqMap[row.enquiry_no] = row;
           });
         }
       }
 
-      const transformedData = historyRows.map((item, index) => {
-        const enqNo = item["Enquiry No."] || "";
-        const mL = leadsMap[enqNo] || {};
-        const mE = enqMap[enqNo] || {};
+      const transformedData = allLogs.map((item) => {
+        const mL = item.isLead ? (leadsMap[item.lead_id] || leadsMap[item.lead_no] || {}) : {};
+        const mE = !item.isLead ? (enqMap[item.enquiry_id] || enqMap[item.enquiry_no] || {}) : {};
 
-        const companyName = mL["Company_Name"] || mE["company_name"] || "";
-        const phoneNo = mL["Phone_Number"] || mE["phone_number"] || "";
-        const salespersonName = mL["Salesperson_Name"] || mL["SC_Name"] || mE["sales_person_name"] || mE["sales_coordinator_name"] || item["Sales Cordinator"] || "";
-        const leadSource = mL["Lead_Source"] || mE["lead_source"] || "";
-        const shippingAddress = mL["Address"] || mE["shipping_address"] || "";
-        const gstNumber = mL["GST_Number"] || mE["gst_number"] || "";
-        const enquiryReceiverName = mL["Lead_Receiver_Name"] || mE["enquiry_receiver_name"] || "";
-        const enquiryAssignToProject = mL["SC_Name"] || mE["enquiry_assign_to_project"] || item["Sales Cordinator"] || "";
-        const enquiryDate = formatDateToDDMMYYYY(mL["Enquiry_Received_Date"] || mE["enquiry_date"]) || "";
-        const enquiryState = mL["Enquiry_for_State"] || mE["enquiry_for_state"] || "";
-        const projectName = mL["Project_Name"] || mE["project_name"] || "";
-        const salesType = mL["Enquiry_Type"] || mE["sales_type"] || "";
-        const enquiryApproach = mL["Enquiry_Approach"] || mE["enquiry_approach"] || "";
-        const callingDate = mL["Calling_Days"] || mE["calling_days"] || "";
+        const enqNo = mL.lead_no || mE.enquiry_no || item.enquiry_no || item["Enquiry No."] || "";
+        const companyName = mL.company_name || mL["Company_Name"] || mE.company_name || mE["company_name"] || item.company_name || "";
+        const phoneNo = mL.phone_number || mL["Phone_Number"] || mE.phone_number || mE["phone_number"] || item.phone_number || "";
+        const salespersonName = mL.salesperson_name || mL.sc_name || mE.sales_coordinator_name || mE.sales_person_name || item.sc_name || item.sales_coordinator_name || item["Sales Cordinator"] || "";
+        const leadSource = mL.lead_source || mE.lead_source || "";
+        const shippingAddress = mL.address || mE.shipping_address || "";
+        const gstNumber = mL.gst_number || mE.gst_number || "";
+        const enquiryReceiverName = mL.lead_receiver_name || mE.enquiry_receiver_name || "";
+        const enquiryAssignToProject = mL.salesperson_name || mE.sales_coordinator_name || mE.enquiry_assign_to_project || salespersonName || "";
+        const enquiryDate = formatDateToDDMMYYYY(mL.created_at || mL.enquiry_received_date || mE.created_at || mE.enquiry_date || item.created_at) || "";
+        const enquiryState = mL.state || mE.enquiry_for_state || mE.state || "";
+        const projectName = mL.nob || mE.project_name || "";
+        const salesType = mL.sales_type || mE.sales_type || "";
+        const enquiryApproach = mL.enquiry_approach || mE.enquiry_approach || "";
+        const callingDate = item.calling_days || mL.calling_days || mE.calling_days || "";
         const totalQty = mL["Total Order Qty"] || mE["total_qty"] || "";
         const itemQty = aggregateItemsForSummary(mL.id ? mL : mE, mL.id ? "Item_Name" : "item_name", mL.id ? "Quantity" : "quantity", mL.id ? "Item/qty" : "item_qty") || "";
 
         return {
           id: item.id,
           uuid: item.id,
-          serialNo: from + index + 1,
-          Timestamp: formatDateToDDMMYYYY(item.Timestamp) || "",
+          serialNo: 0, // Assigned during pagination
+          Timestamp: formatDateToDDMMYYYY(item.created_at || item.Timestamp) || "",
           enquiryNo: enqNo,
           leadNo: enqNo,
           lead_no: enqNo,
@@ -2027,72 +1807,109 @@ const handleSaveClick = async (index) => {
           quantity4: mL["Quantity4"] || mE["quantity4"] || "",
           itemName5: mL["Item_Name5"] || mE["item_name5"] || "",
           quantity5: mL["Quantity5"] || mE["quantity5"] || "",
-          enquiryStatus: item["Enquiry Status"] || "Active",
-          customerFeedback: item["What Did Customer Say"] || "",
-          currentStage: item["Current Stage"] || "",
-          sendQuotationNo: item["Send Quotation No."] || "",
-          quotationSharedBy: item["Quotation Shared By"] || "",
-          quotationNumber: item["Quotation Number"] || "",
-          valueWithoutTax: item["Quotation Value Without Tax"] || "",
-          valueWithTax: item["Quotation Value With Tax"] || "",
-          quotationUpload: item["Quotation Upload"] || item["Quotation Copy"] || mL["Quotation_Upload"] || mE["quotation_upload"] || "",
-          quotationRemarks: item["Quotation Remarks"] || "",
-          validatorName: item["Quotation Validator Name"] || "",
-          sendStatus: item["Quotation Send Status"] || "",
-          validationRemark: item["Quotation Validation Remark"] || "",
-          faqVideo: item["Send Faq Video"] || "",
-          productVideo: item["Send Product Video"] || "",
-          offerVideo: item["Send Offer Video"] || "",
-          productCatalog: item["Send Product Catalog"] || "",
-          productImage: item["Send Product Image"] || "",
-          nextCallDate: formatDateToDDMMYYYY(item["Next Call Date"]) || "",
-          nextCallTime: formatTimeTo12Hour(item["Next Call Time"]) || "",
-          orderStatus: item["Is Order Received? Status"] || "",
-          acceptanceVia: item["Acceptance Via"] || mL["Acceptance_Via"] || mE["acceptance_via"] || "",
-          paymentMode: item["Payment Mode"] || "",
-          paymentTerms: item["Payment Terms (In Days)"] || "",
-          transportMode: item["Transport Mode"] || "",
-          registrationFrom: item["CONVEYED FOR REGISTRATION FORM"] || "",
-          conveyedForRegistration: item["CONVEYED FOR REGISTRATION FORM"] || "",
-          offer: item["Offer"] || "",
-          acceptanceFile: item["Acceptance File Upload"] || mL["Acceptance_File_Upload"] || mE["acceptance_file_upload"] || "",
-          orderRemark: item["Remark"] || "",
-          apologyVideo: item["Order Lost Apology Video"] || "",
-          reasonStatus: item["If No Then Get Relevant Reason Status"] || "",
-          reasonRemark: item["If No Then Get Relevant Reason Remark"] || "",
-          holdReason: item["Customer Order Hold Reason Category"] || "",
-          holdingDate: formatDateToDDMMYYYY(item["Holding Date"]) || "",
-          holdRemark: item["Hold Remark"] || "",
-          sales_coordinator: item["Sales Cordinator"] || "",
-          followup_status: item["Followup Status"] || "",
-          credit_days: item["Credit Days"] || "",
-          credit_limit: item["Credit Limit"] || "",
-          calling_days: item["Calling Days"] || "",
-          order_no: item["Order No."] || "",
-          sc_name: item["Sales Cordinator"] || "",
-          destination: item["Destination"] || "",
-          po_number: item["PO Number"] || "",
-          poNumber: item["PO Number"] || "",
-          priority: determinePriority(item["Enquiry Status"] || ""),
+          enquiryStatus: item.enquiry_status || item["Enquiry Status"] || "Active",
+          customerFeedback: item.what_did_customer_say || item.customer_feedback || item["What Did Customer Say"] || "",
+          currentStage: item.current_stage || item["Current Stage"] || "",
+          sendQuotationNo: item.send_quotation_no || item["Send Quotation No."] || "",
+          quotationSharedBy: item.quotation_shared_by || item["Quotation Shared By"] || "",
+          quotationNumber: item.quotation_number || item["Quotation Number"] || "",
+          valueWithoutTax: item.quotation_value_without_tax || item["Quotation Value Without Tax"] || "",
+          valueWithTax: item.quotation_value_with_tax || item.amount_with_tax || item["Quotation Value With Tax"] || "",
+          quotationUpload: item.quotation_upload || item["Quotation Upload"] || item["Quotation Copy"] || mL.quotation_upload || mE.quotation_upload || "",
+          quotationRemarks: item.quotation_remarks || item["Quotation Remarks"] || "",
+          validatorName: item.quotation_validator_name || item["Quotation Validator Name"] || "",
+          sendStatus: item.quotation_send_status || item["Quotation Send Status"] || "",
+          validationRemark: item.quotation_validation_remark || item["Quotation Validation Remark"] || "",
+          faqVideo: item.send_faq_video || item["Send Faq Video"] || "",
+          productVideo: item.send_product_video || item["Send Product Video"] || "",
+          offerVideo: item.send_offer_video || item["Send Offer Video"] || "",
+          productCatalog: item.send_product_catalog || item["Send Product Catalog"] || "",
+          productImage: item.send_product_image || item["Send Product Image"] || "",
+          nextCallDate: formatDateToDDMMYYYY(item.next_call_date || item["Next Call Date"]) || "",
+          nextCallTime: formatTimeTo12Hour(item.next_call_time || item["Next Call Time"]) || "",
+          orderStatus: item.is_order_received_status || item["Is Order Received? Status"] || "",
+          acceptanceVia: item.acceptance_via || item["Acceptance Via"] || mL.acceptance_via || mE.acceptance_via || "",
+          paymentMode: item.payment_mode || item["Payment Mode"] || "",
+          paymentTerms: item.payment_terms_days || item["Payment Terms (In Days)"] || "",
+          transportMode: item.transport_mode || item["Transport Mode"] || "",
+          registrationFrom: item.conveyed_for_registration_form || item["CONVEYED FOR REGISTRATION FORM"] || "",
+          conveyedForRegistration: item.conveyed_for_registration_form || item["CONVEYED FOR REGISTRATION FORM"] || "",
+          offer: item.offer || item["Offer"] || "",
+          acceptanceFile: item.acceptance_file_upload || item["Acceptance File Upload"] || mL.acceptance_file_upload || mE.acceptance_file_upload || "",
+          orderRemark: item.remark || item["Remark"] || "",
+          apologyVideo: item.order_lost_apology_video || item["Order Lost Apology Video"] || "",
+          reasonStatus: item.if_no_reason_status || item["If No Then Get Relevant Reason Status"] || "",
+          reasonRemark: item.if_no_reason_remark || item["If No Then Get Relevant Reason Remark"] || "",
+          holdReason: item.customer_order_hold_reason_category || item["Customer Order Hold Reason Category"] || "",
+          holdingDate: formatDateToDDMMYYYY(item.holding_date || item["Holding Date"]) || "",
+          holdRemark: item.hold_remark || item["Hold Remark"] || "",
+          sales_coordinator: salespersonName,
+          followup_status: item.followup_status || item["Followup Status"] || "",
+          credit_days: mL.credit_days || mE.credit_days || item["Credit Days"] || "",
+          credit_limit: mL.credit_limit || mE.credit_limit || item["Credit Limit"] || "",
+          calling_days: item.calling_days || mL.calling_days || mE.calling_days || "",
+          order_no: item.order_no || item["Order No."] || "",
+          sc_name: salespersonName,
+          destination: item.destination || item["Destination"] || "",
+          po_number: item.po_number || item["PO Number"] || "",
+          poNumber: item.po_number || item["PO Number"] || "",
+          priority: determinePriority(leadSource || item.enquiry_status || ""),
         };
       });
 
-      if (isLoadMore) {
-        setHistoryData((prev) => {
-          return [...prev, ...transformedData];
-        });
-      } else {
-        setHistoryData(transformedData);
+      let finalRows = transformedData;
+
+      if (!isAdmin() && currentUser && currentUser.username) {
+        const usernamesToFilter = getUsernamesToFilter();
+        finalRows = finalRows.filter((item) =>
+          usernamesToFilter.includes(item.salespersonName) ||
+          usernamesToFilter.includes(item.enquiryAssignToProject) ||
+          usernamesToFilter.includes(item.sc_name)
+        );
       }
 
-      // Check if there's more data - fixed logic
-      const hasMore =
-        transformedData.length === itemsPerPage &&
-        from + transformedData.length < (count || 0);
+      if (isAdmin() && scNameFilter !== "all") {
+        finalRows = finalRows.filter((item) =>
+          item.salespersonName === scNameFilter ||
+          item.enquiryAssignToProject === scNameFilter ||
+          item.sc_name === scNameFilter
+        );
+      }
+
+      if (searchTerm) {
+        const lowerSearch = searchTerm.toLowerCase();
+        finalRows = finalRows.filter((item) =>
+          String(item.enquiryNo || "").toLowerCase().includes(lowerSearch) ||
+          String(item.companyName || "").toLowerCase().includes(lowerSearch) ||
+          String(item.customerFeedback || "").toLowerCase().includes(lowerSearch) ||
+          String(item.currentStage || "").toLowerCase().includes(lowerSearch) ||
+          String(item.quotationNumber || "").toLowerCase().includes(lowerSearch) ||
+          String(item.orderStatus || "").toLowerCase().includes(lowerSearch) ||
+          String(item.order_no || "").toLowerCase().includes(lowerSearch)
+        );
+      }
+
+      const totalCount = finalRows.length;
+      const paginated = finalRows.slice(from, to + 1).map((item, index) => ({
+        ...item,
+        serialNo: from + index + 1,
+      }));
+
+      if (isLoadMore) {
+        setHistoryData((prev) => [...prev, ...paginated]);
+      } else {
+        setHistoryData(paginated);
+      }
+
+      const hasMore = paginated.length === itemsPerPage && from + paginated.length < totalCount;
       setHasMoreHistory(hasMore);
 
       setIsLoading(false);
-      return transformedData;
+      return paginated;
+    } catch (error) {
+      console.error("Error fetching history data:", error);
+      setIsLoading(false);
+      return [];
     }
   };
 
@@ -2111,11 +1928,10 @@ const handleSaveClick = async (index) => {
     const to = from + itemsPerPage - 1;
 
     let query = supabase
-      .from("enquiry_to_order")
+      .from("enquiries")
       .select("*", { count: "exact" })
-      .not("planned1", "is", null)
-      .or('current_stage.is.null,current_stage.eq.""')
-      .order("enquiry_no", { ascending: true })
+      .not("planned_at", "is", null)
+      .order("created_at", { ascending: true })
       .range(from, to);
 
     // Add date filtering for direct enquiry data
@@ -2591,56 +2407,24 @@ const handleSaveClick = async (index) => {
     if (!isAdmin()) return; // Only admins need to see all SC names
 
     try {
-      // Fetch unique SC names from leads_to_order for pending tab
-      const { data: pendingScNames, error: pendingError } = await supabase
-        .from("leads_to_order")
-        .select("SC_Name")
-        .not("SC_Name", "is", null)
-        .not("SC_Name", "eq", "");
+      const { data: scData, error: scError } = await supabase
+        .from("dropdown")
+        .select("value")
+        .eq("category", "sc_name")
+        .not("value", "is", null);
 
-      if (pendingError) {
-        console.error("Error fetching pending SC names:", pendingError);
+      if (scError) {
+        console.error("Error fetching SC names from dropdown:", scError);
       }
 
-      // Fetch unique SC names from enquiry_to_order for direct enquiry tab
-      const { data: directEnquiryScNames, error: directEnquiryError } = await supabase
-        .from("enquiry_to_order")
-        .select("sales_coordinator_name")
-        .not("sales_coordinator_name", "is", null)
-        .not("sales_coordinator_name", "eq", "");
-
-      if (directEnquiryError) {
-        console.error("Error fetching direct enquiry SC names:", directEnquiryError);
-      }
-
-      // Fetch unique SC names from enquiry_tracker for history tab
-      const { data: historyScNames, error: historyError } = await supabase
-        .from("enquiry_tracker")
-        .select(`"Sales Cordinator"`)
-        .not('"Sales Cordinator"', "is", null)
-        .not('"Sales Cordinator"', "eq", "");
-
-      if (historyError) {
-        console.error("Error fetching history SC names:", historyError);
-      }
-
-      // Extract and deduplicate SC names for each tab
-      const uniquePendingNames = Array.from(
-        new Set((pendingScNames || []).map(item => item.SC_Name).filter(Boolean))
-      ).sort();
-
-      const uniqueDirectEnquiryNames = Array.from(
-        new Set((directEnquiryScNames || []).map(item => item.sales_coordinator_name).filter(Boolean))
-      ).sort();
-
-      const uniqueHistoryNames = Array.from(
-        new Set((historyScNames || []).map(item => item["Sales Cordinator"]).filter(Boolean))
+      const uniqueNames = Array.from(
+        new Set((scData || []).map(item => item.value).filter(Boolean))
       ).sort();
 
       setUniqueScNames({
-        pending: uniquePendingNames,
-        directEnquiry: uniqueDirectEnquiryNames,
-        history: uniqueHistoryNames
+        pending: uniqueNames,
+        directEnquiry: uniqueNames,
+        history: uniqueNames
       });
     } catch (error) {
       console.error("Error fetching unique SC names:", error);
@@ -2920,54 +2704,50 @@ const handleSaveClick = async (index) => {
         const query = supabase
           .from(table)
           .select("*", { count: "exact", head: true });
-        if (role === "user" && currentUser?.username) {
+        if (role === "user" && currentUser?.username && (table === "enquiries" || table === "client_master")) {
           const usernamesToFilter = getUsernamesToFilter();
           return query.in("sales_coordinator_name", usernamesToFilter);
+        } else if (role === "user" && currentUser?.username && table === "leads") {
+          const usernamesToFilter = getUsernamesToFilter();
+          return query.in("salesperson_name", usernamesToFilter);
         }
         return query;
       };
 
-      // Leads to Order
-      const { count: pendingToday } = await withRoleFilter("leads_to_order")
-        .not("Planned1", "is", null)
-        .eq("Next Call Date_1", today)
-        .is("Actual1", null);
+      // Leads
+      const { count: pendingToday } = await withRoleFilter("enquiry_tracker_for_leads")
+        .is("is_order_received_status", null)
+        .eq("next_call_date", today);
 
-      const { count: pendingOverdue } = await withRoleFilter("leads_to_order")
-        .not("Planned1", "is", null)
-        .is("Actual1", null)
-        .lt("Next Call Date_1", today);
-
-      const { count: pendingUpcoming } = await withRoleFilter("leads_to_order")
-        .not("Planned1", "is", null)
-        .is("Actual1", null)
-        .gt("Next Call Date_1", today);
-
-      // Enquiry to Order
-      const { count: directToday } = await withRoleFilter("enquiry_to_order")
-        .not("planned1", "is", null)
-        .is("actual1", null)
-        .gte("next_call_date", today)
-        .lt("next_call_date", tomorrow);
-
-      const { count: directOverdue } = await withRoleFilter("enquiry_to_order")
-        .not("planned1", "is", null)
-        .is("actual1", null)
+      const { count: pendingOverdue } = await withRoleFilter("enquiry_tracker_for_leads")
+        .is("is_order_received_status", null)
         .lt("next_call_date", today);
 
-      const { count: directUpcoming } = await withRoleFilter("enquiry_to_order")
-        .not("planned1", "is", null)
-        .is("actual1", null)
+      const { count: pendingUpcoming } = await withRoleFilter("enquiry_tracker_for_leads")
+        .is("is_order_received_status", null)
         .gt("next_call_date", today);
 
-      // Enquiry Tracker
+      // Direct Enquiries
+      const { count: directToday } = await withRoleFilter("enquiry_tracker")
+        .is("is_order_received_status", null)
+        .eq("next_call_date", today);
+
+      const { count: directOverdue } = await withRoleFilter("enquiry_tracker")
+        .is("is_order_received_status", null)
+        .lt("next_call_date", today);
+
+      const { count: directUpcoming } = await withRoleFilter("enquiry_tracker")
+        .is("is_order_received_status", null)
+        .gt("next_call_date", today);
+
+      // History
       const { count: historyToday } = await withRoleFilter("enquiry_tracker")
-        .gte('"Next Call Date"', today)
-        .lt('"Next Call Date"', tomorrow);
+        .not("is_order_received_status", "is", null)
+        .eq("next_call_date", today);
 
       const { count: historyOlder } = await withRoleFilter(
         "enquiry_tracker"
-      ).lt('"Next Call Date"', today);
+      ).not("is_order_received_status", "is", null).lt("next_call_date", today);
 
       setCallingDaysCounts({
         pendingToday: pendingToday || 0,
@@ -3391,16 +3171,17 @@ const handleSaveClick = async (index) => {
   const pendingMap = new Map();
   allPendingRaw.forEach(item => {
     const id = item.lead_no || item.leadNo || item.enquiry_no || item.dbId || item.id;
+    const isLead = item.tableSource === 'leads_to_order' || item.tableSource === 'leads' || String(id || '').toUpperCase().startsWith('LD-');
     if (id && !pendingMap.has(id)) {
       pendingMap.set(id, {
         ...item,
-        enquiryType: item.tableSource === 'leads_to_order' ? 'Lead' : 'Direct Enquiry'
+        enquiryType: isLead ? 'Lead' : 'Direct Enquiry'
       });
     } else if (!id) {
       // Fallback for items without a clear ID
       pendingMap.set(Math.random(), {
         ...item,
-        enquiryType: item.tableSource === 'leads_to_order' ? 'Lead' : 'Direct Enquiry'
+        enquiryType: isLead ? 'Lead' : 'Direct Enquiry'
       });
     }
   });

@@ -26,5 +26,7 @@ dist-ssr
 *.sw?
 
 schema.txt
-schema2.txt
+schemOld.txt
+task.txt
 schema_migration_guide.md
+

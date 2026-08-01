@@ -101,7 +101,7 @@ function App() {
         const { data: leadsData, error: leadsError } = await supabase
           .from('leads')
           .select('*')
-          .order('id', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(100);
         
         const { data: enquiryData, error: enquiryError } = await supabase
@@ -139,7 +139,7 @@ function App() {
           .from('leads')
           .select('*')
           .in('salesperson_name', usernamesToFetch)
-          .order('id', { ascending: false })
+          .order('created_at', { ascending: false })
           .limit(100);
 
         // Fetch enquiries for all usernames in the list

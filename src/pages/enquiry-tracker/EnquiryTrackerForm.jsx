@@ -170,27 +170,17 @@ function NewEnquiryTracker() {
   // Fix the column name escaping
   const fetchExistingOrderNumbers = async () => {
     try {
-      // 🔍 Fetch from ALL 3 tables with their specific correct date columns
-      const [trackerRes, leadsRes, directRes] = await Promise.all([
-        // 1. enquiry_tracker uses "Timestamp" (Capital T)
+      // 🔍 Fetch from tracking tables
+      const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
         supabase
           .from("enquiry_tracker")
-          .select('"Order No."')
-          .not('"Order No."', 'is', null)
-          .order('Timestamp', { ascending: false })
+          .select('order_no')
+          .not('order_no', 'is', null)
+          .order('created_at', { ascending: false })
           .limit(1000),
 
-        // 2. leads_to_order uses "Timestamp" (Capital T)
         supabase
-          .from("leads_to_order")
-          .select('Order_No')
-          .not('Order_No', 'is', null)
-          .order('Timestamp', { ascending: false })
-          .limit(1000),
-
-        // 3. enquiry_to_order uses "created_at" (Lowercase)
-        supabase
-          .from("enquiry_to_order")
+          .from("enquiry_tracker_for_leads")
           .select('order_no')
           .not('order_no', 'is', null)
           .order('created_at', { ascending: false })
@@ -198,9 +188,8 @@ function NewEnquiryTracker() {
       ]);
 
       const allNumbers = [
-        ...(trackerRes.data || []).map(item => item["Order No."]),
-        ...(leadsRes.data || []).map(item => item.Order_No),
-        ...(directRes.data || []).map(item => item.order_no)
+        ...(trackerEnqRes.data || []).map(item => item.order_no),
+        ...(trackerLeadsRes.data || []).map(item => item.order_no)
       ];
 
       return allNumbers.filter(no => no && typeof no === 'string' && no.trim() !== "");
@@ -600,124 +589,14 @@ function NewEnquiryTracker() {
             Quotation_Upload: allFormData.quotationFileUrl,
             Quotation_Remarks: allFormData.remarks,
           });
-          break;
-
-        case "Order Status":
-        case "order-status":
-          // ✅ FIXED: Use orderStatusData for quotation number
-          updateData.Quotation_Number = orderStatusData.orderStatusQuotationNumber || null;
-          updateData["Is_Order_Received?_Status"] = orderStatusData.orderStatus;
-
-          if (orderStatusData.orderStatus?.toLowerCase() === "yes") {
-            // Build item columns from quotationItems
-            const items = orderStatusData.quotationItems || [];
-            const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-
-            // Prepare items data for first 5 columns if items are present
-            const itemUpdates = {};
-            if (items.length > 0) {
-              for (let i = 0; i < 5; i++) {
-                const itemNum = i + 1;
-                if (i < items.length) {
-                  itemUpdates[`Item_Name${itemNum}`] = items[i].name || "";
-                  itemUpdates[`Quantity${itemNum}`] = String(items[i].qty || 0);
-                } else {
-                  itemUpdates[`Item_Name${itemNum}`] = null;
-                  itemUpdates[`Quantity${itemNum}`] = null;
-                }
-              }
-            }
-
-            // If more than 5 items, store remaining in Item/qty JSON column
-            let itemQtyJson = null;
-            if (items.length > 5) {
-              const remainingItems = items.slice(5).map(item => ({
-                name: item.name,
-                quantity: item.qty
-              }));
-              itemQtyJson = JSON.stringify(remainingItems);
-            }
-
-            Object.assign(updateData, {
-              Actual1: new Date().toISOString().slice(0, 10),
-              Acceptance_Via: orderStatusData.acceptanceVia,
-              Payment_Mode: orderStatusData.paymentMode,
-              approved_by: orderStatusData.approvedBy || null,
-              Destination: orderStatusData.destination,
-              "Po Number": orderStatusData.poNumber,
-              "Payment_Terms _In_Days": orderStatusData.paymentTerms,
-              Transport_Mode: orderStatusData.transportMode,
-              "Credit_Limit": orderStatusData.creditLimit,
-              "Credit_Days": orderStatusData.creditDays,
-              CONVEYED_FOR_REGISTRATION_FORM: toBoolean(orderStatusData.conveyedForRegistration),
-              Offer: orderStatusData.orderVideo,
-              Acceptance_File_Upload: typeof orderStatusData.acceptanceFile === "string"
-                ? orderStatusData.acceptanceFile
-                : "",
-              REMARK: orderStatusData.orderRemark,
-              // Add item columns only if they were calculated
-              ...itemUpdates,
-              ...(items.length > 0 ? {
-                "Total Order Qty": String(totalQty),
-                "Item/qty": itemQtyJson,
-              } : {}),
-
-              // ✅ Ensure Order_No is set (already set above, but ensure it's included)
-              Order_No: updateData.Order_No || await generateNextOrderNumber(),
-            });
-          } else if (orderStatusData.orderStatus?.toLowerCase() === "no") {
-            Object.assign(updateData, {
-              Actual1: new Date().toISOString().slice(0, 10),
-              Order_Lost_Apology_Video: typeof orderStatusData.apologyVideo === "string"
-                ? orderStatusData.apologyVideo
-                : "",
-              If_No_Then_Get_Relevant_Reason_Status: orderStatusData.reasonStatus || null,
-              If_No_Then_Get_Relevant_Reason_Remark: orderStatusData.reasonRemark || null,
-              CUSTOMER_ORDER_HOLD_REASON_CATEGORY: null,
-            });
-          } else if (orderStatusData.orderStatus?.toLowerCase() === "hold") {
-            Object.assign(updateData, {
-              HOLDING_DATE: orderStatusData.holdingDate,
-              HOLD_REMARK: orderStatusData.holdRemark,
-              CUSTOMER_ORDER_HOLD_REASON_CATEGORY: orderStatusData.holdReason || null,
-            });
-          }
-          break;
-
-        default:
-          console.warn("Unknown stage:", currentStage);
-      }
-      // Clean up empty, null, or undefined values from updateData
-      Object.keys(updateData).forEach((key) => {
-        if (updateData[key] === undefined || updateData[key] === null || updateData[key] === "") {
-          delete updateData[key];
+        const companyName = allFormData.companyName || allFormData.Company_Name || orderStatusData.companyName;
+        if (companyName) {
+          await generateAndAssignClientCode(companyName);
         }
-      });
-
-      // ✅ Perform the update
-      const { data, error } = await supabase
-        .from("leads_to_order")
-        .update(updateData)
-        .eq("LD-Lead-No", enquiryNo)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("❌ Error updating leads_to_order:", error);
-        return false;
       }
-
-      // ✅ Generate client code if order status is yes
-      if (currentStage === "order-status" && orderStatusData.orderStatus?.toLowerCase() === "yes" && data?.Company_Name) {
-        await generateAndAssignClientCode(data.Company_Name);
-      }
-
-      // ✅ Wait a moment for triggers to fire
-      await new Promise(resolve => setTimeout(resolve, 500));
-
       return true;
     } catch (error) {
-      console.error("❌ Exception updating leads_to_order:", error);
+      console.error("Exception in updateLeadToOrderTable:", error);
       return false;
     }
   };
@@ -725,14 +604,14 @@ function NewEnquiryTracker() {
 
   const triggerWebhookManually = async (enquiryNo, tableName) => {
     try {
-      // Fetch the latest record from the database
+      const colName = tableName === 'leads' ? 'lead_no' : (tableName === 'enquiries' ? 'enquiry_no' : 'id');
       const { data, error } = await supabase
         .from(tableName)
         .select('*')
-        .eq(tableName === 'leads_to_order' ? 'LD-Lead-No' : 'enquiry_no', enquiryNo)
-        .single();
+        .eq(colName, enquiryNo)
+        .maybeSingle();
 
-      if (error) {
+      if (error || !data) {
         console.error("Error fetching updated record:", error);
         return false;
       }
@@ -763,358 +642,22 @@ function NewEnquiryTracker() {
   };
 
 
-  // const updateEnquiryToOrderTable = async (enquiryNo, formData, currentStage) => {
-  //   try {
-  //     // Helper function to safely convert to boolean
-  //     const toBoolean = (value) => {
-  //       if (value === null || value === undefined || value === '') return false;
-  //       if (typeof value === 'boolean') return value;
-  //       if (typeof value === 'string') {
-  //         return value.toLowerCase() === 'true' || value === '1';
-  //       }
-  //       return Boolean(value);
-  //     };
-
-  //     // Base fields always updated
-  //     let updateData = {
-  //       enquiry_no: formData.enquiryNo,
-  //       enquiry_status: formData.enquiryStatus,
-  //       customer_feedback: formData.customerFeedback,
-  //       current_stage: currentStage,
-  //     };
-
-  //     switch (currentStage) {
-  //       case "make-quotation":
-  //         Object.assign(updateData, {
-  //           // fill quotation fields
-  //           send_quotation_no: formData.sendQuotationNo,
-  //           quotation_shared_by: formData.quotationSharedBy,
-  //           quotation_number: formData.quotationNumber,
-  //           quotation_value_without_tax: formData.valueWithoutTax,
-  //           quotation_value_with_tax: formData.valueWithTax,
-  //           quotation_upload: formData.quotationFileUrl,
-  //           quotation_remarks: formData.remarks,
-
-  //           // reset followup + order fields
-  //           // next_call_date: null,
-  //           // next_call_time: null,
-  //           // is_order_received_status: null,
-  //           // acceptance_via: null,
-  //           // payment_mode: null,
-  //           // payment_terms_days: null,
-  //           // transport_mode: null,
-  //         });
-  //         break;
-
-  //       case "order-expected":
-  //         Object.assign(updateData, {
-  //           // fill followup fields
-  //           next_call_date: formData.nextCallDate,
-  //           next_call_time: formData.nextCallTime,
-
-  //           // reset quotation + order fields
-  //           // send_quotation_no: null,
-  //           // quotation_shared_by: null,
-  //           // quotation_number: null,
-  //           // quotation_value_without_tax: null,
-  //           // quotation_value_with_tax: null,
-  //           // quotation_upload: null,
-  //           // quotation_remarks: null,
-  //           // is_order_received_status: null,
-  //           // acceptance_via: null,
-  //           // payment_mode: null,
-  //           // payment_terms_days: null,
-  //           // transport_mode: null,
-  //         });
-  //         break;
-
-  //       case "order-status":
-  //         // Always set the status
-  //         updateData.quotation_number = orderStatusData.orderStatusQuotationNumber;
-  //         updateData.is_order_received_status = formData.orderStatus;
-
-  //         if (formData.orderStatus?.toLowerCase() === "yes") {
-  //           Object.assign(updateData, {
-  //             actual1: new Date().toISOString(),
-  //             acceptance_via: formData.acceptanceVia,
-  //             payment_mode: formData.paymentMode,
-  //             destination: formData.destination,
-  //             po_number: formData.poNumber,
-  //             payment_terms_days: formData.paymentTerms,
-  //             transport_mode: formData.transportMode,
-  //             // if_no_reason_status: null,
-  //             // if_no_reason_remark: null,
-  //             // customer_order_hold_reason_category: null,
-
-  //             // ✅ Use the helper function for boolean conversion
-  //             conveyed_for_registration_form: toBoolean(formData.conveyedForRegistration),
-
-  //             offer: formData.orderVideo,
-  //             acceptance_file_upload:  typeof formData.acceptanceFile === "string" 
-  //       ? formData.acceptanceFile 
-  //       : "", // handle upload later
-  //             remark: formData.orderRemark,
-
-  //             // // reset "no" + "hold" fields
-  //             // order_lost_apology_video: null,
-  //             // holding_date: null,
-  //             // hold_remark: null,
-  //           });
-  //         } else if (formData.orderStatus?.toLowerCase() === "no") {
-  //           Object.assign(updateData, {
-  //              actual1: new Date().toISOString(),
-  //             order_lost_apology_video:typeof formData.apologyVideo === "string" 
-  //       ? formData.apologyVideo 
-  //       : "", // handle upload later
-  //             if_no_reason_status: orderStatusData.reasonStatus,
-  //             if_no_reason_remark: orderStatusData.reasonRemark,
-  //             // customer_order_hold_reason_category: null,
-  //             // // reset "yes" + "hold" fields
-  //             // acceptance_via: null,
-  //             // payment_mode: null,
-  //             // destination: null,
-  //             // po_number: null,
-  //             // payment_terms_days: null,
-  //             // transport_mode: null,
-
-  //             // ✅ Use the helper function for boolean conversion
-  //            // conveyed_for_registration_form: toBoolean(formData.conveyedForRegistration),
-
-  //             // offer: null,
-  //             // acceptance_file_upload: null,
-
-  //             // holding_date: null,
-  //             // hold_remark: null,
-  //           });
-  //         } else if (formData.orderStatus?.toLowerCase() === "hold") {
-  //           Object.assign(updateData, {
-  //             holding_date: formData.holdingDate,
-  //             hold_remark: formData.holdRemark,
-  //             // if_no_reason_status: null,
-  //             // if_no_reason_remark: null,
-  //             customer_order_hold_reason_category: orderStatusData.holdReason,
-  //             // reset "yes" + "no" fields
-  //             // acceptance_via: null,
-  //             // payment_mode: null,
-  //             // destination: null,
-  //             // po_number: null,
-  //             // payment_terms_days: null,
-  //             // transport_mode: null,
-
-  //             // ✅ Use the helper function for boolean conversion
-  //             //conveyed_for_registration_form: toBoolean(formData.conveyedForRegistration),
-
-  //             // offer: null,
-  //             // acceptance_file_upload: null,
-  //             // order_lost_apology_video: null,
-  //           });
-  //         }
-
-  //         // reset quotation + followup fields (like in your original code)
-  //         Object.assign(updateData, {
-  //           // send_quotation_no: null,
-  //           // quotation_shared_by: null,
-  //           // quotation_number: null,
-  //           // quotation_value_without_tax: null,
-  //           // quotation_value_with_tax: null,
-  //           // quotation_upload: null,
-  //           // quotation_remarks: null,
-  //           // next_call_date: null,
-  //           // next_call_time: null,
-  //         });
-
-  //         break;
-
-  //       default:
-  //         console.warn("Unknown stage:", currentStage);
-  //     }
-
-  //     const { data, error } = await supabase
-  //       .from("enquiry_to_order")
-  //       .update(updateData)
-  //       .eq("enquiry_no", enquiryNo)
-  //       .select()
-  //       .single();
-
-  //     if (error) {
-  //       console.error("Error updating enquiry_to_order:", error);
-  //       return false;
-  //     }
-
-  //     console.log("Successfully updated enquiry_to_order:", data);
-  //     return true;
-  //   } catch (error) {
-  //     console.error("Exception updating enquiry_to_order:", error);
-  //     return false;
-  //   }
-  // };
-  // Add this function to your NewCallTracker component
-
-
-
   const updateEnquiryToOrderTable = async (enquiryNo, allFormData, currentStage) => {
     try {
-      // Helper function to safely convert to boolean
-      const toBoolean = (value) => {
-        if (value === null || value === undefined || value === '') return false;
-        if (typeof value === 'boolean') return value;
-        if (typeof value === 'string') {
-          return value.toLowerCase() === 'true' || value === '1';
+      if (currentStage === "order-status" && allFormData.orderStatus?.toLowerCase() === "yes") {
+        const companyName = allFormData.companyName || allFormData.company_name;
+        if (companyName) {
+          await generateAndAssignClientCode(companyName);
         }
-        return Boolean(value);
-      };
-
-      // Base fields always updated
-      let updateData = {
-        enquiry_no: enquiryNo,
-        enquiry_status: allFormData.enquiryStatus,
-        customer_feedback: allFormData.customerFeedback,
-        current_stage: currentStage,
-      };
-
-      switch (currentStage) {
-        case "Make Quotation":
-        case "make-quotation":
-          // Only update quotation fields, don't reset others
-          Object.assign(updateData, {
-            send_quotation_no: allFormData.sendQuotationNo,
-            quotation_shared_by: allFormData.quotationSharedBy,
-            quotation_number: allFormData.quotationNumber,
-            quotation_value_without_tax: allFormData.valueWithoutTax ? Number(allFormData.valueWithoutTax) : null,
-            quotation_value_with_tax: allFormData.valueWithTax ? Number(allFormData.valueWithTax) : null,
-            quotation_upload: allFormData.quotationFileUrl,
-            quotation_remarks: allFormData.remarks,
-          });
-          // DON'T reset followup + order fields - keep existing data
-          break;
-
-        case "Order Expected":
-        case "order-expected":
-          // Only update followup fields, don't reset others
-          Object.assign(updateData, {
-            next_call_date: allFormData.nextCallDate,
-            next_call_time: allFormData.nextCallTime,
-          });
-          // DON'T reset quotation + order fields - keep existing data
-          break;
-
-        case "Order Status":
-        case "order-status":
-          // Always set the status and quotation number
-          updateData.quotation_number = orderStatusData.orderStatusQuotationNumber;
-          updateData.is_order_received_status = allFormData.orderStatus;
-
-          if (allFormData.orderStatus?.toLowerCase() === "yes") {
-            // Build item columns from quotationItems
-            const items = orderStatusData.quotationItems || [];
-            const totalQty = items.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-
-            // Prepare items data for first 10 columns if items are present
-            const itemUpdates = {};
-            if (items.length > 0) {
-              for (let i = 0; i < 10; i++) {
-                const itemNum = i + 1;
-                if (i < items.length) {
-                  itemUpdates[`item_name${itemNum}`] = items[i].name || "";
-                  itemUpdates[`quantity${itemNum}`] = Number(items[i].qty) || 0;
-                } else {
-                  itemUpdates[`item_name${itemNum}`] = null;
-                  itemUpdates[`quantity${itemNum}`] = null;
-                }
-              }
-            }
-
-            // If more than 10 items, store remaining in item_qty JSON column
-            let itemQtyJson = null;
-            if (items.length > 10) {
-              const remainingItems = items.slice(10).map(item => ({
-                name: item.name,
-                quantity: item.qty
-              }));
-              itemQtyJson = JSON.stringify(remainingItems);
-            }
-
-            Object.assign(updateData, {
-              actual1: new Date().toISOString(),
-              acceptance_via: allFormData.acceptanceVia,
-              payment_mode: allFormData.paymentMode,
-              approved_by: allFormData.approvedBy || null,
-              destination: allFormData.destination,
-              po_number: allFormData.poNumber,
-              payment_terms_days: allFormData.paymentTerms,
-              transport_mode: allFormData.transportMode,
-              conveyed_for_registration_form: toBoolean(allFormData.conveyedForRegistration),
-              offer: allFormData.orderVideo,
-              acceptance_file_upload: typeof allFormData.acceptanceFile === "string"
-                ? allFormData.acceptanceFile
-                : "",
-              remark: allFormData.orderRemark,
-              // ✅ Fix: Submit order number to master table
-              order_no: allFormData.generatedOrderNumber || "",
-              // Add item columns only if they were calculated
-              ...itemUpdates,
-              ...(items.length > 0 ? {
-                total_qty: String(totalQty),
-                item_qty: itemQtyJson,
-              } : {}),
-            });
-            // DON'T reset "no" + "hold" fields - they might contain important data
-          } else if (allFormData.orderStatus?.toLowerCase() === "no") {
-            Object.assign(updateData, {
-              actual1: new Date().toISOString(),
-              order_lost_apology_video: typeof allFormData.apologyVideo === "string"
-                ? allFormData.apologyVideo
-                : "",
-              if_no_reason_status: orderStatusData.reasonStatus,
-              if_no_reason_remark: orderStatusData.reasonRemark,
-            });
-            // DON'T reset "yes" + "hold" fields
-          } else if (allFormData.orderStatus?.toLowerCase() === "hold") {
-            Object.assign(updateData, {
-              holding_date: allFormData.holdingDate,
-              hold_remark: allFormData.holdRemark,
-              customer_order_hold_reason_category: orderStatusData.holdReason,
-            });
-            // DON'T reset "yes" + "no" fields
-          }
-
-          // DON'T reset quotation + followup fields - keep existing data
-          break;
-
-        default:
-          console.warn("Unknown stage:", currentStage);
       }
-
-      // Clean up empty, null, or undefined values from updateData
-      Object.keys(updateData).forEach((key) => {
-        if (updateData[key] === undefined || updateData[key] === null || updateData[key] === "") {
-          delete updateData[key];
-        }
-      });
-
-      const { data, error } = await supabase
-        .from("enquiry_to_order")
-        .update(updateData)
-        .eq("enquiry_no", enquiryNo)
-        .select()
-        .single();
-
-      if (error) {
-        console.error("Error updating enquiry_to_order:", error);
-        return false;
-      }
-
-      // ✅ Generate client code if order status is yes
-      if (currentStage === "order-status" && allFormData.orderStatus?.toLowerCase() === "yes" && data?.company_name) {
-        await generateAndAssignClientCode(data.company_name);
-      }
-
       return true;
     } catch (error) {
-      console.error("Exception updating enquiry_to_order:", error);
+      console.error("Exception in updateEnquiryToOrderTable:", error);
       return false;
     }
   };
+
+
   const validateNumericFields = (data) => {
     const numericFields = [
       'valueWithoutTax', 'valueWithTax', 'paymentTerms',
@@ -1208,74 +751,52 @@ function NewEnquiryTracker() {
       const currentDate = new Date();
       const formattedDate = formatDate(currentDate);
 
-      // Prepare the data object for Supabase
-      const supabaseData = {
-        "Enquiry No.": formData.enquiryNo,
-        "Enquiry Status": formData.enquiryStatus || "Active",
-        "What Did Customer Say": formData.customerFeedback || "",
-        "Current Stage": currentStage,
-        "Sales Cordinator": sc_name || "",
+      // Prepare the tracking payload for refactored snake_case tables
+      const trackerPayload = {
+        enquiry_status: formData.enquiryStatus || "Active",
+        what_did_customer_say: formData.customerFeedback || "",
+        current_stage: currentStage,
       };
 
-      // Add stage-specific data with proper numeric handling
       if (isMakeQuotationStage) {
-        Object.assign(supabaseData, {
-          "Send Quotation No.": quotationData.sendQuotationNo,
-          "Quotation Shared By": quotationData.quotationSharedBy,
-          "Quotation Number": quotationData.quotationNumber,
-          "Quotation Value Without Tax": quotationData.valueWithoutTax,
-          "Quotation Value With Tax": quotationData.valueWithTax,
-          "Quotation Remarks": quotationData.remarks,
-          "Quotation Upload": quotationData.quotationFileUrl || "",
+        Object.assign(trackerPayload, {
+          send_quotation_no: quotationData.sendQuotationNo || null,
+          quotation_shared_by: quotationData.quotationSharedBy || null,
+          quotation_number: quotationData.quotationNumber || null,
+          quotation_value_without_tax: quotationData.valueWithoutTax ? Number(quotationData.valueWithoutTax) : null,
+          quotation_value_with_tax: quotationData.valueWithTax ? Number(quotationData.valueWithTax) : null,
+          quotation_remarks: quotationData.remarks || null,
+          quotation_upload: quotationData.quotationFileUrl || null,
         });
-      }
-      else if (isOrderExpectedStage) {
-        Object.assign(supabaseData, {
-          "Followup Status": orderExpectedData.followupStatus, // Current date as followup start
-          "Next Call Date": orderExpectedData.nextCallDate,
-          "Next Call Time": orderExpectedData.nextCallTime,
+      } else if (isOrderExpectedStage) {
+        Object.assign(trackerPayload, {
+          next_call_date: orderExpectedData.nextCallDate || null,
+          next_call_time: orderExpectedData.nextCallTime || null,
         });
-      }
-      else if (isOrderStatusStage) {
-        Object.assign(supabaseData, {
-          "Quotation Number": orderStatusData.orderStatusQuotationNumber,
-          "Is Order Received? Status": orderStatusData.orderStatus,
+      } else if (isOrderStatusStage) {
+        Object.assign(trackerPayload, {
+          quotation_number: orderStatusData.orderStatusQuotationNumber || null,
+          is_order_received_status: orderStatusData.orderStatus || null,
         });
 
-        // Add additional fields based on order status
         if (orderStatusData.orderStatus === "yes") {
-          Object.assign(supabaseData, {
-            "Acceptance Via": orderStatusData.acceptanceVia,
-            "Payment Mode": orderStatusData.paymentMode,
-            "Destination": orderStatusData.destination,
-            "PO Number": orderStatusData.poNumber,
-            "Payment Terms (In Days)": orderStatusData.paymentTerms,
-            "Transport Mode": orderStatusData.transportMode,
-            "Credit Days": orderStatusData.creditDays,
-            "Credit Limit": orderStatusData.creditLimit,
-            "CONVEYED FOR REGISTRATION FORM": orderStatusData.conveyedForRegistration,
-            "Offer": orderStatusData.orderVideo,
-            "Acceptance File Upload": typeof orderStatusData.acceptanceFile === "string"
-              ? orderStatusData.acceptanceFile
-              : "",// You can add file upload logic here
-            "Remark": orderStatusData.orderRemark,
-            "Order No.": orderNumber,
+          Object.assign(trackerPayload, {
+            acceptance_via: orderStatusData.acceptanceVia || null,
+            payment_mode: orderStatusData.paymentMode || null,
+            destination: orderStatusData.destination || null,
+            po_number: orderStatusData.poNumber || null,
+            payment_terms_days: orderStatusData.paymentTerms ? String(orderStatusData.paymentTerms) : null,
+            transport_mode: orderStatusData.transportMode || null,
+            offer: orderStatusData.orderVideo || null,
+            acceptance_file_upload: typeof orderStatusData.acceptanceFile === "string" ? orderStatusData.acceptanceFile : null,
+            remark: orderStatusData.orderRemark || null,
+            order_no: orderNumber || null,
           });
-        }
-        else if (orderStatusData.orderStatus === "no") {
-          Object.assign(supabaseData, {
-            "Order Lost Apology Video": typeof orderStatusData.apologyVideo === "string"
-              ? orderStatusData.apologyVideo
-              : "", // You can add file upload logic here
-            "If No Then Get Relevant Reason Status": orderStatusData.reasonStatus,
-            "If No Then Get Relevant Reason Remark": orderStatusData.reasonRemark,
-          });
-        }
-        else if (orderStatusData.orderStatus === "hold") {
-          Object.assign(supabaseData, {
-            "Customer Order Hold Reason Category": orderStatusData.holdReason,
-            "Holding Date": orderStatusData.holdingDate,
-            "Hold Remark": orderStatusData.holdRemark,
+        } else if (orderStatusData.orderStatus === "no") {
+          Object.assign(trackerPayload, {
+            order_lost_apology_video: typeof orderStatusData.apologyVideo === "string" ? orderStatusData.apologyVideo : null,
+            if_no_reason_status: orderStatusData.reasonStatus || null,
+            if_no_reason_remark: orderStatusData.reasonRemark || null,
           });
         }
       }
@@ -1293,14 +814,14 @@ function NewEnquiryTracker() {
 
           if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
             const { data: ld } = await supabase
-              .from("leads_to_order")
-              .select("handle_person, Company_Name, Salesperson_Name, Phone_Number, Email_Address, Location, State, Address, GST_Number")
-              .eq("LD-Lead-No", formData.enquiryNo)
+              .from("leads")
+              .select("handle_person, company_name, salesperson_name, phone_number, email_address, location, state, address, gst_number")
+              .eq("lead_no", formData.enquiryNo)
               .maybeSingle();
             leadData = ld;
           } else {
             const { data: ed } = await supabase
-              .from("enquiry_to_order")
+              .from("enquiries")
               .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number")
               .eq("enquiry_no", formData.enquiryNo)
               .maybeSingle();
@@ -1312,10 +833,10 @@ function NewEnquiryTracker() {
           if (!resolvedHandlePerson) {
             // Resolve round-robin
             const { data: lastAssigned } = await supabase
-              .from("leads_to_order")
+              .from("leads")
               .select("handle_person")
               .in("handle_person", ["Nikita", "Priya"])
-              .order("Timestamp", { ascending: false })
+              .order("created_at", { ascending: false })
               .limit(1);
 
             if (lastAssigned && lastAssigned.length > 0 && lastAssigned[0].handle_person) {
@@ -1326,8 +847,8 @@ function NewEnquiryTracker() {
           }
 
           // Insert / Update client_master
-          const clientName = leadData?.Salesperson_Name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
-          const compName = leadData?.Company_Name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
+          const clientName = leadData?.salesperson_name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
+          const compName = leadData?.company_name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
 
 
           // Only sync if company name is present
@@ -1336,10 +857,10 @@ function NewEnquiryTracker() {
               company_name: compName,
               client_name: clientName,
               sc_name: resolvedHandlePerson,
-              client_mobile_number: leadData?.Phone_Number || enqData?.phone_number || enqData?.phoneNumber || "",
-              state: leadData?.State || enqData?.enquiry_for_state || enqData?.enquiryState || "",
-              billing_address: leadData?.Address || enqData?.shipping_address || enqData?.shippingAddress || "",
-              gst_number: leadData?.GST_Number || enqData?.gst_number || enqData?.gstNumber || ""
+              client_mobile_number: leadData?.phone_number || enqData?.phone_number || enqData?.phoneNumber || "",
+              state: leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "",
+              billing_address: leadData?.address || enqData?.shipping_address || enqData?.shippingAddress || "",
+              gst_number: leadData?.gst_number || enqData?.gst_number || enqData?.gstNumber || ""
             };
 
             const { data: existingClient } = await supabase
@@ -1377,27 +898,36 @@ function NewEnquiryTracker() {
       }
       // --- END: Client Master Sync ---
 
-      // Clean up empty, null, or undefined values from supabaseData
-      Object.keys(supabaseData).forEach((key) => {
-        if (supabaseData[key] === undefined || supabaseData[key] === null || supabaseData[key] === "") {
-          delete supabaseData[key];
+      // Clean up empty, null, or undefined values from trackerPayload
+      Object.keys(trackerPayload).forEach((key) => {
+        if (trackerPayload[key] === undefined || trackerPayload[key] === null || trackerPayload[key] === "") {
+          delete trackerPayload[key];
         }
       });
 
       const isEnquiryTableRecord = (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("EN-")) || activeTab === "directEnquiry";
 
       if (isEnquiryTableRecord) {
+        // Fetch enquiry UUID from enquiries table using enquiry_no
+        const { data: enqData, error: enqErr } = await supabase
+          .from("enquiries")
+          .select("id")
+          .eq("enquiry_no", formData.enquiryNo)
+          .maybeSingle();
 
-        // Insert into Supabase for Direct Enquiries only
-        const { data, error } = await supabase
-          .from("enquiry_tracker")
-          .insert([supabaseData]);
+        if (enqData?.id) {
+          const { error: trackerErr } = await supabase
+            .from("enquiry_tracker")
+            .insert([{ ...trackerPayload, enquiry_id: enqData.id }]);
 
-        if (error) {
-          console.error("Error inserting data:", error.message);
-          showNotification("Error saving tracking data: " + error.message, "error");
-          setIsSubmitting(false);
-          return;
+          if (trackerErr) {
+            console.error("Error inserting into enquiry_tracker:", trackerErr.message);
+            showNotification("Error saving tracking data: " + trackerErr.message, "error");
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          console.warn("Could not find UUID in enquiries table for:", formData.enquiryNo);
         }
 
         const updateSuccess = await updateEnquiryToOrderTable(
@@ -1414,16 +944,8 @@ function NewEnquiryTracker() {
 
         if (updateSuccess) {
           showNotification("Call tracker updated successfully and enquiry record updated", "success");
-
-          // ✅ Wait for database to settle
           await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // ✅ Manually trigger webhook to ensure Google Sheets gets updated
-          const webhookSuccess = await triggerWebhookManually(
-            formData.enquiryNo,
-            "enquiry_to_order"
-          );
-
+          const webhookSuccess = await triggerWebhookManually(formData.enquiryNo, "enquiries");
           if (webhookSuccess) {
             showNotification("Data synced to Google Sheets", "success");
           } else {
@@ -1433,7 +955,28 @@ function NewEnquiryTracker() {
           showNotification("Call tracker updated but enquiry record could not be updated", "warning");
         }
       } else {
-        // Pass the correct data structure
+        // Fetch lead UUID from leads table using lead_no
+        const { data: leadData, error: leadErr } = await supabase
+          .from("leads")
+          .select("id")
+          .eq("lead_no", formData.enquiryNo)
+          .maybeSingle();
+
+        if (leadData?.id) {
+          const { error: trackerErr } = await supabase
+            .from("enquiry_tracker_for_leads")
+            .insert([{ ...trackerPayload, lead_id: leadData.id }]);
+
+          if (trackerErr) {
+            console.error("Error inserting into enquiry_tracker_for_leads:", trackerErr.message);
+            showNotification("Error saving lead tracking data: " + trackerErr.message, "error");
+            setIsSubmitting(false);
+            return;
+          }
+        } else {
+          console.warn("Could not find UUID in leads table for:", formData.enquiryNo);
+        }
+
         const updateSuccess = await updateLeadToOrderTable(
           formData.enquiryNo,
           {
@@ -1443,21 +986,13 @@ function NewEnquiryTracker() {
             ...orderStatusData
           },
           currentStage,
-          orderStatusData // Pass orderStatusData as the 4th parameter
+          orderStatusData
         );
 
         if (updateSuccess) {
           showNotification("Call tracker updated successfully and lead record updated", "success");
-
-          // ✅ Wait for database to settle
           await new Promise(resolve => setTimeout(resolve, 1000));
-
-          // ✅ Manually trigger webhook to ensure Google Sheets gets updated
-          const webhookSuccess = await triggerWebhookManually(
-            formData.enquiryNo,
-            "leads_to_order"
-          );
-
+          const webhookSuccess = await triggerWebhookManually(formData.enquiryNo, "leads");
           if (webhookSuccess) {
             showNotification("Data synced to Google Sheets", "success");
           } else {

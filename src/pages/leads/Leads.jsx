@@ -20,18 +20,24 @@ const generateNextImportLeadNumbers = async (count) => {
     const { data, error } = await supabase
       .from("leads")
       .select("lead_no")
-      .order("id", { ascending: false })
-      .limit(1);
+      .not("lead_no", "is", null)
+      .order("created_at", { ascending: false })
+      .limit(1000);
 
     let startNum = 1;
     if (!error && data && data.length > 0) {
-      const lastLeadNumber = data[0].lead_no || data[0]["LD-Lead-No"];
-      if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
-        const match = lastLeadNumber.match(/LD-(\d+)/);
-        if (match) {
-          startNum = Number.parseInt(match[1], 10) + 1;
+      let maxNum = 0;
+      data.forEach((row) => {
+        const lastLeadNumber = row.lead_no;
+        if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
+          const match = lastLeadNumber.match(/LD-(\d+)/);
+          if (match) {
+            const num = Number.parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
         }
-      }
+      });
+      if (maxNum > 0) startNum = maxNum + 1;
     }
 
     const numbers = [];
@@ -663,28 +669,29 @@ function Leads() {
       const { data, error } = await supabase
         .from("leads")
         .select("lead_no")
-        .order("id", { ascending: false })
-        .limit(1);
+        .not("lead_no", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(1000);
 
-      if (error) {
+      if (error || !data || data.length === 0) {
         setNextLeadNumber("LD-001");
         return;
       }
 
-      if (!data || data.length === 0) {
-        setNextLeadNumber("LD-001");
-        return;
-      }
-
-      const lastLeadNumber = data[0].lead_no || data[0]["LD-Lead-No"];
-      if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
-        const match = lastLeadNumber.match(/LD-(\d+)/);
-        if (match) {
-          const lastNumber = Number.parseInt(match[1], 10);
-          setNextLeadNumber(`LD-${String(lastNumber + 1).padStart(3, "0")}`);
-        } else {
-          setNextLeadNumber("LD-001");
+      let maxNum = 0;
+      data.forEach((row) => {
+        const lastLeadNumber = row.lead_no;
+        if (lastLeadNumber && lastLeadNumber.startsWith("LD-")) {
+          const match = lastLeadNumber.match(/LD-(\d+)/);
+          if (match) {
+            const num = Number.parseInt(match[1], 10);
+            if (num > maxNum) maxNum = num;
+          }
         }
+      });
+
+      if (maxNum > 0) {
+        setNextLeadNumber(`LD-${String(maxNum + 1).padStart(3, "0")}`);
       } else {
         setNextLeadNumber("LD-001");
       }
@@ -876,11 +883,14 @@ function Leads() {
         createdAtDate.getTime() + (tatHours * 3600000) + (tatMinutes * 60000)
       );
 
-      // 2. Insert into leads
+      // 2. Fetch freshest lead number right before insert to prevent duplicate key error
+      const freshNumbers = await generateNextImportLeadNumbers(1);
+      const authoritiveLeadNo = freshNumbers && freshNumbers.length > 0 ? freshNumbers[0] : nextLeadNumber;
+
       const leadData = {
         created_at: createdAtDate.toISOString(),
         planned_at: plannedAtDate.toISOString(),
-        lead_no: nextLeadNumber,
+        lead_no: authoritiveLeadNo,
         lead_receiver_name: formData.receiverName || "",
         lead_source: formData.source || "",
         company_name: formData.companyName || "",
