@@ -317,6 +317,17 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                     SC Distribution
                                 </Link>
                                 <Link
+                                    to="/master/crm-distribution"
+                                    onClick={() => setMobileMenuOpen(false)}
+                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                                        location.pathname === "/master/crm-distribution"
+                                            ? "bg-sky-50 text-sky-600 font-semibold"
+                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
+                                    }`}
+                                >
+                                    CRM Distribution
+                                </Link>
+                                <Link
                                     to="/master/client"
                                     onClick={() => setMobileMenuOpen(false)}
                                     className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${

@@ -42,6 +42,10 @@ function MainNav({ logout, setMobileMenuOpen }) {
       title: "SC Distribution",
       description: "Manage automatic Sales Coordinator assignments and round-robin rules"
     }
+    if (path.startsWith("/master/crm-distribution")) return {
+      title: "CRM Distribution",
+      description: "Manage hierarchical CRM/CRE assignment rules upon order conversion"
+    }
     if (path.startsWith("/master/client")) return {
       title: "Client Master",
       description: "Manage client master list"

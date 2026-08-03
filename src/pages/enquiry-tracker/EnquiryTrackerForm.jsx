@@ -815,14 +815,14 @@ function NewEnquiryTracker() {
           if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
             const { data: ld } = await supabase
               .from("leads")
-              .select("sc_name, company_name, person_name, phone_number, email_address, location, state, address, gst_number")
+              .select("sc_name, company_name, person_name, phone_number, email_address, location, state, address, gst_number, company_group_name, nob, crm_name")
               .eq("lead_no", formData.enquiryNo)
               .maybeSingle();
             leadData = ld;
           } else {
             const { data: ed } = await supabase
               .from("enquiries")
-              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number")
+              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number, crm_name")
               .eq("enquiry_no", formData.enquiryNo)
               .maybeSingle();
             enqData = ed;
@@ -853,21 +853,71 @@ function NewEnquiryTracker() {
 
           // Only sync if company name is present
           if (compName) {
+            const { data: existingClient } = await supabase
+              .from("client_master")
+              .select("uuid, company_name, crm_name, company_group_name")
+              .eq("company_name", compName)
+              .maybeSingle();
+
+            // CRM Distribution Algorithm (Group -> State -> NOB hierarchy)
+            let assignedCrmName = "";
+            if (existingClient) {
+              // If company already exists, bypass algorithm and inherit existing CRM Name
+              assignedCrmName = existingClient.crm_name || leadData?.crm_name || enqData?.crm_name || "";
+            } else {
+              // Brand new company! Execute Group -> State -> NOB hierarchical algorithm against crm_distribution
+              const leadGroup = leadData?.company_group_name || existingClient?.company_group_name || "";
+              const leadState = leadData?.state || enqData?.enquiry_for_state || "";
+              const leadNob = leadData?.nob || "";
+
+              try {
+                const { data: crmRules, error: rulesErr } = await supabase
+                  .from("crm_distribution")
+                  .select("key, value, category");
+
+                if (!rulesErr && crmRules && crmRules.length > 0) {
+                  const groupMap = new Map();
+                  const stateMap = new Map();
+                  const nobMap = new Map();
+
+                  crmRules.forEach(rule => {
+                    if (!rule.key || !rule.value) return;
+                    const normKey = rule.key.trim().toLowerCase();
+                    const cat = (rule.category || "").trim().toLowerCase();
+                    if (cat === "group") groupMap.set(normKey, rule.value);
+                    else if (cat === "state") stateMap.set(normKey, rule.value);
+                    else if (cat === "nob") nobMap.set(normKey, rule.value);
+                  });
+
+                  // Priority 1: Group
+                  if (leadGroup && groupMap.has(leadGroup.trim().toLowerCase())) {
+                    assignedCrmName = groupMap.get(leadGroup.trim().toLowerCase());
+                  } 
+                  // Priority 2: State
+                  else if (leadState && stateMap.has(leadState.trim().toLowerCase())) {
+                    assignedCrmName = stateMap.get(leadState.trim().toLowerCase());
+                  } 
+                  // Priority 3: NOB
+                  else if (leadNob && nobMap.has(leadNob.trim().toLowerCase())) {
+                    assignedCrmName = nobMap.get(leadNob.trim().toLowerCase());
+                  }
+                  // Fallback: remains blank ("") if no match found across all 3 tiers
+                }
+              } catch (crmErr) {
+                console.error("Error evaluating CRM distribution rules:", crmErr);
+              }
+            }
+
             const clientPayload = {
               company_name: compName,
               client_name: clientName,
               sc_name: resolvedHandlePerson,
+              crm_name: assignedCrmName || null,
               client_mobile_number: leadData?.phone_number || enqData?.phone_number || enqData?.phoneNumber || "",
               state: leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "",
               billing_address: leadData?.address || enqData?.shipping_address || enqData?.shippingAddress || "",
               gst_number: leadData?.gst_number || enqData?.gst_number || enqData?.gstNumber || ""
             };
-
-            const { data: existingClient } = await supabase
-              .from("client_master")
-              .select("uuid, company_name")
-              .eq("company_name", compName)
-              .maybeSingle();
 
             let cmError = null;
             if (existingClient) {
@@ -885,6 +935,21 @@ function NewEnquiryTracker() {
 
             if (cmError) {
               console.error("Error syncing client_master:", cmError);
+            }
+
+            // Sync assigned crm_name back to the parent lead or enquiry record
+            if (assignedCrmName) {
+              if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
+                await supabase
+                  .from("leads")
+                  .update({ crm_name: assignedCrmName })
+                  .eq("lead_no", formData.enquiryNo);
+              } else if (formData.enquiryNo) {
+                await supabase
+                  .from("enquiries")
+                  .update({ crm_name: assignedCrmName })
+                  .eq("enquiry_no", formData.enquiryNo);
+              }
             }
           } else {
             console.warn("Client Master sync skipped: No company name found");

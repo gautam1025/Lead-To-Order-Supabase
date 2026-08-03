@@ -17,6 +17,7 @@ import Notification from "./components/Notification"
 import Sidebar from "./components/Sidebar"
 import LeadMaster from "./pages/Master/LeadMaster"
 import ScDistributionMaster from "./pages/Master/ScDistributionMaster"
+import CREMgmt from "./pages/Master/CREMgmt"
 import ClientMaster from "./pages/Master/ClientMaster"
 import Dropdowns from "./pages/Master/Dropdowns"
 import Consignors from "./pages/Master/Consignors"
@@ -404,6 +405,14 @@ function App() {
                     element={
                       <ProtectedRoute>
                         <ScDistributionMaster />
+                      </ProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/master/crm-distribution"
+                    element={
+                      <ProtectedRoute>
+                        <CREMgmt />
                       </ProtectedRoute>
                     }
                   />

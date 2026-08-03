@@ -1,11 +1,13 @@
-Now, I want to make a algorithm based divison of the SCs for the new leads whose company is not present in the client_master table. 
+1. SC Assign based on two things [Sales Type and NOB] existing wale me column change karna, dropdown ka option dena for these two fields.
 
-This is for assigning the SC to the lead, when the lead is created from the Leads form. 
+2. Office hours add karna hai TAT me, next Call Date in follow-up will become the planned date for calculating the delay.
 
-It will be like, when the user creates a new Lead and the company is not present in the client_master table, then the SC will be assigned based on the following logic:
+----------- SC Assignment -----------
 
-when NOB=RESELLER selected in the dropdown, it will be assigned only to one person (e.g. GANGA), and for the other conditions, it will be divided equally between two persons (e.g. NIKITA & PRIYA) using a flag=true/false system which we will manage in the DB and the names will be managed from the Master stage. 
+We have to update the SC assignment logic. The SC will be assigned automatically when the user will create a lead or enquiry. 
 
-I want the table structure from you, so that we can do it efficiently. It will updated as follows: The new lead is filled, no company found in the DB, the system will check if NOB!=RESELLER, then which person has the true flag, the person will be pre-filled in the SC Name field, and the same person is marked as false with the other person as true, next time the person with the true will be assigned, and then the same will be repeated.
+Case-1: If the user selects the sales_type=NBD, then it must be assigned to specific person, and after the lead or enquiry is converted [like is_order_received_status=yes from Pending Enquiry Stage], then the sales_type must be updated to NBD_CRR and then it will look for the NOB!=RESELLER, and also the SC will be updated to divide between NIKITA/PRIYA equally.
 
-Analyze my requirement, and give me the schema for the new table, and also the algorithm and a new separate page under the Master directory.
+Case-2: if the NOB=RESELLER, then the SC won't be updated, only the Sales_Type will be updated.
+
+The SC Distribution form will also be updated 

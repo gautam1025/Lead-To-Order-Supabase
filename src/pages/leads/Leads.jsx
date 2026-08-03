@@ -243,6 +243,7 @@ function ExcelImportModal({ onClose, onSaved }) {
           credit_access: "",
           credit_days: null,
           credit_limit: null,
+          company_group_name: groupName || row.groupName || "",
         };
       });
 
@@ -915,6 +916,7 @@ function Leads() {
         credit_access: formData.creditAccess || "",
         credit_days: formData.creditDays ? parseInt(formData.creditDays, 10) : null,
         credit_limit: formData.creditLimit ? parseFloat(formData.creditLimit) : null,
+        company_group_name: formData.groupName || "",
       };
 
       const { error } = await supabase.from("leads").insert([leadData]);
