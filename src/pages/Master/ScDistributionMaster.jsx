@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Pencil, Trash2, RefreshCw, CheckCircle, Circle, Users, ShieldCheck, ArrowRight, Database } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, Users, ShieldCheck, ArrowRight, CheckSquare, Square } from "lucide-react";
 import supabase from "../../utils/supabase";
-import { TABLES } from "../../constants/dbSchema";
 
 export default function ScDistributionMaster() {
-  const [activeGroup, setActiveGroup] = useState("RESELLER"); // 'RESELLER' | 'OTHER'
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  // Dropdown options from database & defaults
   const [scOptions, setScOptions] = useState([]);
+  const [salesTypeOptions, setSalesTypeOptions] = useState([]);
+  const [sourceOptions, setSourceOptions] = useState([]);
+  const [nobOptions, setNobOptions] = useState([]);
 
   // Modal states
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -15,15 +19,16 @@ export default function ScDistributionMaster() {
   const [currentItem, setCurrentItem] = useState(null);
   const [formData, setFormData] = useState({
     sc_name: "",
-    is_active: true,
+    is_next_in_line: false,
     sequence_order: 1,
+    sales_types: ["NBD"],
+    lead_sources: ["ALL SOURCES"],
+    nobs: ["ALL NOBS (EXCEPT RESELLER)"],
   });
-
-  const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchData();
-    fetchScOptions();
+    fetchDropdownOptions();
   }, []);
 
   const fetchData = async () => {
@@ -32,7 +37,6 @@ export default function ScDistributionMaster() {
       const { data: records, error } = await supabase
         .from("sc_distribution")
         .select("*")
-        .order("rule_group", { ascending: true })
         .order("sequence_order", { ascending: true })
         .order("created_at", { ascending: true });
 
@@ -64,6 +68,9 @@ export default function ScDistributionMaster() {
           const rowsWithLastLead = res.map((row) => ({
             ...row,
             last_assigned_lead: lastLeadMap[row.sc_name] || "—",
+            sales_types: Array.isArray(row.sales_types) ? row.sales_types : [],
+            lead_sources: Array.isArray(row.lead_sources) ? row.lead_sources : [],
+            nobs: Array.isArray(row.nobs) ? row.nobs : [],
           }));
           setData(rowsWithLastLead);
         } else {
@@ -77,41 +84,43 @@ export default function ScDistributionMaster() {
     }
   };
 
-  const fetchScOptions = async () => {
-    try {
-      const { data: scData, error } = await supabase
-        .from(TABLES.DROPDOWN)
-        .select("value")
-        .eq("category", "sc_name");
+  const fetchDropdownOptions = async () => {
+    const fetchCat = (category) =>
+      supabase.from("dropdown").select("value").eq("category", category);
 
-      if (!error && scData) {
-        const unique = [...new Set(scData.map(item => item.value).filter(Boolean))].sort();
-        setScOptions(unique);
-      }
-    } catch (err) {
-      console.error("Error loading SC dropdown options:", err);
-    }
-  };
-
-  const handleSeedDefaults = async () => {
-    setLoading(true);
     try {
-      const defaultPayloads = [
-        { sc_name: "GANGA", rule_group: "RESELLER", is_active: true, is_next_in_line: true, sequence_order: 1 },
-        { sc_name: "NIKITA", rule_group: "OTHER", is_active: true, is_next_in_line: true, sequence_order: 1 },
-        { sc_name: "PRIYA", rule_group: "OTHER", is_active: true, is_next_in_line: false, sequence_order: 2 },
+      const [
+        { data: scs },
+        { data: stypes },
+        { data: lsources },
+        { data: nobsList },
+      ] = await Promise.all([
+        fetchCat("sc_name"),
+        fetchCat("sales_type"),
+        fetchCat("lead_source"),
+        fetchCat("nob"),
+      ]);
+
+      const clean = (arr) =>
+        [...new Set((arr || []).map((r) => r.value).filter((v) => v && v.trim() !== ""))].sort();
+
+      setScOptions(clean(scs));
+
+      // Always ensure NBD, NBD_CRR, and CRR exist per specification
+      const combinedTypes = [...new Set(["NBD", "NBD_CRR", "CRR", ...clean(stypes)])].sort();
+      setSalesTypeOptions(combinedTypes);
+
+      const combinedSources = ["ALL SOURCES", ...clean(lsources)];
+      setSourceOptions(combinedSources);
+
+      const combinedNobs = [
+        "ALL NOBS (EXCEPT RESELLER)",
+        "ALL NOBS",
+        ...clean(nobsList).filter((n) => n.toUpperCase() !== "ALL NOBS (EXCEPT RESELLER)" && n.toUpperCase() !== "ALL NOBS")
       ];
-
-      const { error } = await supabase.from("sc_distribution").insert(defaultPayloads);
-      if (error) {
-        alert("Failed to seed default SCs: " + error.message);
-      } else {
-        await fetchData();
-      }
+      setNobOptions(combinedNobs);
     } catch (err) {
-      console.error("Error seeding:", err);
-    } finally {
-      setLoading(false);
+      console.error("Error fetching dropdown options:", err);
     }
   };
 
@@ -121,16 +130,21 @@ export default function ScDistributionMaster() {
     if (item && mode === "edit") {
       setFormData({
         sc_name: item.sc_name || "",
-        is_active: item.is_active ?? true,
+        is_next_in_line: item.is_next_in_line ?? false,
         sequence_order: item.sequence_order || 1,
+        sales_types: Array.isArray(item.sales_types) ? [...item.sales_types] : [],
+        lead_sources: Array.isArray(item.lead_sources) ? [...item.lead_sources] : [],
+        nobs: Array.isArray(item.nobs) ? [...item.nobs] : [],
       });
     } else {
-      // Auto sequence order to next available in current group
-      const currentGroupCount = data.filter(r => r.rule_group === activeGroup).length;
+      const nextSeq = data.length + 1;
       setFormData({
         sc_name: scOptions[0] || "",
-        is_active: true,
-        sequence_order: currentGroupCount + 1,
+        is_next_in_line: data.length === 0,
+        sequence_order: nextSeq,
+        sales_types: ["NBD"],
+        lead_sources: ["ALL SOURCES"],
+        nobs: ["ALL NOBS (EXCEPT RESELLER)"],
       });
     }
     setIsModalOpen(true);
@@ -141,6 +155,34 @@ export default function ScDistributionMaster() {
     setCurrentItem(null);
   };
 
+  const handleCheckboxToggle = (field, option) => {
+    setFormData((prev) => {
+      const currentList = prev[field] || [];
+      const exists = currentList.includes(option);
+      let nextList = exists ? currentList.filter((item) => item !== option) : [...currentList, option];
+
+      // Handle mutually exclusive or overriding shortcuts
+      if (field === "nobs") {
+        if (option === "ALL NOBS" && !exists) {
+          nextList = ["ALL NOBS"];
+        } else if (option === "ALL NOBS (EXCEPT RESELLER)" && !exists) {
+          nextList = ["ALL NOBS (EXCEPT RESELLER)"];
+        } else if (!exists && (option !== "ALL NOBS" && option !== "ALL NOBS (EXCEPT RESELLER)")) {
+          nextList = nextList.filter((x) => x !== "ALL NOBS" && x !== "ALL NOBS (EXCEPT RESELLER)");
+        }
+      }
+      if (field === "lead_sources") {
+        if (option === "ALL SOURCES" && !exists) {
+          nextList = ["ALL SOURCES"];
+        } else if (!exists && option !== "ALL SOURCES") {
+          nextList = nextList.filter((x) => x !== "ALL SOURCES");
+        }
+      }
+
+      return { ...prev, [field]: nextList };
+    });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!formData.sc_name.trim()) {
@@ -149,38 +191,42 @@ export default function ScDistributionMaster() {
     }
 
     try {
-      if (modalMode === "add") {
-        // If adding to 'OTHER' and it is the first record, set is_next_in_line to true
-        const existingGroup = data.filter(r => r.rule_group === activeGroup);
-        const isFirst = existingGroup.length === 0;
+      const payload = {
+        sc_name: formData.sc_name.trim(),
+        rule_group: "DYNAMIC", // Fallback for schema compatibility
+        is_active: true, // Always set active by default since status is not toggled manually
+        is_next_in_line: formData.is_next_in_line,
+        sequence_order: Number(formData.sequence_order) || 1,
+        sales_types: formData.sales_types,
+        lead_sources: formData.lead_sources,
+        nobs: formData.nobs,
+        updated_at: new Date().toISOString()
+      };
 
+      if (modalMode === "add") {
         const { error } = await supabase.from("sc_distribution").insert([{
-          sc_name: formData.sc_name.trim(),
-          rule_group: activeGroup,
-          is_active: formData.is_active,
-          sequence_order: Number(formData.sequence_order) || 1,
-          is_next_in_line: isFirst || activeGroup === "RESELLER",
+          ...payload,
+          created_at: new Date().toISOString()
         }]);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("sc_distribution").update({
-          sc_name: formData.sc_name.trim(),
-          is_active: formData.is_active,
-          sequence_order: Number(formData.sequence_order) || 1,
-          updated_at: new Date().toISOString()
-        }).eq("id", currentItem.id);
+        const { error } = await supabase
+          .from("sc_distribution")
+          .update(payload)
+          .eq("id", currentItem.id);
         if (error) throw error;
       }
+
       handleCloseModal();
       fetchData();
     } catch (err) {
-      alert("Error saving record: " + err.message);
+      alert("Error saving SC distribution rule: " + err.message);
       console.error(err);
     }
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm("Are you sure you want to remove this Sales Coordinator from the distribution pool?")) return;
+    if (!window.confirm("Are you sure you want to delete this SC distribution rule?")) return;
     try {
       const { error } = await supabase.from("sc_distribution").delete().eq("id", id);
       if (error) throw error;
@@ -190,48 +236,31 @@ export default function ScDistributionMaster() {
     }
   };
 
-  const handleSetNextInLine = async (id) => {
+  const handleToggleNextInLine = async (row) => {
     try {
-      // First clear is_next_in_line for all in the same rule_group
+      const newVal = !row.is_next_in_line;
       await supabase
         .from("sc_distribution")
-        .update({ is_next_in_line: false })
-        .eq("rule_group", activeGroup);
-
-      // Then set true for selected ID
-      await supabase
-        .from("sc_distribution")
-        .update({ is_next_in_line: true, updated_at: new Date().toISOString() })
-        .eq("id", id);
-
+        .update({ is_next_in_line: newVal, updated_at: new Date().toISOString() })
+        .eq("id", row.id);
       fetchData();
     } catch (err) {
-      alert("Error updating next-in-line status: " + err.message);
-      console.error(err);
+      alert("Error updating Next in Line status: " + err.message);
     }
   };
 
-  const handleToggleActive = async (item) => {
-    try {
-      await supabase
-        .from("sc_distribution")
-        .update({ is_active: !item.is_active, updated_at: new Date().toISOString() })
-        .eq("id", item.id);
-      fetchData();
-    } catch (err) {
-      console.error("Error toggling active status:", err);
-    }
-  };
-
-  const filteredRows = data.filter(item => {
-    const matchesGroup = item.rule_group === activeGroup;
-    const matchesSearch = !searchQuery || item.sc_name.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesGroup && matchesSearch;
+  const filteredRows = data.filter((item) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    const matchName = (item.sc_name || "").toLowerCase().includes(q);
+    const matchType = (item.sales_types || []).some((t) => t.toLowerCase().includes(q));
+    const matchNob = (item.nobs || []).some((n) => n.toLowerCase().includes(q));
+    return matchName || matchType || matchNob;
   });
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
           <div>
@@ -240,12 +269,15 @@ export default function ScDistributionMaster() {
               SC Distribution Master
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Manage automatic Sales Coordinator assignments for new Leads when companies do not exist in Client Master.
+              Configure dynamic SC assignments based on multi-select checkboxes for Sales Type, Lead Source, and NOB.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <button
-              onClick={fetchData}
+              onClick={() => {
+                fetchData();
+                fetchDropdownOptions();
+              }}
               className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 text-gray-600 transition duration-150"
               title="Refresh"
             >
@@ -256,83 +288,28 @@ export default function ScDistributionMaster() {
               className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white font-medium rounded-lg shadow-sm transition duration-150"
             >
               <Plus className="w-5 h-5" />
-              Add SC to Pool
+              Add SC Rule
             </button>
           </div>
         </div>
 
-        {/* Empty State / Initialize Defaults Banner */}
-        {!loading && data.length === 0 && (
-          <div className="bg-purple-50 border border-purple-200 rounded-xl p-6 text-center shadow-sm">
-            <Database className="w-12 h-12 text-purple-500 mx-auto mb-3" />
-            <h3 className="text-lg font-semibold text-purple-900">No SC Distribution Rules Configured Yet</h3>
-            <p className="text-sm text-purple-700 max-w-md mx-auto my-2">
-              Click the button below to instantly populate the discussed defaults: GANGA for Reseller leads, and a round-robin pool of NIKITA and PRIYA for other leads.
-            </p>
-            <button
-              onClick={handleSeedDefaults}
-              disabled={loading}
-              className="mt-3 inline-flex items-center gap-2 px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white text-sm font-medium rounded-lg shadow transition duration-150"
-            >
-              Initialize Default SC Pool (GANGA, NIKITA, PRIYA)
-            </button>
-          </div>
-        )}
-
-        {/* Tab Navigation */}
-        <div className="flex items-center space-x-4 border-b border-gray-200">
-          <button
-            onClick={() => setActiveGroup("RESELLER")}
-            className={`flex items-center gap-2 py-3 px-6 font-semibold text-sm border-b-2 transition-colors duration-150 ${
-              activeGroup === "RESELLER"
-                ? "border-purple-600 text-purple-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <span>NOB = RESELLER (Dedicated)</span>
-            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 font-bold">
-              {data.filter(i => i.rule_group === "RESELLER").length}
-            </span>
-          </button>
-          <button
-            onClick={() => setActiveGroup("OTHER")}
-            className={`flex items-center gap-2 py-3 px-6 font-semibold text-sm border-b-2 transition-colors duration-150 ${
-              activeGroup === "OTHER"
-                ? "border-purple-600 text-purple-600"
-                : "border-transparent text-gray-500 hover:text-gray-700"
-            }`}
-          >
-            <span>NOB ≠ RESELLER (Round-Robin Pool)</span>
-            <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 font-bold">
-              {data.filter(i => i.rule_group === "OTHER").length}
-            </span>
-          </button>
-        </div>
-
-        {/* Search Bar & Instructions */}
+        {/* Search & Instructions */}
         <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="relative flex-1 max-w-md">
             <Search className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by Sales Coordinator name..."
+              placeholder="Search by SC name, Sales Type, or NOB..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
             />
           </div>
-          <div className="text-xs text-gray-500 max-w-lg">
-            {activeGroup === "RESELLER" ? (
-              <span className="flex items-center gap-1.5 font-medium text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-lg border border-emerald-200">
-                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                All new leads with NOB = Reseller will be assigned to the active coordinator below.
-              </span>
-            ) : (
-              <span className="flex items-center gap-1.5 font-medium text-blue-700 bg-blue-50 px-3 py-1.5 rounded-lg border border-blue-200">
-                <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0" />
-                Leads with NOB ≠ Reseller rotate automatically between active pool members upon submission.
-              </span>
-            )}
+          <div className="text-xs text-gray-600 max-w-xl">
+            <span className="flex items-center gap-1.5 font-medium text-purple-800 bg-purple-50 px-3 py-2 rounded-lg border border-purple-200">
+              <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
+              Rules are evaluated dynamically. Upon Order conversion (NBD &rarr; NBD_CRR), the system matches candidates with NBD_CRR and the company's NOB without hardcoded restrictions.
+            </span>
           </div>
         </div>
 
@@ -341,89 +318,123 @@ export default function ScDistributionMaster() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <th className="py-3.5 px-6">Sequence</th>
+                <th className="py-3.5 px-4">Seq</th>
                 <th className="py-3.5 px-6">SC Name</th>
-                <th className="py-3.5 px-6">Last Assigned Lead No.</th>
-                <th className="py-3.5 px-6">Status</th>
-                {activeGroup === "OTHER" && <th className="py-3.5 px-6 text-center">Next in Line</th>}
+                <th className="py-3.5 px-5">Sales Types</th>
+                <th className="py-3.5 px-5">Lead Sources</th>
+                <th className="py-3.5 px-5">NOB Rules</th>
+                <th className="py-3.5 px-5">Last Lead No.</th>
+                <th className="py-3.5 px-5 text-center">Next Turn</th>
                 <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
-              {filteredRows.length > 0 ? (
+            <tbody className="divide-y divide-gray-100 text-sm">
+              {loading ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-10 text-gray-400">
+                    Loading SC distribution rules...
+                  </td>
+                </tr>
+              ) : filteredRows.length === 0 ? (
+                <tr>
+                  <td colSpan="8" className="text-center py-12 text-gray-500">
+                    No SC distribution rules configured. Click "Add SC Rule" to create your pool.
+                  </td>
+                </tr>
+              ) : (
                 filteredRows.map((row, index) => (
-                  <tr key={row.id} className="hover:bg-gray-50/75 transition-colors">
-                    <td className="py-4 px-6 font-medium text-gray-500">
+                  <tr key={row.id} className="hover:bg-gray-50/70 transition duration-150">
+                    <td className="py-4 px-4 font-medium text-gray-500">
                       #{row.sequence_order || index + 1}
                     </td>
-                    <td className="py-4 px-6 font-semibold text-gray-900 flex items-center gap-2">
-                      <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">
-                        {row.sc_name?.slice(0, 2)?.toUpperCase()}
-                      </span>
-                      {row.sc_name}
+                    <td className="py-4 px-6 font-bold text-gray-900 whitespace-nowrap">
+                      <div className="flex items-center gap-2">
+                        <span className="w-8 h-8 rounded-full bg-purple-100 text-purple-700 font-bold flex items-center justify-center text-xs">
+                          {row.sc_name?.slice(0, 2)?.toUpperCase()}
+                        </span>
+                        {row.sc_name}
+                      </div>
                     </td>
-                    <td className="py-4 px-6 font-medium">
+                    <td className="py-4 px-5 max-w-[200px]">
+                      <div className="flex flex-wrap gap-1">
+                        {(row.sales_types || []).map((t) => (
+                          <span key={t} className="px-2 py-0.5 text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-md">
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-4 px-5 max-w-[200px]">
+                      <div className="flex flex-wrap gap-1">
+                        {(row.lead_sources || []).map((s) => (
+                          <span key={s} className="px-2 py-0.5 text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 rounded-md">
+                            {s}
+                          </span>
+                        ))}
+                      </div>
+                    </td>
+                    <td className="py-4 px-5 max-w-[240px]">
+                      <div className="flex flex-wrap gap-1">
+                        {(row.nobs || []).map((n) => {
+                          const isSpecial = n.includes("EXCEPT") || n === "ALL NOBS";
+                          return (
+                            <span key={n} className={`px-2 py-0.5 text-xs font-bold border rounded-md ${
+                              isSpecial ? "bg-amber-50 text-amber-800 border-amber-300" : "bg-teal-50 text-teal-700 border-teal-200"
+                            }`}>
+                              {n}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </td>
+                    <td className="py-4 px-5 font-medium whitespace-nowrap">
                       {row.last_assigned_lead && row.last_assigned_lead !== "—" ? (
-                        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-sky-50 border border-sky-200 text-sky-800 text-xs font-semibold shadow-sm">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-sky-50 border border-sky-200 text-sky-800 text-xs font-semibold shadow-sm">
                           {row.last_assigned_lead}
                         </span>
                       ) : (
                         <span className="text-gray-400 font-normal">—</span>
                       )}
                     </td>
-                    <td className="py-4 px-6">
+                    <td className="py-4 px-5 text-center whitespace-nowrap">
                       <button
-                        onClick={() => handleToggleActive(row)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-colors ${
-                          row.is_active
-                            ? "bg-emerald-100 text-emerald-800 hover:bg-emerald-200"
-                            : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                        onClick={() => handleToggleNextInLine(row)}
+                        className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold transition-all ${
+                          row.is_next_in_line
+                            ? "bg-purple-100 text-purple-800 border border-purple-300 shadow-sm"
+                            : "bg-gray-50 text-gray-500 border border-gray-200 hover:bg-gray-100"
                         }`}
+                        title="Click to toggle Next in Line turn for this rule"
                       >
-                        {row.is_active ? <CheckCircle className="w-3.5 h-3.5 text-emerald-600" /> : <Circle className="w-3.5 h-3.5 text-gray-400" />}
-                        {row.is_active ? "Active" : "Inactive"}
+                        {row.is_next_in_line ? (
+                          <>
+                            <ArrowRight className="w-3.5 h-3.5 text-purple-600 animate-pulse" /> Next Turn
+                          </>
+                        ) : (
+                          "Set Next"
+                        )}
                       </button>
                     </td>
-                    {activeGroup === "OTHER" && (
-                      <td className="py-4 px-6 text-center">
-                        {row.is_next_in_line ? (
-                          <span className="inline-flex items-center gap-1 px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-semibold text-xs border border-purple-300">
-                            <ArrowRight className="w-3.5 h-3.5 animate-pulse" /> Next Turn
-                          </span>
-                        ) : (
-                          <button
-                            onClick={() => handleSetNextInLine(row.id)}
-                            className="px-3 py-1 text-xs text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-full border border-gray-200 transition-colors"
-                          >
-                            Set as Next
-                          </button>
-                        )}
-                      </td>
-                    )}
-                    <td className="py-4 px-6 text-right space-x-2">
-                      <button
-                        onClick={() => handleOpenModal("edit", row)}
-                        className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                        title="Edit"
-                      >
-                        <Pencil className="w-4 h-4" />
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row.id)}
-                        className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <td className="py-4 px-6 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleOpenModal("edit", row)}
+                          className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition duration-150"
+                          title="Edit rule"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => handleDelete(row.id)}
+                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition duration-150"
+                          title="Delete rule"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
-              ) : (
-                <tr>
-                  <td colSpan="5" className="py-12 text-center text-gray-400 font-medium">
-                    {loading ? "Loading distribution pool..." : `No coordinators configured for ${activeGroup === "RESELLER" ? "Reseller" : "Round-Robin"} pool.`}
-                  </td>
-                </tr>
               )}
             </tbody>
           </table>
@@ -432,72 +443,172 @@ export default function ScDistributionMaster() {
 
       {/* Add / Edit Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-5 border border-gray-100 animate-in fade-in zoom-in-95 duration-150">
-            <h3 className="text-lg font-bold text-gray-800">
-              {modalMode === "add" ? "Add SC to Pool" : "Edit SC Rule"} ({activeGroup})
-            </h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Sales Coordinator Name <span className="text-red-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  list="scOptionsList"
-                  value={formData.sc_name}
-                  onChange={(e) => setFormData({ ...formData, sc_name: e.target.value })}
-                  placeholder="Select or enter SC name..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                  required
-                />
-                <datalist id="scOptionsList">
-                  {scOptions.map((opt, idx) => (
-                    <option key={idx} value={opt} />
-                  ))}
-                </datalist>
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-600" />
+                {modalMode === "add" ? "Add SC Distribution Rule" : "Edit SC Distribution Rule"}
+              </h3>
+              <button
+                onClick={handleCloseModal}
+                className="text-gray-400 hover:text-gray-600 font-bold text-xl"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Top Details (SC Name, Sequence, Next in Line) */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pb-4 border-b border-gray-100 items-end">
+                <div className="md:col-span-1 space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    SC Name <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.sc_name}
+                    onChange={(e) => setFormData({ ...formData, sc_name: e.target.value })}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-gray-900"
+                    required
+                  >
+                    <option value="" disabled>Select SC Representative...</option>
+                    {scOptions.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Sequence Order
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={formData.sequence_order}
+                    onChange={(e) => setFormData({ ...formData, sequence_order: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
+                  />
+                </div>
+
+                <div className="pb-1.5">
+                  <label className="flex items-center gap-2.5 p-2 rounded-lg bg-purple-50/75 border border-purple-200 cursor-pointer hover:bg-purple-100/60 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_next_in_line}
+                      onChange={(e) => setFormData({ ...formData, is_next_in_line: e.target.checked })}
+                      className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+                    />
+                    <span className="text-sm font-bold text-purple-900">Next Turn in Round-Robin</span>
+                  </label>
+                </div>
               </div>
 
-              <div className="space-y-1.5">
-                <label className="block text-sm font-semibold text-gray-700">
-                  Sequence Order
-                </label>
-                <input
-                  type="number"
-                  min="1"
-                  value={formData.sequence_order}
-                  onChange={(e) => setFormData({ ...formData, sequence_order: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
-                />
-                <p className="text-xs text-gray-400">Determines rotation sequence in the round-robin pool.</p>
+              {/* Checkbox Section: Sales Types */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-indigo-800 uppercase tracking-wider">
+                    1. Sales Types Checkboxes (NBD / NBD_CRR / CRR)
+                  </label>
+                  <span className="text-xs text-gray-400">Select all sales types this SC handles</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-indigo-50/50 p-3 rounded-xl border border-indigo-100">
+                  {salesTypeOptions.map((opt) => {
+                    const checked = (formData.sales_types || []).includes(opt);
+                    return (
+                      <label
+                        key={opt}
+                        onClick={() => handleCheckboxToggle("sales_types", opt)}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border text-xs font-bold transition-all ${
+                          checked
+                            ? "bg-white text-indigo-900 border-indigo-300 shadow-sm"
+                            : "bg-transparent text-gray-600 border-transparent hover:bg-white/50"
+                        }`}
+                      >
+                        {checked ? <CheckSquare className="w-4 h-4 text-indigo-600 shrink-0" /> : <Square className="w-4 h-4 text-gray-300 shrink-0" />}
+                        <span className="truncate">{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="flex items-center gap-2 pt-2">
-                <input
-                  type="checkbox"
-                  id="isActiveCheck"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
-                />
-                <label htmlFor="isActiveCheck" className="text-sm font-medium text-gray-700">
-                  Active in Distribution Pool
-                </label>
+              {/* Checkbox Section: NOB */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-amber-800 uppercase tracking-wider">
+                    2. NOB Rules Checkboxes
+                  </label>
+                  <span className="text-xs text-gray-400">Use shortcut option to cover non-Reseller leads</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 bg-amber-50/50 p-3 rounded-xl border border-amber-100 max-h-48 overflow-y-auto">
+                  {nobOptions.map((opt) => {
+                    const checked = (formData.nobs || []).includes(opt);
+                    const isShortcut = opt.includes("EXCEPT") || opt === "ALL NOBS";
+                    return (
+                      <label
+                        key={opt}
+                        onClick={() => handleCheckboxToggle("nobs", opt)}
+                        className={`flex items-center gap-2 p-2.5 rounded-lg cursor-pointer border text-xs font-semibold transition-all ${
+                          checked
+                            ? isShortcut ? "bg-amber-100 text-amber-900 border-amber-400 shadow-sm" : "bg-white text-gray-900 border-amber-200 shadow-sm"
+                            : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
+                        }`}
+                      >
+                        {checked ? <CheckSquare className="w-4 h-4 text-amber-600 shrink-0" /> : <Square className="w-4 h-4 text-gray-300 shrink-0" />}
+                        <span className={isShortcut ? "font-bold text-amber-900" : ""}>{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
 
-              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+              {/* Checkbox Section: Lead Sources */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-xs font-bold text-gray-700 uppercase tracking-wider">
+                    3. Lead Sources Checkboxes
+                  </label>
+                  <span className="text-xs text-gray-400">Select sources or check "ALL SOURCES"</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 bg-gray-50 p-3 rounded-xl border border-gray-200 max-h-40 overflow-y-auto">
+                  {sourceOptions.map((opt) => {
+                    const checked = (formData.lead_sources || []).includes(opt);
+                    return (
+                      <label
+                        key={opt}
+                        onClick={() => handleCheckboxToggle("lead_sources", opt)}
+                        className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border text-xs font-medium transition-all ${
+                          checked
+                            ? "bg-white text-gray-900 border-gray-300 shadow-sm font-bold"
+                            : "bg-transparent text-gray-500 border-transparent hover:bg-white/50"
+                        }`}
+                      >
+                        {checked ? <CheckSquare className="w-4 h-4 text-gray-800 shrink-0" /> : <Square className="w-4 h-4 text-gray-300 shrink-0" />}
+                        <span className="truncate">{opt}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 shrink-0">
                 <button
                   type="button"
                   onClick={handleCloseModal}
-                  className="px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-4 py-2 text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-lg transition duration-150"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2 text-sm font-medium bg-purple-600 hover:bg-purple-700 text-white rounded-lg shadow-sm transition-colors"
+                  className="px-5 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition duration-150"
+                  disabled={formData.sales_types.length === 0 || formData.nobs.length === 0}
                 >
-                  {modalMode === "add" ? "Add Coordinator" : "Save Changes"}
+                  {modalMode === "add" ? "Save SC Rule" : "Update SC Rule"}
                 </button>
               </div>
             </form>

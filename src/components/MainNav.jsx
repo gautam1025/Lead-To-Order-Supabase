@@ -34,21 +34,9 @@ function MainNav({ logout, setMobileMenuOpen }) {
       title: "Reports",
       description: "View sales performance reports and charts"
     }
-    if (path.startsWith("/master/lead")) return {
-      title: "Lead Master",
-      description: "Manage lead source configurations"
-    }
-    if (path.startsWith("/master/sc-distribution")) return {
-      title: "SC Distribution",
-      description: "Manage automatic Sales Coordinator assignments and round-robin rules"
-    }
-    if (path.startsWith("/master/crm-distribution")) return {
-      title: "CRM Distribution",
-      description: "Manage hierarchical CRM/CRE assignment rules upon order conversion"
-    }
-    if (path.startsWith("/master/client")) return {
-      title: "Client Master",
-      description: "Manage client master list"
+    if (path.startsWith("/master")) return {
+      title: "Master Data",
+      description: "Centralized master records, distribution rules, and catalog management"
     }
     if (path.startsWith("/setting")) return {
       title: "Settings",

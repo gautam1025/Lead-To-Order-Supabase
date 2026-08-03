@@ -139,6 +139,21 @@ export const COLUMNS = {
     UPDATED_AT: 'updated_at',
     CLIENT_CODE: 'client_code',
     IS_RELEVANT: 'isRelevant',
+    SALES_TYPE: 'sales_type',
+  },
+
+  [TABLES.SC_DISTRIBUTION]: {
+    ID: 'id',
+    SC_NAME: 'sc_name',
+    RULE_GROUP: 'rule_group',
+    SALES_TYPES: 'sales_types',
+    LEAD_SOURCES: 'lead_sources',
+    NOBS: 'nobs',
+    IS_ACTIVE: 'is_active',
+    IS_NEXT_IN_LINE: 'is_next_in_line',
+    SEQUENCE_ORDER: 'sequence_order',
+    CREATED_AT: 'created_at',
+    UPDATED_AT: 'updated_at',
   },
 } as const;
 

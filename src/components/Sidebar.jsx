@@ -1,5 +1,5 @@
 import { Link, useLocation } from "react-router-dom"
-import { HomeIcon, UsersIcon, PhoneCallIcon, BarChartIcon, FileTextIcon, ShieldIcon, LogoutIcon, DatabaseIcon, ChevronDownIcon, ChevronUpIcon, SettingsIcon } from "./Icons"
+import { HomeIcon, UsersIcon, PhoneCallIcon, BarChartIcon, FileTextIcon, ShieldIcon, LogoutIcon, DatabaseIcon, SettingsIcon } from "./Icons"
 import { useContext, useState, useEffect } from "react"
 import { AuthContext } from "../App"
 import supabase from "../utils/supabase"
@@ -9,7 +9,6 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     const location = useLocation()
     const authContext = useContext(AuthContext) || {}
     const { userType = null, isAdmin = () => false, logout = () => {} } = authContext
-    const [isMasterOpen, setIsMasterOpen] = useState(() => location.pathname.startsWith("/master"))
     const [counts, setCounts] = useState({
         callTracker: null,
         enquiryTracker: null,
@@ -18,12 +17,6 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
     })
 
     const isMasterActive = location.pathname.startsWith("/master")
-
-    useEffect(() => {
-        if (isMasterActive) {
-            setIsMasterOpen(true)
-        }
-    }, [location.pathname])
 
     useEffect(() => {
         const fetchCounts = async () => {
@@ -271,130 +264,19 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                         </Link>
                     ))}
 
-                    {/* Master Collapsible Menu */}
-                    <div>
-                        <button
-                            onClick={() => setIsMasterOpen(!isMasterOpen)}
-                            className={`flex w-full items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${isMasterActive || isMasterOpen
-                                ? "bg-slate-100 text-sky-600"
-                                : "text-slate-600 hover:bg-sky-50 hover:text-sky-600"
-                                }`}
-                        >
-                            <div className="flex items-center">
-                                <DatabaseIcon className="h-5 w-5 mr-3" />
-                                Master
-                            </div>
-                            {isMasterOpen ? (
-                                <ChevronUpIcon className="h-4 w-4" />
-                            ) : (
-                                <ChevronDownIcon className="h-4 w-4" />
-                            )}
-                        </button>
-                        
-                        {/* Master Sub-menu */}
-                        {isMasterOpen && (
-                            <div className="mt-1 space-y-1 pl-11 pr-3">
-                                <Link
-                                    to="/master/lead"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/lead"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    Lead Master
-                                </Link>
-                                <Link
-                                    to="/master/sc-distribution"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/sc-distribution"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    SC Distribution
-                                </Link>
-                                <Link
-                                    to="/master/crm-distribution"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/crm-distribution"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    CRM Distribution
-                                </Link>
-                                <Link
-                                    to="/master/client"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/client"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    <span>Client Master</span>
-                                    {counts.clientMaster !== null && (
-                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700">
-                                            {counts.clientMaster}
-                                        </span>
-                                    )}
-                                </Link>
-                                <Link
-                                    to="/master/dropdowns"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/dropdowns"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    Dropdowns
-                                </Link>
-                                <Link
-                                    to="/master/consignors"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/consignors"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    Consignors
-                                </Link>
-                                 <Link
-                                    to="/master/items"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/items"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    <span>Items</span>
-                                    {counts.itemsMaster !== null && (
-                                        <span className="px-2 py-0.5 text-xs font-bold rounded-full bg-slate-100 text-slate-700">
-                                            {counts.itemsMaster}
-                                        </span>
-                                    )}
-                                </Link>
-                                <Link
-                                    to="/master/tat"
-                                    onClick={() => setMobileMenuOpen(false)}
-                                    className={`block rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
-                                        location.pathname === "/master/tat" || location.pathname === "/master/tat-config"
-                                            ? "bg-sky-50 text-sky-600 font-semibold"
-                                            : "text-slate-500 hover:bg-slate-50 hover:text-sky-600"
-                                    }`}
-                                >
-                                    TAT Configuration
-                                </Link>
-                            </div>
-                        )}
-                        
+                    {/* Master Data Link */}
+                    <Link
+                        to="/master/client"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className={`flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                            isMasterActive
+                                ? "bg-gradient-to-r from-sky-50 to-blue-50 text-sky-700 font-semibold shadow-sm border border-sky-100/50"
+                                : "text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:shadow-sm"
+                        }`}
+                    >
+                        <DatabaseIcon className="h-5 w-5 mr-3" />
+                        <span>Master Data</span>
+                    </Link>
                         {/* Settings for Admins (below Master) */}
                         {isAdmin && isAdmin() && (
                             <div className="pt-2 mt-2 border-t border-slate-100">
@@ -412,7 +294,6 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                 </Link>
                             </div>
                         )}
-                    </div>
                 </nav>
 
                 <div className="border-t border-slate-100 p-4 space-y-2">

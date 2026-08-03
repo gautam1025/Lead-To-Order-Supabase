@@ -71,8 +71,8 @@ export const generateAndAssignClientCode = async (companyName) => {
       let maxCodeNum = 0;
       allCodes.forEach(row => {
         if (row.client_code) {
-          // Match C- followed by numbers only (base code)
-          const match = row.client_code.match(/^C-(\d+)$/i);
+          // Match C or C- followed by numbers only (base code)
+          const match = row.client_code.match(/^C-?(\d+)$/i);
           if (match) {
             const num = parseInt(match[1], 10);
             if (num > maxCodeNum) maxCodeNum = num;
@@ -81,7 +81,7 @@ export const generateAndAssignClientCode = async (companyName) => {
       });
 
       const nextNum = maxCodeNum + 1;
-      newClientCode = `C-${String(nextNum).padStart(3, '0')}`;
+      newClientCode = `C${String(nextNum).padStart(3, '0')}`;
     } else {
       // Logic for HAS group
       // Fetch all clients in this group that have a client_code
@@ -94,8 +94,8 @@ export const generateAndAssignClientCode = async (companyName) => {
         let maxCodeNum = 0;
         allCodes.forEach(row => {
           if (row.client_code) {
-            // Match C- followed by numbers only
-            const match = row.client_code.match(/^C-(\d+)$/i);
+            // Match C or C- followed by numbers only
+            const match = row.client_code.match(/^C-?(\d+)$/i);
             if (match) {
               const num = parseInt(match[1], 10);
               if (num > maxCodeNum) maxCodeNum = num;
@@ -104,18 +104,18 @@ export const generateAndAssignClientCode = async (companyName) => {
         });
 
         const nextNum = maxCodeNum + 1;
-        newClientCode = `C-${String(nextNum).padStart(3, '0')}`;
+        newClientCode = `C${String(nextNum).padStart(3, '0')}`;
       } else {
         // Group already has at least one client code.
         // Find the base code for this group and highest suffix.
         let baseCodeStr = "";
         
         // Find a base code or derive it from an existing one
-        // Base code format C-XXX
+        // Base code format CXXX (or legacy C-XXX)
         for (const gc of groupClients) {
-           const match = gc.client_code.match(/^C-(\d+)[A-Z]*$/i);
+           const match = gc.client_code.match(/^C-?(\d+)[A-Z]*$/i);
            if (match) {
-               baseCodeStr = `C-${match[1]}`;
+               baseCodeStr = `C${match[1]}`;
                break;
            }
         }
@@ -128,7 +128,7 @@ export const generateAndAssignClientCode = async (companyName) => {
         // Now find the highest suffix for this base code
         let maxSuffixCode = 0; // 0 = no suffix, 1 = A, 2 = B, etc.
         groupClients.forEach(gc => {
-            const upperCode = gc.client_code.toUpperCase();
+            const upperCode = gc.client_code.toUpperCase().replace(/^C-/, "C");
             if (upperCode.startsWith(baseCodeStr.toUpperCase())) {
                const suffix = upperCode.substring(baseCodeStr.length);
                if (suffix === "") {

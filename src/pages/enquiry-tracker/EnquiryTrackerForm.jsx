@@ -815,49 +815,87 @@ function NewEnquiryTracker() {
           if (formData.enquiryNo && formData.enquiryNo.toUpperCase().startsWith("LD-")) {
             const { data: ld } = await supabase
               .from("leads")
-              .select("sc_name, company_name, person_name, phone_number, email_address, location, state, address, gst_number, company_group_name, nob, crm_name")
+              .select("sc_name, company_name, person_name, phone_number, email_address, location, state, address, gst_number, company_group_name, nob, crm_name, sales_type, lead_source")
               .eq("lead_no", formData.enquiryNo)
               .maybeSingle();
             leadData = ld;
           } else {
             const { data: ed } = await supabase
               .from("enquiries")
-              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number, crm_name")
+              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number, crm_name, sales_type, lead_source")
               .eq("enquiry_no", formData.enquiryNo)
               .maybeSingle();
             enqData = ed;
           }
 
-          resolvedHandlePerson = leadData?.sc_name || leadData?.handle_person;
-
-          if (!resolvedHandlePerson) {
-            // Resolve round-robin
-            const { data: lastAssigned } = await supabase
-              .from("leads")
-              .select("sc_name")
-              .in("sc_name", ["Nikita", "Priya"])
-              .order("created_at", { ascending: false })
-              .limit(1);
-
-            if (lastAssigned && lastAssigned.length > 0 && lastAssigned[0].sc_name) {
-              resolvedHandlePerson = lastAssigned[0].sc_name === "Nikita" ? "Priya" : "Nikita";
-            } else {
-              resolvedHandlePerson = "Nikita";
-            }
-          }
+          resolvedHandlePerson = leadData?.sc_name || leadData?.handle_person || enqData?.sales_coordinator_name || "";
 
           // Insert / Update client_master
           const clientName = leadData?.person_name || leadData?.salesperson_name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
           const compName = leadData?.company_name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
 
-
           // Only sync if company name is present
           if (compName) {
             const { data: existingClient } = await supabase
               .from("client_master")
-              .select("uuid, company_name, crm_name, company_group_name")
+              .select("uuid, company_name, crm_name, company_group_name, sales_type, sc_name")
               .eq("company_name", compName)
               .maybeSingle();
+
+            // Sales Type Upgrade & Dynamic SC Reassignment upon Order Conversion
+            let currentSalesType = (existingClient?.sales_type || leadData?.sales_type || enqData?.sales_type || "").trim();
+            let targetSalesType = currentSalesType.toUpperCase() === "NBD" ? "NBD_CRR" : currentSalesType;
+
+            try {
+              const { data: activeRules } = await supabase
+                .from("sc_distribution")
+                .select("*")
+                .eq("is_active", true)
+                .order("sequence_order", { ascending: true })
+                .order("created_at", { ascending: true });
+
+              if (activeRules && activeRules.length > 0) {
+                const currentNob = (leadData?.nob || "").trim().toUpperCase();
+                const currentSource = (leadData?.lead_source || enqData?.lead_source || "").trim().toUpperCase();
+                const currentType = targetSalesType.toUpperCase();
+
+                const matchedRules = activeRules.filter((rule) => {
+                  const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+                  const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+                  const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+                  const typeMatch = types.length === 0 || types.includes(currentType);
+                  const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+                  const nobMatch = nobs.some((n) => {
+                    if (n === "ALL NOBS") return true;
+                    if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                    return n === currentNob;
+                  });
+
+                  return typeMatch && sourceMatch && nobMatch;
+                });
+
+                if (matchedRules.length > 0) {
+                  const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
+                  if (candidate && candidate.sc_name) {
+                    resolvedHandlePerson = candidate.sc_name;
+                  }
+
+                  if (matchedRules.length > 1 && candidate?.id) {
+                    const currentIndex = matchedRules.findIndex((item) => item.id === candidate.id);
+                    const nextIndex = (currentIndex + 1) % matchedRules.length;
+                    const nextItem = matchedRules[nextIndex];
+
+                    if (candidate.id !== nextItem.id) {
+                      await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", candidate.id);
+                    }
+                    await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
+                  }
+                }
+              }
+            } catch (scErr) {
+              console.error("Error evaluating SC conversion reassignment:", scErr);
+            }
 
             // CRM Distribution Algorithm (Group -> State -> NOB hierarchy)
             let assignedCrmName = "";
@@ -912,6 +950,7 @@ function NewEnquiryTracker() {
               company_name: compName,
               client_name: clientName,
               sc_name: resolvedHandlePerson,
+              sales_type: targetSalesType || null,
               crm_name: assignedCrmName || null,
               client_mobile_number: leadData?.phone_number || enqData?.phone_number || enqData?.phoneNumber || "",
               state: leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "",

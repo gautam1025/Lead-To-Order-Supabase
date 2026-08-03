@@ -6,8 +6,12 @@
 
 We have to update the SC assignment logic. The SC will be assigned automatically when the user will create a lead or enquiry. 
 
-Case-1: If the user selects the sales_type=NBD, then it must be assigned to specific person, and after the lead or enquiry is converted [like is_order_received_status=yes from Pending Enquiry Stage], then the sales_type must be updated to NBD_CRR and then it will look for the NOB!=RESELLER, and also the SC will be updated to divide between NIKITA/PRIYA equally.
+Case-1: If the user selects the sales_type=NBD, then it must be assigned to specific person [e.g. GANGA], and after the lead or enquiry is converted [like is_order_received_status=yes from Pending Enquiry Stage], then the sales_type must be updated to NBD_CRR and then it will look for the NOB!=RESELLER, and then the SC will be updated in client_master to divide between NIKITA/PRIYA equally.
 
 Case-2: if the NOB=RESELLER, then the SC won't be updated, only the Sales_Type will be updated.
 
-The SC Distribution form will also be updated 
+The SC Distribution form will also be updated such that it will have a SC Name, and then three dropdown checkbox fields [Sales_Type, Lead Source, NOB] 
+
+Example: If I created a lead whose company does not exists in my DB, so it will have no pre-defined SC, I will make its Sales_Type=NBD and NOB != Reseller, it must be assigned to GANGA, then it will be processed and if I receive the order through the Enquiry Form, then the Sales_type in the client_master will be updated from NBD to NBD_CRR, and at the same time, the SC will be updated to another person [NIKITA/PRIYA], this I want to manage from the SC Distribution page from the frontend. The person with the checked Sales_Type, Lead Source and NOB will be used for the assignment. 
+
+Now, analyze my requirement, tell me if we need to re-design the table 'sc_distribution' and requires altering other tables too. Ask required questions and let me know before making changes

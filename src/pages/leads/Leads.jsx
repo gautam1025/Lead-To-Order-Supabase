@@ -538,53 +538,68 @@ function Leads() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Auto-assign SC Name when Company Name is NOT in client_master
+  // Auto-assign SC Name when Company Name is NOT in client_master using dynamic multi-select criteria
   useEffect(() => {
     const assignScForUnregisteredCompany = async () => {
-      if (!formData.nob) return;
+      if (!formData.companyName?.trim() || !formData.salesType || !formData.nob) return;
 
       // Check if current company exists in client_master
       const isCompanyInMaster = clientMasterRecords.some(
-        (c) => (c.company_name || "").toLowerCase().trim() === (formData.companyName || "").toLowerCase().trim() && formData.companyName?.trim() !== ""
+        (c) => (c.company_name || "").toLowerCase().trim() === formData.companyName.toLowerCase().trim()
       );
 
-      if (!isCompanyInMaster && formData.companyName?.trim()) {
-        const isReseller = formData.nob.trim().toUpperCase() === "RESELLER";
-        let targetScName = null;
-
-        if (isReseller) {
-          const { data: resData } = await supabase
+      if (!isCompanyInMaster) {
+        try {
+          const { data: activeRules } = await supabase
             .from("sc_distribution")
-            .select("sc_name")
-            .eq("rule_group", "RESELLER")
+            .select("*")
             .eq("is_active", true)
             .order("sequence_order", { ascending: true })
-            .limit(1);
-          if (resData && resData[0]?.sc_name) {
-            targetScName = resData[0].sc_name;
-          }
-        } else {
-          const { data: otherData } = await supabase
-            .from("sc_distribution")
-            .select("sc_name")
-            .eq("rule_group", "OTHER")
-            .eq("is_active", true)
-            .eq("is_next_in_line", true)
-            .limit(1);
-          if (otherData && otherData[0]?.sc_name) {
-            targetScName = otherData[0].sc_name;
-          }
-        }
+            .order("created_at", { ascending: true });
 
-        if (targetScName) {
-          setSearchScName(targetScName);
-          setFormData((prev) => ({ ...prev, scName: targetScName }));
+          if (activeRules && activeRules.length > 0) {
+            const currentNob = (formData.nob || "").trim().toUpperCase();
+            const currentSource = (formData.source || "").trim().toUpperCase();
+            const currentType = (formData.salesType || "").trim().toUpperCase();
+
+            const matchedRules = activeRules.filter((rule) => {
+              const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+              const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+              const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+              // 1. Sales Type match
+              const typeMatch = types.length === 0 || types.includes(currentType);
+
+              // 2. Lead Source match
+              const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+
+              // 3. NOB match
+              const nobMatch = nobs.some((n) => {
+                if (n === "ALL NOBS") return true;
+                if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                return n === currentNob;
+              });
+
+              return typeMatch && sourceMatch && nobMatch;
+            });
+
+            if (matchedRules.length > 0) {
+              // Pick the one whose turn is next, otherwise default to first matched candidate
+              const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
+              if (candidate?.sc_name) {
+                setSearchScName(candidate.sc_name);
+                setFormData((prev) => ({ ...prev, scName: candidate.sc_name }));
+              }
+            }
+          }
+        } catch (err) {
+          console.error("Error matching dynamic SC distribution:", err);
         }
       }
     };
 
     assignScForUnregisteredCompany();
-  }, [formData.nob, formData.companyName, clientMasterRecords]);
+  }, [formData.nob, formData.salesType, formData.source, formData.companyName, clientMasterRecords]);
 
   const fetchDropdownData = async () => {
     // Helper: fetch all values for a given category from the normalized dropdown table
@@ -922,30 +937,51 @@ function Leads() {
       const { error } = await supabase.from("leads").insert([leadData]);
       if (error) throw error;
 
-      // 3. Perform SC Round-Robin Turn Rotation if company was brand new and NOB != RESELLER
-      if (wasNewCompany && (formData.nob || "").trim().toUpperCase() !== "RESELLER") {
+      // 3. Perform SC Round-Robin Turn Rotation if company was brand new and multiple pool members match
+      if (wasNewCompany) {
         try {
-          const { data: pool } = await supabase
+          const { data: activeRules } = await supabase
             .from("sc_distribution")
-            .select("id, is_next_in_line")
-            .eq("rule_group", "OTHER")
+            .select("*")
             .eq("is_active", true)
             .order("sequence_order", { ascending: true })
             .order("created_at", { ascending: true });
 
-          if (pool && pool.length > 0) {
-            const currentIndex = pool.findIndex((item) => item.is_next_in_line);
-            const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % pool.length : 0;
-            const currentItem = currentIndex !== -1 ? pool[currentIndex] : null;
-            const nextItem = pool[nextIndex];
+          if (activeRules && activeRules.length > 0) {
+            const currentNob = (formData.nob || "").trim().toUpperCase();
+            const currentSource = (formData.source || "").trim().toUpperCase();
+            const currentType = (formData.salesType || "").trim().toUpperCase();
 
-            if (currentItem && currentItem.id !== nextItem.id) {
-              await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", currentItem.id);
+            const pool = activeRules.filter((rule) => {
+              const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+              const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+              const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+              const typeMatch = types.length === 0 || types.includes(currentType);
+              const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+              const nobMatch = nobs.some((n) => {
+                if (n === "ALL NOBS") return true;
+                if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                return n === currentNob;
+              });
+
+              return typeMatch && sourceMatch && nobMatch;
+            });
+
+            if (pool.length > 1) {
+              const currentIndex = pool.findIndex((item) => item.is_next_in_line);
+              const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % pool.length : 0;
+              const currentItem = currentIndex !== -1 ? pool[currentIndex] : null;
+              const nextItem = pool[nextIndex];
+
+              if (currentItem && currentItem.id !== nextItem.id) {
+                await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", currentItem.id);
+              }
+              await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
             }
-            await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
           }
         } catch (rrErr) {
-          console.error("Error advancing SC round-robin pointer:", rrErr);
+          console.error("Error advancing dynamic SC round-robin pointer:", rrErr);
         }
       }
 

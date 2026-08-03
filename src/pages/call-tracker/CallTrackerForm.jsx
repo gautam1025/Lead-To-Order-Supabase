@@ -31,7 +31,7 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
 
   // Form fields states
   const [leadSource, setLeadSource] = useState("")
-  const [scName, setScName] = useState(location.state || "")
+  const [scName, setScName] = useState(typeof location.state === "string" ? location.state : (location.state?.sc_name || location.state?.scName || ""))
   const [companyName, setCompanyName] = useState("")
   const [phoneNumber, setPhoneNumber] = useState("")
   const [salesPersonName, setSalesPersonName] = useState("")
@@ -241,10 +241,10 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
           if (error) throw error
           if (data) {
             setLeadSource(data.Lead_Source || data.lead_source || "")
-            setScName(data.SC_Name || data.salesperson_name || "")
+            setScName(data.sc_name || data.SC_Name || data.handle_person || data.salesperson_name || "")
             setCompanyName(data.Company_Name || data.company_name || "")
             setPhoneNumber(data.Phone_Number || data.phone_number || "")
-            setSalesPersonName(data.Salesperson_Name || data.salesperson_name || "")
+            setSalesPersonName(data.person_name || data.Person_Name || data.client_name || data.Salesperson_Name || data.salesperson_name || "")
             setBillingLocation(data.Location || data.location || "")
             setEmailAddress(data.Email_Address || data.email_address || "")
             setShippingAddress(data.Address || data.address || "")
@@ -974,31 +974,34 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
 
                   {items.map((item, index) => (
                     <div key={item.id} className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-                      <div className="md:col-span-5 space-y-2">
-  <label htmlFor={`itemName-${item.id}`} className="block text-sm font-medium text-gray-700">
-    Item Name 1
-   <span className="text-red-500">*</span></label>
-  <input
-    list={`item-options-${item.id}`}
-    id={`itemName-${item.id}`}
-    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-    value={item.name}
-    onChange={(e) => updateItem(item.id, "name", e.target.value)}
-    required
-    placeholder="Select or type item name"
-  />
-  <datalist id={`item-options-${item.id}`}>
-    {productCategories.map((category, index) => (
-      <option key={index} value={category} />
-    ))}
-  </datalist>
-</div>
-
+                      <div className="md:col-span-6 space-y-2">
+                        <label htmlFor={`itemName-${item.id}`} className="block text-sm font-medium text-gray-700">
+                          Item Name {index + 1}
+                          <span className="text-red-500">*</span>
+                        </label>
+                        <div>
+                          <input
+                            list={`item-options-${item.id}`}
+                            id={`itemName-${item.id}`}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
+                            value={item.name}
+                            onChange={(e) => updateItem(item.id, "name", e.target.value)}
+                            required
+                            placeholder="Select or type item name"
+                          />
+                          <datalist id={`item-options-${item.id}`}>
+                            {productCategories.map((category, idx) => (
+                              <option key={idx} value={category} />
+                            ))}
+                          </datalist>
+                        </div>
+                      </div>
 
                       <div className="md:col-span-5 space-y-2">
                         <label htmlFor={`quantity-${item.id}`} className="block text-sm font-medium text-gray-700">
                           Quantity
-                         <span className="text-red-500">*</span></label>
+                          <span className="text-red-500">*</span>
+                        </label>
                         <input
                           id={`quantity-${item.id}`}
                           className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
@@ -1009,7 +1012,7 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
                         />
                       </div>
 
-                      <div className="md:col-span-2">
+                      <div className="md:col-span-1 flex items-center pb-2">
                         <button
                           type="button"
                           onClick={() => removeItem(item.id)}
