@@ -1126,8 +1126,8 @@ function Leads() {
         <form onSubmit={handleSubmit}>
           <div className="p-2 space-y-2.5">
             
-            {/* Row 1: 3 Fields */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Row 1: 2 Fields */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label htmlFor="receiverName" className="block text-xs font-semibold text-gray-700">
                   Lead Receiver Name <span className="text-red-500">*</span>
@@ -1166,20 +1166,6 @@ function Leads() {
                     </option>
                   ))}
                 </select>
-              </div>
-
-              <div className="space-y-1">
-                <label htmlFor="scName" className="block text-xs font-semibold text-gray-700">
-                  SC Name <span className="text-xs text-gray-500 font-normal">(Auto-assigned)</span>
-                </label>
-                <input
-                  type="text"
-                  id="scName"
-                  value={formData.scName || searchScName || ""}
-                  readOnly
-                  className="w-full px-3 py-1.5 border border-gray-200 rounded-md bg-gray-100 text-gray-600 text-sm cursor-not-allowed font-medium shadow-inner"
-                  placeholder="Auto-assigned"
-                />
               </div>
             </div>
 

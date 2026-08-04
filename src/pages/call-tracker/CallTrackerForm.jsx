@@ -722,20 +722,6 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
                   </div>
 
                   <div className="space-y-2">
-                    <label htmlFor="scName" className="block text-sm font-medium text-gray-700">
-                      SC Name
-                     <span className="text-red-500">*</span></label>
-                    <input
-                      id="scName"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                      placeholder="Auto-fills from Lead Source"
-                      value={scName}
-                      onChange={(e) => setScName(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
                     <label htmlFor="companyName" className="block text-sm font-medium text-gray-700">
                       Company Name
                      <span className="text-red-500">*</span></label>

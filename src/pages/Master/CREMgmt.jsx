@@ -65,18 +65,18 @@ export default function CREMgmt() {
         setGroupOptions(uniqueGroups);
       }
 
-      // 2. Fetch state, nob, and sc_name from dropdown table
+      // 2. Fetch state, nob, and crm_name from dropdown table
       const fetchDropdownCat = (category) =>
         supabase.from("dropdown").select("value").eq("category", category);
 
       const [
         { data: states },
         { data: nobs },
-        { data: scs }
+        { data: crms }
       ] = await Promise.all([
         fetchDropdownCat("state"),
         fetchDropdownCat("nob"),
-        fetchDropdownCat("sc_name")
+        fetchDropdownCat("crm_name")
       ]);
 
       const cleanOptions = (arr) =>
@@ -84,7 +84,7 @@ export default function CREMgmt() {
 
       setStateOptions(cleanOptions(states));
       setNobOptions(cleanOptions(nobs));
-      setCrmOptions(cleanOptions(scs));
+      setCrmOptions(cleanOptions(crms));
     } catch (err) {
       console.error("Error fetching dynamic options for CRM Management:", err);
     }
@@ -467,7 +467,7 @@ export default function CREMgmt() {
                     disabled
                     className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-400 rounded-lg text-sm italic"
                   >
-                    <option>No sc_name options found in dropdown table</option>
+                    <option>No crm_name options found in dropdown table</option>
                   </select>
                 ) : (
                   <select
@@ -485,7 +485,7 @@ export default function CREMgmt() {
                   </select>
                 )}
                 <p className="text-xs text-gray-400 mt-1">
-                  Source: 'sc_name' records present in the dropdown table.
+                  Source: 'crm_name' records present in the dropdown table.
                 </p>
               </div>
 

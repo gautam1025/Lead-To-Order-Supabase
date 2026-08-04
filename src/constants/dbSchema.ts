@@ -83,7 +83,7 @@ export const COLUMNS = {
     SALES_COORDINATOR_NAME: 'sales_coordinator_name',
     CRM_NAME: 'crm_name',
     ENQUIRY_FOR_STATE: 'enquiry_for_state',
-    PROJECT_NAME: 'project_name',
+    NOB: 'nob',
     SALES_TYPE: 'sales_type',
     ENQUIRY_APPROACH: 'enquiry_approach',
     ENQUIRY_STATUS: 'enquiry_status',

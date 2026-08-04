@@ -39,7 +39,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   const [enquiryFormData, setEnquiryFormData] = useState({
     enquiryDate: "",
     enquiryState: "",
-    projectName: "",
+    nob: "",
     salesType: "",
     enquiryApproach: "",
   })
@@ -398,12 +398,127 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       const createdAtDate = new Date();
       const plannedAtTime = new Date(createdAtDate.getTime() + (tatHours * 60 + tatMinutes) * 60 * 1000);
 
+      // Check existing client in client_master
+      let existingClient = null;
+      if (newCallTrackerData.companyName) {
+        try {
+          const { data: clientRes } = await supabase
+            .from("client_master")
+            .select("uuid, client_code, sc_name, crm_name, company_group_name")
+            .ilike("company_name", newCallTrackerData.companyName.trim())
+            .maybeSingle();
+          existingClient = clientRes;
+        } catch (err) {
+          console.warn("Could not fetch client from client_master:", err);
+        }
+      }
+
+      // 1. Auto-assign SC Name (sc_distribution rules with Round-Robin)
+      let assignedScName = existingClient?.sc_name || newCallTrackerData.scName || null;
+      if (!assignedScName) {
+        try {
+          const { data: activeRules } = await supabase
+            .from("sc_distribution")
+            .select("*")
+            .eq("is_active", true)
+            .order("sequence_order", { ascending: true })
+            .order("created_at", { ascending: true });
+
+          if (activeRules && activeRules.length > 0) {
+            const currentNob = (enquiryFormData.nob || "").trim().toUpperCase();
+            const currentSource = (newCallTrackerData.leadSource || "").trim().toUpperCase();
+            const currentType = (enquiryFormData.salesType || "").trim().toUpperCase();
+
+            const matchedRules = activeRules.filter((rule) => {
+              const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+              const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+              const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+              const typeMatch = types.length === 0 || types.includes(currentType);
+              const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+              const nobMatch = nobs.some((n) => {
+                if (n === "ALL NOBS") return true;
+                if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                return n === currentNob;
+              });
+
+              return typeMatch && sourceMatch && nobMatch;
+            });
+
+            if (matchedRules.length > 0) {
+              const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
+              if (candidate && candidate.sc_name) {
+                assignedScName = candidate.sc_name;
+              }
+
+              if (matchedRules.length > 1 && candidate?.id) {
+                const currentIndex = matchedRules.findIndex((item) => item.id === candidate.id);
+                const nextIndex = (currentIndex + 1) % matchedRules.length;
+                const nextItem = matchedRules[nextIndex];
+
+                if (candidate.id !== nextItem.id) {
+                  await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", candidate.id);
+                }
+                await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
+              }
+            }
+          }
+        } catch (scErr) {
+          console.error("Error evaluating SC auto-assignment rules:", scErr);
+        }
+      }
+
+      // 2. Auto-assign CRE / CRM Name (crm_distribution Group -> State -> NOB Hierarchy)
+      let assignedCrmName = existingClient?.crm_name || null;
+      if (!existingClient || !assignedCrmName) {
+        const targetGroup = existingClient?.company_group_name || "";
+        const targetState = enquiryFormData.enquiryState || "";
+        const targetNob = enquiryFormData.nob || "";
+
+        try {
+          const { data: crmRules, error: rulesErr } = await supabase
+            .from("crm_distribution")
+            .select("key, value, category");
+
+          if (!rulesErr && crmRules && crmRules.length > 0) {
+            const groupMap = new Map();
+            const stateMap = new Map();
+            const nobMap = new Map();
+
+            crmRules.forEach(rule => {
+              if (!rule.key || !rule.value) return;
+              const normKey = rule.key.trim().toLowerCase();
+              const cat = (rule.category || "").trim().toLowerCase();
+              if (cat === "group") groupMap.set(normKey, rule.value);
+              else if (cat === "state") stateMap.set(normKey, rule.value);
+              else if (cat === "nob") nobMap.set(normKey, rule.value);
+            });
+
+            // Priority 1: Group
+            if (targetGroup && groupMap.has(targetGroup.trim().toLowerCase())) {
+              assignedCrmName = groupMap.get(targetGroup.trim().toLowerCase());
+            } 
+            // Priority 2: State
+            else if (targetState && stateMap.has(targetState.trim().toLowerCase())) {
+              assignedCrmName = stateMap.get(targetState.trim().toLowerCase());
+            } 
+            // Priority 3: NOB
+            else if (targetNob && nobMap.has(targetNob.trim().toLowerCase())) {
+              assignedCrmName = nobMap.get(targetNob.trim().toLowerCase());
+            }
+          }
+        } catch (crmErr) {
+          console.error("Error evaluating CRM distribution rules:", crmErr);
+        }
+      }
+
       const rowData = {
         created_at: createdAtDate.toISOString(),
         planned_at: plannedAtTime.toISOString(),
         enquiry_status: "New",
         lead_source: newCallTrackerData.leadSource,
-        sales_coordinator_name: newCallTrackerData.scName,
+        sales_coordinator_name: assignedScName,
+        crm_name: assignedCrmName,
         company_name: newCallTrackerData.companyName,
         phone_number: newCallTrackerData.phoneNumber,
         sales_person_name: newCallTrackerData.salesPersonName,
@@ -415,7 +530,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         gst_number: newCallTrackerData.gstNumber,
         enquiry_date: enquiryFormData.enquiryDate ? formatDateToISO(enquiryFormData.enquiryDate) : null,
         enquiry_for_state: enquiryFormData.enquiryState,
-        project_name: enquiryFormData.projectName,
+        nob: enquiryFormData.nob,
         sales_type: enquiryFormData.salesType,
         enquiry_approach: enquiryFormData.enquiryApproach,
       };
@@ -453,12 +568,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
       if (newCallTrackerData.companyName) {
         try {
-          const { data: existingClient } = await supabase
-            .from("client_master")
-            .select("uuid, client_code")
-            .ilike("company_name", newCallTrackerData.companyName.trim())
-            .maybeSingle();
-
           if (!existingClient) {
             await supabase.from("client_master").insert([{
               company_name: newCallTrackerData.companyName.trim(),
@@ -466,18 +575,26 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               client_mobile_number: newCallTrackerData.phoneNumber || null,
               billing_address: newCallTrackerData.location || null,
               gst_number: newCallTrackerData.gstNumber || null,
-              sc_name: newCallTrackerData.scName || null,
+              sc_name: assignedScName || null,
+              crm_name: assignedCrmName || null,
               sales_type: enquiryFormData.salesType || null,
               isRelevant: true,
               already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`
             }]);
           } else {
+            const updatePayload = {
+              already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`,
+              updated_at: new Date().toISOString()
+            };
+            if (!existingClient.sc_name && assignedScName) {
+              updatePayload.sc_name = assignedScName;
+            }
+            if (!existingClient.crm_name && assignedCrmName) {
+              updatePayload.crm_name = assignedCrmName;
+            }
             await supabase
               .from("client_master")
-              .update({
-                already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`,
-                updated_at: new Date().toISOString()
-              })
+              .update(updatePayload)
               .eq("uuid", existingClient.uuid);
           }
         } catch (cmErr) {
@@ -546,26 +663,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                 {leadSources.map((source, index) => (
                   <option key={index} value={source}>
                     {source}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div className="space-y-2">
-              <label htmlFor="scName" className="block text-sm font-medium text-gray-700">
-                SC Name
-               <span className="text-red-500">*</span></label>
-              <select
-                id="scName"
-                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
-                value={newCallTrackerData.scName}
-                onChange={(e) => setNewCallTrackerData(prev => ({ ...prev, scName: e.target.value }))}
-                required
-              >
-                <option value="">Select SC Name</option>
-                {scNameOptions.map((scName, index) => (
-                  <option key={index} value={scName}>
-                    {scName}
                   </option>
                 ))}
               </select>
@@ -793,14 +890,14 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               </div>
 
               <div className="space-y-2">
-                <label htmlFor="projectName" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="nob" className="block text-sm font-medium text-gray-700">
                   NOB
                  <span className="text-red-500">*</span></label>
                 <select
-                  id="projectName"
+                  id="nob"
                   className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  value={enquiryFormData.projectName}
-                  onChange={(e) => setEnquiryFormData({ ...enquiryFormData, projectName: e.target.value })}
+                  value={enquiryFormData.nob}
+                  onChange={(e) => setEnquiryFormData({ ...enquiryFormData, nob: e.target.value })}
                   required
                 >
                   <option value="">Select NOB</option>
