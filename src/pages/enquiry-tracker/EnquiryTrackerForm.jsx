@@ -824,7 +824,7 @@ function NewEnquiryTracker() {
           } else {
             const { data: ed } = await supabase
               .from("enquiries")
-              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number, crm_name, sales_type, lead_source")
+              .select("company_name, sales_coordinator_name, sales_person_name, phone_number, email, location, enquiry_for_state, shipping_address, gst_number, crm_name, sales_type, lead_source, nob")
               .eq("enquiry_no", formData.enquiryNo)
               .maybeSingle();
             enqData = ed;
@@ -840,7 +840,7 @@ function NewEnquiryTracker() {
           if (compName) {
             const { data: existingClient } = await supabase
               .from("client_master")
-              .select("uuid, company_name, crm_name, company_group_name, sales_type, sc_name")
+              .select("uuid, company_name, crm_name, company_group_name, sales_type, sc_name, state")
               .eq("company_name", compName)
               .maybeSingle();
 
@@ -852,12 +852,11 @@ function NewEnquiryTracker() {
               const { data: activeRules } = await supabase
                 .from("sc_distribution")
                 .select("*")
-                .eq("is_active", true)
                 .order("sequence_order", { ascending: true })
                 .order("created_at", { ascending: true });
 
               if (activeRules && activeRules.length > 0) {
-                const currentNob = (leadData?.nob || "").trim().toUpperCase();
+                const currentNob = (leadData?.nob || enqData?.nob || "").trim().toUpperCase();
                 const currentSource = (leadData?.lead_source || enqData?.lead_source || "").trim().toUpperCase();
                 const currentType = targetSalesType.toUpperCase();
 
@@ -868,7 +867,7 @@ function NewEnquiryTracker() {
 
                   const typeMatch = types.length === 0 || types.includes(currentType);
                   const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
-                  const nobMatch = nobs.some((n) => {
+                  const nobMatch = nobs.length === 0 || nobs.some((n) => {
                     if (n === "ALL NOBS") return true;
                     if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
                     return n === currentNob;
@@ -900,15 +899,13 @@ function NewEnquiryTracker() {
             }
 
             // CRM Distribution Algorithm (Group -> State -> NOB hierarchy)
-            let assignedCrmName = "";
-            if (existingClient) {
-              // If company already exists, bypass algorithm and inherit existing CRM Name
-              assignedCrmName = existingClient.crm_name || leadData?.crm_name || enqData?.crm_name || "";
-            } else {
-              // Brand new company! Execute Group -> State -> NOB hierarchical algorithm against crm_distribution
-              const leadGroup = leadData?.company_group_name || existingClient?.company_group_name || "";
-              const leadState = leadData?.state || enqData?.enquiry_for_state || "";
-              const leadNob = leadData?.nob || "";
+            let assignedCrmName = (existingClient?.crm_name || leadData?.crm_name || enqData?.crm_name || "").trim();
+
+            // Evaluate rules whenever CRM Name is currently blank/null (even for existing unconverted client_master records)
+            if (!assignedCrmName) {
+              const targetGroup = (existingClient?.company_group_name || leadData?.company_group_name || enqData?.company_group_name || "").trim();
+              const targetState = (existingClient?.state || leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "").trim();
+              const targetNob = (leadData?.nob || enqData?.nob || "").trim();
 
               try {
                 const { data: crmRules, error: rulesErr } = await supabase
@@ -930,16 +927,16 @@ function NewEnquiryTracker() {
                   });
 
                   // Priority 1: Group
-                  if (leadGroup && groupMap.has(leadGroup.trim().toLowerCase())) {
-                    assignedCrmName = groupMap.get(leadGroup.trim().toLowerCase());
+                  if (targetGroup && groupMap.has(targetGroup.toLowerCase())) {
+                    assignedCrmName = groupMap.get(targetGroup.toLowerCase());
                   } 
                   // Priority 2: State
-                  else if (leadState && stateMap.has(leadState.trim().toLowerCase())) {
-                    assignedCrmName = stateMap.get(leadState.trim().toLowerCase());
+                  else if (targetState && stateMap.has(targetState.toLowerCase())) {
+                    assignedCrmName = stateMap.get(targetState.toLowerCase());
                   } 
                   // Priority 3: NOB
-                  else if (leadNob && nobMap.has(leadNob.trim().toLowerCase())) {
-                    assignedCrmName = nobMap.get(leadNob.trim().toLowerCase());
+                  else if (targetNob && nobMap.has(targetNob.toLowerCase())) {
+                    assignedCrmName = nobMap.get(targetNob.toLowerCase());
                   }
                   // Fallback: remains blank ("") if no match found across all 3 tiers
                 }

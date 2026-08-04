@@ -553,7 +553,6 @@ function Leads() {
           const { data: activeRules } = await supabase
             .from("sc_distribution")
             .select("*")
-            .eq("is_active", true)
             .order("sequence_order", { ascending: true })
             .order("created_at", { ascending: true });
 
@@ -951,7 +950,6 @@ function Leads() {
           const { data: activeRules } = await supabase
             .from("sc_distribution")
             .select("*")
-            .eq("is_active", true)
             .order("sequence_order", { ascending: true })
             .order("created_at", { ascending: true });
 

@@ -193,8 +193,6 @@ export default function ScDistributionMaster() {
     try {
       const payload = {
         sc_name: formData.sc_name.trim(),
-        rule_group: "DYNAMIC", // Fallback for schema compatibility
-        is_active: true, // Always set active by default since status is not toggled manually
         is_next_in_line: formData.is_next_in_line,
         sequence_order: Number(formData.sequence_order) || 1,
         sales_types: formData.sales_types,

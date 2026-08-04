@@ -50,10 +50,10 @@ const masterNavItems = [
   },
   {
     id: "items",
-    label: "Items & Catalog",
+    label: "Items",
     icon: Package,
     table: "items",
-    description: "Product database and pricing catalog"
+    description: "Product database and pricing"
   },
   {
     id: "tat-config",

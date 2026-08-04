@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Pencil, Trash2, RefreshCw, UserCheck, Filter, ShieldCheck, Layers, MapPin, Briefcase } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, UserCheck, ShieldCheck, Layers, MapPin, Briefcase, CheckSquare, Square, Users } from "lucide-react";
 import supabase from "../../utils/supabase";
 
 export default function CREMgmt() {
@@ -20,7 +20,7 @@ export default function CREMgmt() {
   const [currentItem, setCurrentItem] = useState(null);
   const [formData, setFormData] = useState({
     category: "Group",
-    key: "",
+    selectedKeys: [],
     value: "",
   });
 
@@ -103,16 +103,14 @@ export default function CREMgmt() {
     if (item && mode === "edit") {
       setFormData({
         category: item.category || "Group",
-        key: item.key || "",
+        selectedKeys: [item.key].filter(Boolean),
         value: item.value || "",
       });
     } else {
-      // Default to first available options when adding new
       const initialCat = "Group";
-      const availableKeys = getOptionsForCategory(initialCat);
       setFormData({
         category: initialCat,
-        key: availableKeys.length > 0 ? availableKeys[0] : "",
+        selectedKeys: [],
         value: crmOptions.length > 0 ? crmOptions[0] : "",
       });
     }
@@ -125,58 +123,101 @@ export default function CREMgmt() {
   };
 
   const handleCategoryChange = (newCat) => {
-    const availableKeys = getOptionsForCategory(newCat);
     setFormData((prev) => ({
       ...prev,
       category: newCat,
-      key: availableKeys.length > 0 ? availableKeys[0] : "",
+      selectedKeys: [],
     }));
+  };
+
+  const handleCheckboxToggle = (opt) => {
+    setFormData((prev) => {
+      const current = prev.selectedKeys || [];
+      const exists = current.includes(opt);
+      const next = exists ? current.filter((k) => k !== opt) : [...current, opt];
+      return { ...prev, selectedKeys: next };
+    });
+  };
+
+  const handleSelectAll = (opts) => {
+    setFormData((prev) => ({ ...prev, selectedKeys: [...opts] }));
+  };
+
+  const handleDeselectAll = () => {
+    setFormData((prev) => ({ ...prev, selectedKeys: [] }));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.category || !formData.key || !formData.value) {
-      alert("Please ensure Category, Name, and CRM are all selected.");
+    if (!formData.category || !formData.value || !formData.selectedKeys || formData.selectedKeys.length === 0) {
+      alert("Please ensure Category, CRM Representative, and at least one Name option are selected.");
       return;
     }
 
     try {
       if (modalMode === "add") {
-        // Check if rule already exists for this category and key
-        const existing = data.find(
-          (r) =>
-            (r.category || "").toLowerCase() === formData.category.toLowerCase() &&
-            (r.key || "").toLowerCase() === formData.key.toLowerCase()
-        );
-        if (existing) {
-          if (!window.confirm(`A rule for ${formData.category} "${formData.key}" already exists. Do you want to overwrite it with the new CRM?`)) {
-            return;
+        for (const key of formData.selectedKeys) {
+          const existing = data.find(
+            (r) =>
+              (r.category || "").toLowerCase() === formData.category.toLowerCase() &&
+              (r.key || "").toLowerCase() === key.toLowerCase()
+          );
+          if (existing) {
+            if (window.confirm(`A rule for ${formData.category} "${key}" already exists (currently assigned to ${existing.value}). Do you want to update it to ${formData.value}?`)) {
+              await supabase
+                .from("crm_distribution")
+                .update({ value: formData.value, updated_at: new Date().toISOString() })
+                .eq(existing.uuid ? "uuid" : "id", existing.uuid || existing.id);
+            }
+          } else {
+            await supabase.from("crm_distribution").insert([{
+              category: formData.category,
+              key: key,
+              value: formData.value,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }]);
           }
-          const { error } = await supabase
-            .from("crm_distribution")
-            .update({ value: formData.value, updated_at: new Date().toISOString() })
-            .eq("uuid", existing.uuid || existing.id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase.from("crm_distribution").insert([{
-            category: formData.category,
-            key: formData.key,
-            value: formData.value,
-          }]);
-          if (error) throw error;
         }
       } else {
         const targetId = currentItem.uuid || currentItem.id;
+        const mainKey = formData.selectedKeys[0] || currentItem.key;
         const { error } = await supabase
           .from("crm_distribution")
           .update({
             category: formData.category,
-            key: formData.key,
+            key: mainKey,
             value: formData.value,
             updated_at: new Date().toISOString()
           })
           .eq(currentItem.uuid ? "uuid" : "id", targetId);
         if (error) throw error;
+
+        // If user selected extra items during edit, process them as additions/updates
+        if (formData.selectedKeys.length > 1) {
+          for (let i = 1; i < formData.selectedKeys.length; i++) {
+            const key = formData.selectedKeys[i];
+            const existing = data.find(
+              (r) =>
+                (r.category || "").toLowerCase() === formData.category.toLowerCase() &&
+                (r.key || "").toLowerCase() === key.toLowerCase()
+            );
+            if (!existing) {
+              await supabase.from("crm_distribution").insert([{
+                category: formData.category,
+                key: key,
+                value: formData.value,
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }]);
+            } else {
+              await supabase
+                .from("crm_distribution")
+                .update({ value: formData.value, updated_at: new Date().toISOString() })
+                .eq(existing.uuid ? "uuid" : "id", existing.uuid || existing.id);
+            }
+          }
+        }
       }
 
       handleCloseModal();
@@ -388,13 +429,14 @@ export default function CREMgmt() {
         </div>
       </div>
 
-      {/* Add / Edit Modal */}
+      {/* Dynamic Multi-Select Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden border border-gray-200">
-            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center">
-              <h3 className="text-lg font-bold text-gray-800">
-                {modalMode === "add" ? "Add CRM Distribution Rule" : "Edit CRM Distribution Rule"}
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
+            <div className="bg-gray-50 px-6 py-4 border-b border-gray-200 flex justify-between items-center shrink-0">
+              <h3 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-600" />
+                {modalMode === "add" ? "Add CRM Distribution Rules" : "Edit CRM Distribution Rule"}
               </h3>
               <button
                 onClick={handleCloseModal}
@@ -404,93 +446,120 @@ export default function CREMgmt() {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-5">
-              {/* Category Dropdown */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                  Category <span className="text-red-500">*</span>
-                </label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => handleCategoryChange(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-medium"
-                  required
-                >
-                  <option value="Group">Group</option>
-                  <option value="State">State</option>
-                  <option value="NOB">NOB</option>
-                </select>
-                <p className="text-xs text-gray-400 mt-1">
-                  Selects the hierarchical tier to apply this rule to.
-                </p>
+            <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
+              {/* Top Details: CRM Name & Category Tier */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-gray-100 items-end">
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    CRM Representative <span className="text-red-500">*</span>
+                  </label>
+                  {crmOptions.length === 0 ? (
+                    <select disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-400 rounded-lg text-sm italic">
+                      <option>No crm_name options found in dropdown table</option>
+                    </select>
+                  ) : (
+                    <select
+                      value={formData.value}
+                      onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-purple-900"
+                      required
+                    >
+                      <option value="" disabled>Select CRM Representative...</option>
+                      {crmOptions.map((crm) => (
+                        <option key={crm} value={crm}>
+                          {crm}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                    Hierarchy Category Tier <span className="text-red-500">*</span>
+                  </label>
+                  <select
+                    value={formData.category}
+                    onChange={(e) => handleCategoryChange(e.target.value)}
+                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-bold text-gray-800"
+                    required
+                  >
+                    <option value="Group">Group Tier (Priority 1)</option>
+                    <option value="State">State Tier (Priority 2)</option>
+                    <option value="NOB">NOB Tier (Priority 3)</option>
+                  </select>
+                </div>
               </div>
 
-              {/* Name Dropdown (Dynamic based on Category) */}
+              {/* Dynamic Checkbox Section */}
               <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                  Name ({formData.category} Option) <span className="text-red-500">*</span>
-                </label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-purple-900">
+                    Select {formData.category} Options to assign to {formData.value || "this CRM"}
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectAll(currentDynamicOptions)}
+                      className="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md transition"
+                    >
+                      Select All
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDeselectAll}
+                      className="px-2.5 py-1 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+
                 {currentDynamicOptions.length === 0 ? (
-                  <select
-                    disabled
-                    className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-400 rounded-lg text-sm italic"
-                  >
-                    <option>No existing {formData.category.toLowerCase()}s found in database</option>
-                  </select>
+                  <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm italic">
+                    No existing {formData.category.toLowerCase()}s found in database.
+                  </div>
                 ) : (
-                  <select
-                    value={formData.key}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, key: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm"
-                    required
-                  >
-                    <option value="" disabled>Select {formData.category}...</option>
-                    {currentDynamicOptions.map((opt) => (
-                      <option key={opt} value={opt}>
-                        {opt}
-                      </option>
-                    ))}
-                  </select>
+                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-4 rounded-xl border max-h-64 overflow-y-auto ${
+                    formData.category === "Group"
+                      ? "bg-purple-50/40 border-purple-100"
+                      : formData.category === "State"
+                      ? "bg-blue-50/40 border-blue-100"
+                      : "bg-amber-50/40 border-amber-100"
+                  }`}>
+                    {currentDynamicOptions.map((opt) => {
+                      const checked = (formData.selectedKeys || []).includes(opt);
+                      return (
+                        <label
+                          key={opt}
+                          onClick={() => handleCheckboxToggle(opt)}
+                          className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
+                            checked
+                              ? formData.category === "Group"
+                                ? "bg-white text-purple-900 border-purple-300 shadow-xs font-bold"
+                                : formData.category === "State"
+                                ? "bg-white text-blue-900 border-blue-300 shadow-xs font-bold"
+                                : "bg-white text-amber-900 border-amber-300 shadow-xs font-bold"
+                              : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
+                          }`}
+                        >
+                          {checked ? (
+                            <CheckSquare className={`w-4 h-4 shrink-0 ${
+                              formData.category === "Group" ? "text-purple-600" : formData.category === "State" ? "text-blue-600" : "text-amber-600"
+                            }`} />
+                          ) : (
+                            <Square className="w-4 h-4 text-gray-300 shrink-0" />
+                          )}
+                          <span className="truncate">{opt}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
                 )}
-                <p className="text-xs text-gray-400 mt-1">
-                  Options loaded directly from existing {formData.category === "Group" ? "client_master groups" : `dropdown (${formData.category.toLowerCase()} table)`}.
-                </p>
               </div>
 
-              {/* CRM Dropdown */}
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider mb-1.5">
-                  CRM Name <span className="text-red-500">*</span>
-                </label>
-                {crmOptions.length === 0 ? (
-                  <select
-                    disabled
-                    className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-400 rounded-lg text-sm italic"
-                  >
-                    <option>No crm_name options found in dropdown table</option>
-                  </select>
-                ) : (
-                  <select
-                    value={formData.value}
-                    onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-purple-900"
-                    required
-                  >
-                    <option value="" disabled>Select CRM Representative...</option>
-                    {crmOptions.map((crm) => (
-                      <option key={crm} value={crm}>
-                        {crm}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <p className="text-xs text-gray-400 mt-1">
-                  Source: 'crm_name' records present in the dropdown table.
-                </p>
-              </div>
-
-              {/* Actions */}
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-100">
+              {/* Footer Actions */}
+              <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 shrink-0">
                 <button
                   type="button"
                   onClick={handleCloseModal}
@@ -501,9 +570,9 @@ export default function CREMgmt() {
                 <button
                   type="submit"
                   className="px-5 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition duration-150"
-                  disabled={currentDynamicOptions.length === 0 || crmOptions.length === 0}
+                  disabled={currentDynamicOptions.length === 0 || crmOptions.length === 0 || formData.selectedKeys.length === 0}
                 >
-                  {modalMode === "add" ? "Save Rule" : "Update Rule"}
+                  {modalMode === "add" ? `Save ${formData.selectedKeys.length} Rule(s)` : "Update Rule"}
                 </button>
               </div>
             </form>

@@ -420,7 +420,6 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
           const { data: activeRules } = await supabase
             .from("sc_distribution")
             .select("*")
-            .eq("is_active", true)
             .order("sequence_order", { ascending: true })
             .order("created_at", { ascending: true });
 
@@ -468,49 +467,8 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         }
       }
 
-      // 2. Auto-assign CRE / CRM Name (crm_distribution Group -> State -> NOB Hierarchy)
+      // 2. CRE / CRM Name is assigned only upon order conversion; inherit existing if present in client_master
       let assignedCrmName = existingClient?.crm_name || null;
-      if (!existingClient || !assignedCrmName) {
-        const targetGroup = existingClient?.company_group_name || "";
-        const targetState = enquiryFormData.enquiryState || "";
-        const targetNob = enquiryFormData.nob || "";
-
-        try {
-          const { data: crmRules, error: rulesErr } = await supabase
-            .from("crm_distribution")
-            .select("key, value, category");
-
-          if (!rulesErr && crmRules && crmRules.length > 0) {
-            const groupMap = new Map();
-            const stateMap = new Map();
-            const nobMap = new Map();
-
-            crmRules.forEach(rule => {
-              if (!rule.key || !rule.value) return;
-              const normKey = rule.key.trim().toLowerCase();
-              const cat = (rule.category || "").trim().toLowerCase();
-              if (cat === "group") groupMap.set(normKey, rule.value);
-              else if (cat === "state") stateMap.set(normKey, rule.value);
-              else if (cat === "nob") nobMap.set(normKey, rule.value);
-            });
-
-            // Priority 1: Group
-            if (targetGroup && groupMap.has(targetGroup.trim().toLowerCase())) {
-              assignedCrmName = groupMap.get(targetGroup.trim().toLowerCase());
-            } 
-            // Priority 2: State
-            else if (targetState && stateMap.has(targetState.trim().toLowerCase())) {
-              assignedCrmName = stateMap.get(targetState.trim().toLowerCase());
-            } 
-            // Priority 3: NOB
-            else if (targetNob && nobMap.has(targetNob.trim().toLowerCase())) {
-              assignedCrmName = nobMap.get(targetNob.trim().toLowerCase());
-            }
-          }
-        } catch (crmErr) {
-          console.error("Error evaluating CRM distribution rules:", crmErr);
-        }
-      }
 
       const rowData = {
         created_at: createdAtDate.toISOString(),
