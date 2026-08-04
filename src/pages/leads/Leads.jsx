@@ -865,6 +865,7 @@ function Leads() {
             sc_name: formData.scName ? formData.scName.trim() : null,
             credit_days: formData.creditDays ? parseInt(formData.creditDays, 10) : null,
             credit_limit: formData.creditLimit ? parseFloat(formData.creditLimit) : null,
+            sales_type: formData.salesType ? formData.salesType.trim() : null,
             "isRelevant": true
           };
 
@@ -936,6 +937,13 @@ function Leads() {
 
       const { error } = await supabase.from("leads").insert([leadData]);
       if (error) throw error;
+
+      if (compNameTrimmed) {
+        await supabase
+          .from("client_master")
+          .update({ already_in_tracker: `Call-Tracker (${authoritiveLeadNo})` })
+          .ilike("company_name", compNameTrimmed);
+      }
 
       // 3. Perform SC Round-Robin Turn Rotation if company was brand new and multiple pool members match
       if (wasNewCompany) {

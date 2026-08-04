@@ -451,6 +451,40 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         console.error("Error inserting enquiry items:", itemsError.message);
       }
 
+      if (newCallTrackerData.companyName) {
+        try {
+          const { data: existingClient } = await supabase
+            .from("client_master")
+            .select("uuid, client_code")
+            .ilike("company_name", newCallTrackerData.companyName.trim())
+            .maybeSingle();
+
+          if (!existingClient) {
+            await supabase.from("client_master").insert([{
+              company_name: newCallTrackerData.companyName.trim(),
+              client_name: newCallTrackerData.salesPersonName || null,
+              client_mobile_number: newCallTrackerData.phoneNumber || null,
+              billing_address: newCallTrackerData.location || null,
+              gst_number: newCallTrackerData.gstNumber || null,
+              sc_name: newCallTrackerData.scName || null,
+              sales_type: enquiryFormData.salesType || null,
+              isRelevant: true,
+              already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`
+            }]);
+          } else {
+            await supabase
+              .from("client_master")
+              .update({
+                already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`,
+                updated_at: new Date().toISOString()
+              })
+              .eq("uuid", existingClient.uuid);
+          }
+        } catch (cmErr) {
+          console.error("Error updating client_master tracking status:", cmErr);
+        }
+      }
+
       alert(`Call tracker updated successfully. Enquiry No: ${assignedEnquiryNo || 'Generated'}`);
       onClose(true);
     } catch (err) {

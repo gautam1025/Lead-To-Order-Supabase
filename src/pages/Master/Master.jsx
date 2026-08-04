@@ -137,8 +137,8 @@ export default function Master() {
   return (
     <div className="flex flex-col md:flex-row min-h-[calc(100vh-3.5rem)] bg-slate-50/50">
       {/* Master Data Vertical Sub-Sidebar */}
-      <div className="w-full md:w-56 lg:w-64 bg-white border-b md:border-b-0 md:border-r border-slate-200 p-2.5 shrink-0 shadow-sm z-10">
-        <div className="mb-2.5 px-2 py-1">
+      <div className="w-full md:w-48 lg:w-52 bg-white border-b md:border-b-0 md:border-r border-slate-200 p-1 shrink-0 shadow-sm z-10">
+        <div className="mb-1.5 px-2 py-1">
           <h2 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
             <Database className="w-3.5 h-3.5 text-sky-500" />
             Master Data
@@ -155,13 +155,13 @@ export default function Master() {
               <button
                 key={item.id}
                 onClick={() => navigate(`/master/${item.id}`)}
-                className={`w-full flex items-center justify-between px-3 py-2 rounded-lg text-xs font-medium transition-all duration-150 group ${
+                className={`w-full flex items-center justify-between px-2 py-1.5 rounded-lg text-xs font-medium transition-all duration-150 group ${
                   isActive
                     ? "bg-gradient-to-r from-sky-50 to-blue-50 text-sky-700 font-bold border border-sky-100/75 shadow-sm"
                     : "text-slate-600 hover:bg-sky-50 hover:text-sky-600 border border-transparent"
                 }`}
               >
-                <div className="flex items-center gap-2.5 truncate pr-1">
+                <div className="flex items-center gap-2 truncate pr-1">
                   <Icon className={`w-4 h-4 shrink-0 transition-colors ${
                     isActive ? "text-sky-600" : "text-slate-400 group-hover:text-sky-600"
                   }`} />

@@ -575,6 +575,11 @@ function NewEnquiryTracker() {
         if (orderStatusData.resolvedHandlePerson) {
           updateData.handle_person = orderStatusData.resolvedHandlePerson;
         }
+
+        const companyName = allFormData.companyName || allFormData.Company_Name || allFormData.company_name || orderStatusData.companyName;
+        if (companyName) {
+          await generateAndAssignClientCode(companyName);
+        }
       }
 
       switch (currentStage) {
@@ -589,10 +594,7 @@ function NewEnquiryTracker() {
             Quotation_Upload: allFormData.quotationFileUrl,
             Quotation_Remarks: allFormData.remarks,
           });
-        const companyName = allFormData.companyName || allFormData.Company_Name || orderStatusData.companyName;
-        if (companyName) {
-          await generateAndAssignClientCode(companyName);
-        }
+          break;
       }
       return true;
     } catch (error) {
@@ -645,7 +647,7 @@ function NewEnquiryTracker() {
   const updateEnquiryToOrderTable = async (enquiryNo, allFormData, currentStage) => {
     try {
       if (currentStage === "order-status" && allFormData.orderStatus?.toLowerCase() === "yes") {
-        const companyName = allFormData.companyName || allFormData.company_name;
+        const companyName = allFormData.companyName || allFormData.Company_Name || allFormData.company_name || orderStatusData?.companyName;
         if (companyName) {
           await generateAndAssignClientCode(companyName);
         }
@@ -955,7 +957,8 @@ function NewEnquiryTracker() {
               client_mobile_number: leadData?.phone_number || enqData?.phone_number || enqData?.phoneNumber || "",
               state: leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "",
               billing_address: leadData?.address || enqData?.shipping_address || enqData?.shippingAddress || "",
-              gst_number: leadData?.gst_number || enqData?.gst_number || enqData?.gstNumber || ""
+              gst_number: leadData?.gst_number || enqData?.gst_number || enqData?.gstNumber || "",
+              already_in_tracker: `Order Received (${formData.enquiryNo})`
             };
 
             let cmError = null;
@@ -990,6 +993,9 @@ function NewEnquiryTracker() {
                   .eq("enquiry_no", formData.enquiryNo);
               }
             }
+
+            // Immediately trigger client code generation (CXXX format) upon Order confirmation!
+            await generateAndAssignClientCode(compName);
           } else {
             console.warn("Client Master sync skipped: No company name found");
           }
@@ -1104,6 +1110,38 @@ function NewEnquiryTracker() {
           }
         } else {
           showNotification("Call tracker updated but lead record could not be updated", "warning");
+        }
+      }
+
+      const targetComp = formData.companyName || formData.Company_Name || formData.company_name;
+      if (targetComp) {
+        try {
+          let displayStage = currentStage;
+          if (currentStage === "order-status" || currentStage === "Order Status") {
+            if (orderStatusData.orderStatus?.toLowerCase() === "yes") {
+              displayStage = "Order Received";
+            } else if (orderStatusData.orderStatus?.toLowerCase() === "no") {
+              displayStage = "Order Lost";
+            } else {
+              displayStage = "Order Status";
+            }
+          } else if (currentStage === "make-quotation" || currentStage === "Make Quotation") {
+            displayStage = "Make Quotation";
+          } else if (currentStage === "order-expected" || currentStage === "Order Expected") {
+            displayStage = "Follow-up";
+          } else {
+            displayStage = "Enquiry Tracker";
+          }
+
+          await supabase
+            .from("client_master")
+            .update({
+              already_in_tracker: `${displayStage} (${formData.enquiryNo})`,
+              updated_at: new Date().toISOString()
+            })
+            .ilike("company_name", targetComp.trim());
+        } catch (cmErr) {
+          console.error("Failed to update already_in_tracker in client_master:", cmErr);
         }
       }
 

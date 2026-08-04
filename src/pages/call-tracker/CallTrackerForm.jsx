@@ -423,17 +423,28 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
         console.error("Error updating leads table:", updateError);
       }
 
-    if (leadStatus === "Not Relevant" && companyName) {
+    if (companyName) {
       try {
+        let stageLabel = `Call-Tracker (${formData.leadNo})`;
+        if (enquiryStatus === "yes") {
+          stageLabel = `Enquiry Tracker (${formData.leadNo})`;
+        } else if (leadStatus === "Not Relevant" || enquiryStatus === "no") {
+          stageLabel = null;
+        }
+
+        const updatePayload = { updated_at: new Date().toISOString() };
+        if (stageLabel !== undefined) updatePayload.already_in_tracker = stageLabel;
+        if (leadStatus === "Not Relevant") updatePayload.isRelevant = false;
+
         const { error: cmErr } = await supabase
           .from("client_master")
-          .update({ "isRelevant": false, updated_at: new Date().toISOString() })
-          .eq("company_name", companyName.trim());
+          .update(updatePayload)
+          .ilike("company_name", companyName.trim());
         if (cmErr) {
-          console.error("Error updating client_master relevance:", cmErr);
+          console.error("Error updating client_master tracking status:", cmErr);
         }
       } catch (err) {
-        console.error("Failed to mark company as not relevant:", err);
+        console.error("Failed to update company tracking status:", err);
       }
     }
 

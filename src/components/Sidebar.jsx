@@ -222,42 +222,42 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
 
             {/* Sidebar Component */}
             <aside
-                className={`fixed inset-y-0 left-0 z-50 w-64 transform bg-white border-r border-slate-100 text-slate-800 transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto flex flex-col ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
+                className={`fixed inset-y-0 left-0 z-50 w-52 transform bg-white border-r border-slate-100 text-slate-800 transition-transform duration-300 ease-in-out md:translate-x-0 md:static md:inset-auto flex flex-col ${mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
                     }`}
             >
-                <div className="flex h-16 items-center justify-start border-b border-slate-100 px-6">
+                <div className="flex h-16 items-center justify-start border-b border-slate-100 px-4">
                     <Link to="/" className="flex items-center" onClick={() => setMobileMenuOpen(false)}>
                         <div className="flex flex-row items-center gap-2">
-                            <img src={logoSvg} alt="Divine" className="h-10 w-auto object-contain" />
-                            <span className="text-xl font-bold text-sky-600">
+                            <img src={logoSvg} alt="Divine" className="h-9 w-auto object-contain" />
+                            <span className="text-lg font-bold text-sky-600">
                                 Divine
                             </span>
                         </div>
                     </Link>
                 </div>
 
-                <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
+                <nav className="flex-1 overflow-y-auto px-2 py-3 space-y-1">
                     {routes.map((route) => (
                         <Link
                             key={route.href}
                             to={route.href}
                             onClick={() => setMobileMenuOpen(false)}
-                            className={`flex items-center justify-between rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${route.active
+                            className={`flex items-center justify-between rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 ${route.active
                                 ? "bg-sky-500 text-white shadow-md shadow-sky-200 hover:bg-sky-600"
                                 : "text-slate-600 hover:bg-sky-50 hover:text-sky-600"
                                 }`}
                         >
-                            <div className="flex items-center">
+                            <div className="flex items-center truncate">
                                 {route.icon}
-                                {route.label}
+                                <span className="truncate">{route.label}</span>
                             </div>
                             {route.href === "/call-tracker" && counts.callTracker !== null && (
-                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
+                                <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded-full shrink-0 ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
                                     {counts.callTracker}
                                 </span>
                             )}
                             {route.href === "/enquiry-tracker" && counts.enquiryTracker !== null && (
-                                <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
+                                <span className={`px-1.5 py-0.5 text-[11px] font-bold rounded-full shrink-0 ${route.active ? "bg-white text-sky-600" : "bg-sky-100 text-sky-700"}`}>
                                     {counts.enquiryTracker}
                                 </span>
                             )}
@@ -268,14 +268,14 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                     <Link
                         to="/master/client"
                         onClick={() => setMobileMenuOpen(false)}
-                        className={`flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                        className={`flex items-center rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 ${
                             isMasterActive
                                 ? "bg-gradient-to-r from-sky-50 to-blue-50 text-sky-700 font-semibold shadow-sm border border-sky-100/50"
                                 : "text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:shadow-sm"
                         }`}
                     >
-                        <DatabaseIcon className="h-5 w-5 mr-3" />
-                        <span>Master Data</span>
+                        <DatabaseIcon className="h-5 w-5 mr-2.5 shrink-0" />
+                        <span className="truncate">Master Data</span>
                     </Link>
                         {/* Settings for Admins (below Master) */}
                         {isAdmin && isAdmin() && (
@@ -283,26 +283,26 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                                 <Link
                                     to="/setting"
                                     onClick={() => setMobileMenuOpen(false)}
-                                    className={`flex items-center rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-200 ${
+                                    className={`flex items-center rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 ${
                                         location.pathname.startsWith("/setting")
                                             ? "bg-gradient-to-r from-sky-50 to-blue-50 text-sky-700 font-semibold shadow-sm border border-sky-100/50"
                                             : "text-slate-600 hover:bg-sky-50 hover:text-sky-600 hover:shadow-sm"
                                     }`}
                                 >
-                                    <SettingsIcon className="h-5 w-5 mr-3" />
-                                    Settings
+                                    <SettingsIcon className="h-5 w-5 mr-2.5 shrink-0" />
+                                    <span className="truncate">Settings</span>
                                 </Link>
                             </div>
                         )}
                 </nav>
 
-                <div className="border-t border-slate-100 p-4 space-y-2">
+                <div className="border-t border-slate-100 p-3 space-y-2">
                     <button
                         onClick={logout}
-                        className="flex w-full items-center justify-center rounded-lg px-4 py-2.5 text-sm font-bold text-white bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md"
+                        className="flex w-full items-center justify-center rounded-lg px-3 py-2 text-xs font-bold text-white bg-red-500 hover:bg-red-600 transition-all duration-200 shadow-sm hover:shadow-md"
                     >
-                        <LogoutIcon className="h-5 w-5 mr-2" />
-                        Logout
+                        <LogoutIcon className="h-4 w-4 mr-2 shrink-0" />
+                        <span>Logout</span>
                     </button>
                 </div>
             </aside>

@@ -22,6 +22,7 @@ function ClientMaster() {
   const [showColumnToggle, setShowColumnToggle] = useState(false);
   const columnToggleRef = useRef(null);
   const [hiddenColumns, setHiddenColumns] = useState([]);
+  const [activeTab, setActiveTab] = useState("converted"); // Converted vs Unconverted tab
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -45,7 +46,8 @@ function ClientMaster() {
     crmName: "",
     stateCode: "",
     creditDays: "",
-    creditLimit: ""
+    creditLimit: "",
+    salesType: ""
   });
   
   const fetchIdRef = useRef(0);
@@ -58,20 +60,6 @@ function ClientMaster() {
     setClientData([]); // Reset data before new fetch
 
     try {
-      // Fetch active tracking leads and enquiries FIRST
-      const { data: leadsData } = await supabase
-        .from(TABLES.LEADS_TO_ORDER)
-        .select("Company_Name, Leads_Tracking_Status")
-        .eq("Leads_Tracking_Status", "Pending");
-
-      const { data: enquiryData } = await supabase
-        .from(TABLES.ENQUIRY_TO_ORDER)
-        .select("company_name, current_stage")
-        .ilike("current_stage", "pending");
-
-      const leadCompanies = new Set((leadsData || []).map(l => (l.Company_Name || "").toLowerCase().trim()).filter(Boolean));
-      const enquiryCompanies = new Set((enquiryData || []).map(e => (e.company_name || "").toLowerCase().trim()).filter(Boolean));
-
       // Fetch clients from Supabase using progressive chunks
       let from = 0;
       const step = 500;
@@ -89,18 +77,7 @@ function ClientMaster() {
 
         if (data && data.length > 0) {
           const formattedChunk = data.map((c, i) => {
-            const nameLower = (c.company_name || "").toLowerCase().trim();
-            const inLead = leadCompanies.has(nameLower);
-            const inEnquiry = enquiryCompanies.has(nameLower);
-            
-            let trackerStatus = "-";
-            if (inLead && inEnquiry) {
-              trackerStatus = "Lead / Enquiry";
-            } else if (inLead) {
-              trackerStatus = "Lead";
-            } else if (inEnquiry) {
-              trackerStatus = "Enquiry";
-            }
+            const trackerStatus = c.already_in_tracker && c.already_in_tracker.trim() ? c.already_in_tracker.trim() : "-";
 
             return {
               // Using from + i + 1 to maintain global index
@@ -119,6 +96,7 @@ function ClientMaster() {
               stateCode: c.state_code || "",
               creditDays: c.credit_days ?? "",
               creditLimit: c.credit_limit ?? "",
+              salesType: c.sales_type || "",
               isRelevant: c.isRelevant !== false,
               trackerStatus
             };
@@ -174,7 +152,8 @@ function ClientMaster() {
         crmName: client.crmName || "",
         stateCode: client.stateCode || "",
         creditDays: client.creditDays !== "" ? String(client.creditDays) : "",
-        creditLimit: client.creditLimit !== "" ? String(client.creditLimit) : ""
+        creditLimit: client.creditLimit !== "" ? String(client.creditLimit) : "",
+        salesType: client.salesType || ""
       });
     } else {
       setFormData({
@@ -189,7 +168,8 @@ function ClientMaster() {
         crmName: "",
         stateCode: "",
         creditDays: "",
-        creditLimit: ""
+        creditLimit: "",
+        salesType: ""
       });
     }
     setIsModalOpen(true);
@@ -216,6 +196,7 @@ function ClientMaster() {
       state_code: formData.stateCode || null,
       credit_days: formData.creditDays !== "" && formData.creditDays !== null ? parseInt(formData.creditDays, 10) : null,
       credit_limit: formData.creditLimit !== "" && formData.creditLimit !== null ? parseFloat(formData.creditLimit) : null,
+      sales_type: formData.salesType || null,
       updated_at: new Date().toISOString()
     };
 
@@ -271,7 +252,8 @@ function ClientMaster() {
     { key: "actions", label: "Actions" },
     { key: "action2", label: "Action 2" },
     { key: "companyName", label: "Company Name" },
-    { key: "clientCode", label: "Client Code" }, // Added at index 3!
+    { key: "clientCode", label: "Client Code" },
+    { key: "salesType", label: "Sales Type" },
     { key: "relevance", label: "Relevance" },
     { key: "trackerStatus", label: "Already In Tracker" },
     { key: "clientName", label: "Client Name" },
@@ -290,7 +272,11 @@ function ClientMaster() {
   const visibleHeaders = allHeaders.filter(col => !hiddenColumns.includes(col.key));
   const headers = visibleHeaders.map(col => col.label);
 
-  const filteredData = clientData.filter(item => {
+  const convertedClients = clientData.filter(c => c.clientCode && c.clientCode.trim() !== "");
+  const unconvertedClients = clientData.filter(c => !c.clientCode || c.clientCode.trim() === "");
+  const tabData = activeTab === "converted" ? convertedClients : unconvertedClients;
+
+  const filteredData = tabData.filter(item => {
     const matchesSearch = !searchQuery || 
       Object.values(item).some(val => 
         String(val).toLowerCase().includes(searchQuery.toLowerCase())
@@ -381,19 +367,22 @@ function ClientMaster() {
           )}
         </td>
       ),
+      salesType: (
+        <td key="salesType" className="px-6 py-4 whitespace-nowrap text-sm text-center">
+          {row.salesType ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+              {row.salesType}
+            </span>
+          ) : (
+            <span className="text-gray-400">-</span>
+          )}
+        </td>
+      ),
       trackerStatus: (
         <td key="trackerStatus" className="px-6 py-4 whitespace-nowrap text-sm text-center">
-          {row.trackerStatus === "Lead" ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-              Lead
-            </span>
-          ) : row.trackerStatus === "Enquiry" ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
-              Enquiry
-            </span>
-          ) : row.trackerStatus === "Lead / Enquiry" ? (
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-purple-100 text-purple-800">
-              Lead / Enquiry
+          {row.trackerStatus && row.trackerStatus !== "-" ? (
+            <span className="inline-flex items-center px-2.5 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-900 text-xs font-medium shadow-sm">
+              {row.trackerStatus}
             </span>
           ) : (
             <span className="text-gray-400">-</span>
@@ -461,13 +450,14 @@ function ClientMaster() {
                 Code: {item.clientCode}
               </span>
             )}
-            {item.trackerStatus !== "-" && (
-              <span className={`inline-flex items-center w-fit mt-1 px-2 py-0.5 rounded text-[10px] font-medium ${
-                item.trackerStatus === "Lead" ? "bg-blue-100 text-blue-800" :
-                item.trackerStatus === "Enquiry" ? "bg-emerald-100 text-emerald-800" :
-                "bg-purple-100 text-purple-800"
-              }`}>
+            {item.trackerStatus && item.trackerStatus !== "-" && (
+              <span className="inline-flex items-center w-fit mt-1 px-2 py-0.5 rounded border border-amber-200 bg-amber-50 text-amber-900 text-[10px] font-medium">
                 {item.trackerStatus}
+              </span>
+            )}
+            {item.salesType && (
+              <span className="inline-flex items-center w-fit mt-1 px-2 py-0.5 rounded bg-indigo-50 text-indigo-700 border border-indigo-200 text-[10px] font-medium">
+                {item.salesType}
               </span>
             )}
           </div>
@@ -496,13 +486,43 @@ function ClientMaster() {
   return (
     <div className="flex-1 flex flex-col h-full min-h-0">
         
-        {/* Top Filter & Controls Section */}
+        {/* Top Tab Switcher & Controls Section */}
         <div className="flex flex-col gap-3 mb-3 bg-white shrink-0 p-1">
+          {/* Tabs */}
+          <div className="flex items-center gap-2 border-b border-gray-200 pb-2 px-1">
+            <button
+              onClick={() => { setActiveTab("converted"); setCurrentPage(1); }}
+              className={`px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 transition-all flex items-center gap-2 ${
+                activeTab === "converted"
+                  ? "border-sky-600 text-sky-600 bg-sky-50/50 font-bold"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Converted Clients
+              <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === "converted" ? "bg-sky-100 text-sky-800" : "bg-gray-100 text-gray-600"}`}>
+                {convertedClients.length}
+              </span>
+            </button>
+            <button
+              onClick={() => { setActiveTab("unconverted"); setCurrentPage(1); }}
+              className={`px-4 py-2 font-medium text-sm rounded-t-lg border-b-2 transition-all flex items-center gap-2 ${
+                activeTab === "unconverted"
+                  ? "border-amber-600 text-amber-600 bg-amber-50/50 font-bold"
+                  : "border-transparent text-gray-500 hover:text-gray-700 hover:bg-gray-50"
+              }`}
+            >
+              Unconverted Clients
+              <span className={`px-2 py-0.5 rounded-full text-xs ${activeTab === "unconverted" ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600"}`}>
+                {unconvertedClients.length}
+              </span>
+            </button>
+          </div>
+
           <div className="flex flex-wrap items-center gap-2 shrink-0 pb-1 w-full">
             
             {/* Title / Label */}
             <div className="text-lg font-bold text-gray-800 shrink-0 mr-2 border-r border-gray-200 pr-4">
-              Client Details
+              {activeTab === "converted" ? "Converted Clients" : "Unconverted Clients"}
             </div>
 
             {/* Search Bar */}
@@ -697,6 +717,15 @@ function ClientMaster() {
             <div className="space-y-2">
               <label className="block text-sm font-medium text-gray-700">Credit Limit</label>
               <input type="number" step="0.01" value={formData.creditLimit} onChange={e => setFormData({...formData, creditLimit: e.target.value})} className="w-full px-3 py-2 border rounded-md" />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-sm font-medium text-gray-700">Sales Type</label>
+              <select value={formData.salesType} onChange={e => setFormData({...formData, salesType: e.target.value})} className="w-full px-3 py-2 border rounded-md bg-white">
+                <option value="">Select Sales Type</option>
+                <option value="NBD">NBD</option>
+                <option value="NBD_CRR">NBD_CRR</option>
+                <option value="CRR">CRR</option>
+              </select>
             </div>
             <div className="space-y-2 md:col-span-2">
               <label className="block text-sm font-medium text-gray-700">Billing Address</label>
