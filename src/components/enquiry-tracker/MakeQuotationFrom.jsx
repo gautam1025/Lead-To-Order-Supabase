@@ -192,7 +192,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
 
         <div className="space-y-2">
           <label htmlFor="quotationFile" className="block text-sm font-medium">
-            Quotation Upload
+            Quotation Upload <span className="text-red-500">*</span>
           </label>
           <div className="flex items-center justify-center w-full">
             <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
@@ -211,6 +211,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
                 className="hidden"
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg"
+                required={!formData.quotationFile && !formData.quotationFileUrl}
               />
             </label>
           </div>

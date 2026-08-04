@@ -48,7 +48,7 @@ const columnsConfig = [
   { key: "companyName", label: "Company Name" },
   { key: "phoneNumber", label: "Phone Number" },
   { key: "salespersonName", label: "Person Name" },
-  { key: "nextCallDate", label: "Next Follow Update" },
+  { key: "nextCallDate", label: "Next Follow-Up Date" },
   { key: "currentStage", label: "Current Stage" },
   { key: "callingDate", label: "Calling Date" },
   { key: "itemQty", label: "Item/Qty" },
@@ -912,40 +912,55 @@ const handleSaveClick = async (index) => {
     }
   };
 
+  // Robust helper to parse various date strings (DD-MM-YYYY, YYYY-MM-DD, DD/MM/YYYY)
+  const parseDateHelper = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      const cleanStr = String(dateStr).trim();
+      if (cleanStr.includes("-") || cleanStr.includes("/")) {
+        const separator = cleanStr.includes("-") ? "-" : "/";
+        const parts = cleanStr.split(separator);
+        if (parts[0].length === 4) {
+          return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        } else if (parts[2] && parts[2].length === 4) {
+          return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        }
+      }
+      const d = new Date(cleanStr);
+      return isNaN(d.getTime()) ? null : d;
+    } catch {
+      return null;
+    }
+  };
+
   // Helper function to check if a date is today
   const isToday = (dateStr) => {
-    if (!dateStr) return false;
-    try {
-      const date = new Date(dateStr.split("/").reverse().join("-"));
-      const today = new Date();
-      return date.toDateString() === today.toDateString();
-    } catch {
-      return false;
-    }
+    const date = parseDateHelper(dateStr);
+    if (!date || isNaN(date.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return date.getTime() === today.getTime();
   };
 
   // Helper function to check if a date is overdue
   const isOverdue = (dateStr) => {
-    if (!dateStr) return false;
-    try {
-      const date = new Date(dateStr.split("/").reverse().join("-"));
-      const today = new Date();
-      return date < today;
-    } catch {
-      return false;
-    }
+    const date = parseDateHelper(dateStr);
+    if (!date || isNaN(date.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return date < today;
   };
 
   // Helper function to check if a date is upcoming
   const isUpcoming = (dateStr) => {
-    if (!dateStr) return false;
-    try {
-      const date = new Date(dateStr.split("/").reverse().join("-"));
-      const today = new Date();
-      return date > today;
-    } catch {
-      return false;
-    }
+    const date = parseDateHelper(dateStr);
+    if (!date || isNaN(date.getTime())) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return date > today;
   };
 
   const formatItemQty = (itemQtyString) => {
@@ -1580,7 +1595,7 @@ const handleSaveClick = async (index) => {
           leadReceiverName: parentLead.lead_receiver_name || "",
           leadSource: parentLead.lead_source || "",
           phoneNo: parentLead.phone_number || "",
-          salespersonName: parentLead.salesperson_name || "",
+          salespersonName: parentLead.person_name || parentLead.Person_Name || parentLead.client_name || parentLead.salesperson_name || item.sales_person_name || item.person_name || "",
           companyName: parentLead.company_name || item.company_name || "",
           currentStage: latestLog.current_stage || "Enquiry Tracker",
           callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.created_at ? formatDateToDDMMYYYY(item.created_at) : ""),
@@ -1618,7 +1633,7 @@ const handleSaveClick = async (index) => {
           leadReceiverName: item.enquiry_receiver_name || "",
           leadSource: item.lead_source || "",
           phoneNo: item.phone_number || "",
-          salespersonName: item.sales_person_name || "",
+          salespersonName: item.sales_person_name || item.person_name || item.client_name || "",
           companyName: item.company_name || "",
           currentStage: latestLog.current_stage || "Enquiry Tracker",
           callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.enquiry_date ? formatDateToDDMMYYYY(item.enquiry_date) : ""),
@@ -2532,16 +2547,23 @@ const handleSaveClick = async (index) => {
 
     // Calling days filter
     if (callingDaysFilter.length > 0) {
-      let dateValue = "";
-      if (activeTab === "pending") {
-        dateValue = tracker.nextCallDate1 || tracker.Calling_Days || "";
-      } else if (activeTab === "directEnquiry") {
-        dateValue = tracker.nextCallDate || tracker.calling_days || "";
-      } else if (activeTab === "history") {
-        dateValue = tracker.nextCallDate || "";
+      const dateValue = tracker.nextCallDate || tracker.nextCallDate1 || tracker.Calling_Days || tracker.calling_days || tracker.plannedAt || "";
+      if (activeTab === "history") {
+        const ok = callingDaysFilter.some(f => {
+          if (f === "today") return isToday(dateValue);
+          if (f === "older") return !isToday(dateValue) && !!parseDateHelper(dateValue);
+          return false;
+        });
+        if (!ok) return false;
+      } else {
+        const ok = callingDaysFilter.some(f => {
+          if (f === "today") return isToday(dateValue);
+          if (f === "overdue") return isOverdue(dateValue);
+          if (f === "upcoming") return isUpcoming(dateValue);
+          return false;
+        });
+        if (!ok) return false;
       }
-
-      if (!matchesCallingDaysFilter(dateValue, activeTab)) return false;
     }
 
     return true;
@@ -2781,24 +2803,23 @@ const handleSaveClick = async (index) => {
     if (activeTab === "pending") {
       pendingData.forEach((tracker) => {
         const nextCallDate1 =
-          tracker.nextCallDate1 || tracker.Calling_Days || "";
+          tracker.nextCallDate || tracker.nextCallDate1 || tracker.Calling_Days || tracker.calling_days || tracker.plannedAt || "";
         if (isToday(nextCallDate1)) counts.today++;
         else if (isOverdue(nextCallDate1)) counts.overdue++;
         else if (isUpcoming(nextCallDate1)) counts.upcoming++;
       });
     } else if (activeTab === "directEnquiry") {
       directEnquiryData.forEach((tracker) => {
-        const nextCallDate = tracker.nextCallDate || tracker.calling_days || "";
+        const nextCallDate = tracker.nextCallDate || tracker.nextCallDate1 || tracker.calling_days || tracker.Calling_Days || tracker.plannedAt || "";
         if (isToday(nextCallDate)) counts.today++;
         else if (isOverdue(nextCallDate)) counts.overdue++;
         else if (isUpcoming(nextCallDate)) counts.upcoming++;
       });
     } else if (activeTab === "history") {
       historyData.forEach((tracker) => {
-        const nextCallDate = tracker.nextCallDate || "";
+        const nextCallDate = tracker.nextCallDate || tracker.nextCallDate1 || tracker.calling_days || tracker.Calling_Days || tracker.plannedAt || "";
         if (isToday(nextCallDate)) counts.today++;
-        else if (isOverdue(nextCallDate)) counts.older++;
-        else if (nextCallDate) counts.older++; // Any date that's not today
+        else if (isOverdue(nextCallDate) || (nextCallDate && parseDateHelper(nextCallDate))) counts.older++;
       });
     }
 
@@ -3202,22 +3223,19 @@ const handleSaveClick = async (index) => {
       if (!currentStageFilter.includes(tracker.currentStage || "")) return false;
     }
     if (callingDaysFilter.length > 0) {
-      const dateVal = tab === "history"
-        ? (tracker.nextCallDate || "")
-        : (tracker.nextCallDate1 || tracker.Calling_Days || tracker.callingDate || "");
+      const dateVal = tracker.nextCallDate || tracker.nextCallDate1 || tracker.Calling_Days || tracker.calling_days || tracker.callingDate || tracker.plannedAt || "";
       if (tab === "history") {
         const ok = callingDaysFilter.some(f => {
           if (f === "today") return isToday(dateVal);
-          if (f === "older") return !isToday(dateVal) && !!dateVal;
+          if (f === "older") return !isToday(dateVal) && !!parseDateHelper(dateVal);
           return false;
         });
         if (!ok) return false;
       } else {
-        const dl = dateVal.toLowerCase();
         const ok = callingDaysFilter.some(f => {
-          if (f === "today") return dl.includes("today");
-          if (f === "overdue") return dl.includes("overdue");
-          if (f === "upcoming") return dl.includes("upcoming");
+          if (f === "today") return isToday(dateVal);
+          if (f === "overdue") return isOverdue(dateVal);
+          if (f === "upcoming") return isUpcoming(dateVal);
           return false;
         });
         if (!ok) return false;
@@ -3235,7 +3253,13 @@ const handleSaveClick = async (index) => {
 
   useEffect(() => { setCurrentPage(1); }, [activeTab, searchTerm, callingDaysFilter, enquiryNoFilter, currentStageFilter]);
 
-  const currentData = activeTab === "pending" ? filteredPending : filteredHistory;
+  const rawCurrentData = activeTab === "pending" ? filteredPending : filteredHistory;
+  const currentData = [...rawCurrentData].sort((a, b) => {
+    const valA = String(a.enquiryNo || a.enquiry_no || a.leadNo || a.lead_no || "").trim();
+    const valB = String(b.enquiryNo || b.enquiry_no || b.leadNo || b.lead_no || "").trim();
+    const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: "base" });
+    return activeTab === "history" ? -cmp : cmp;
+  });
   const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage));
   const paginatedData = currentData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
@@ -3263,9 +3287,9 @@ const handleSaveClick = async (index) => {
         (opt.key === "leadId" ? (tracker.leadNo || tracker.lead_no || tracker.enquiryNo || tracker.enquiry_no || tracker.leadId) : null) ??
         (opt.key === "phoneNumber" ? (tracker.phoneNo || tracker.Phone_Number || tracker.phoneNumber) : null) ??
         (opt.key === "companyName" ? (tracker.Company_Name || tracker.company_name || tracker.companyName) : null) ??
-        (opt.key === "salespersonName" ? (tracker.salesperson_Name || tracker.sales_co_ordinator_name || tracker.salespersonName || tracker.sales_coordinator || tracker.sc_name) : null) ??
+        (opt.key === "salespersonName" ? (tracker.salespersonName || tracker.salesperson_Name || tracker.personName || tracker.person_name || tracker.sales_co_ordinator_name || tracker.sales_coordinator || tracker.sc_name) : null) ??
         (opt.key === "customerFeedback" ? (tracker.customerSay || tracker.What_Did_The_Customer_say || tracker.customerFeedback) : null) ??
-        (opt.key === "nextCallDate" ? (tracker.nextCallDate1 || tracker.Calling_Days || tracker.nextCallDate) : null) ??
+        (opt.key === "nextCallDate" ? (tracker.nextCallDate || tracker.nextCallDate1 || tracker.Calling_Days || tracker.plannedAt) : null) ??
         (opt.key === "nextCallTime" ? (tracker.nextCallTime1 || tracker.nextCallTime) : null) ??
         (opt.key === "leadSource" ? (tracker.Lead_Source || tracker.lead_source || tracker.leadSource) : null) ??
         (opt.key === "currentStage" ? (tracker.Current_Stage || tracker.current_stage || tracker.currentStage) : null) ??

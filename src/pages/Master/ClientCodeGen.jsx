@@ -63,8 +63,8 @@ export const generateAndAssignClientCode = async (companyName) => {
       return codes;
     };
 
-    if (!groupName) {
-      // Logic for NO group
+    if (!groupName || groupName.trim().toUpperCase() === "OTHER CLIENTS") {
+      // Logic for NO group or OTHER CLIENTS
       // Fetch ALL client codes using pagination
       const allCodes = await fetchAllClientCodes();
 

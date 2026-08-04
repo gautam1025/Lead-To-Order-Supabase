@@ -229,7 +229,12 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
   const handleChange = (e) => {
     const { name, value } = e.target
-    onFieldChange(name, value)
+    if (name === "warranty" || name === "orderVideo") {
+      onFieldChange("warranty", value)
+      onFieldChange("orderVideo", value)
+    } else {
+      onFieldChange(name, value)
+    }
   }
 
   const handleFileChange = (e) => {
@@ -322,7 +327,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
         </div>
       </div>
       <div className="space-y-2">
-        <label className="block text-sm font-medium text-gray-700">Is Order Received? Status</label>
+        <label className="block text-sm font-medium text-gray-700">Is Order Received? Status <span className="text-red-500">*</span></label>
         <div className="space-y-1">
           <div className="flex items-center space-x-2">
             <input
@@ -333,6 +338,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               checked={orderStatus === "yes"}
               onChange={() => handleStatusChange("yes")}
               className="h-4 w-4 text-purple-600 focus:ring-purple-500"
+              required={!orderStatus}
             />
             <label htmlFor="order-yes" className="text-sm text-gray-700">
               YES
@@ -401,7 +407,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
               <label htmlFor="approvedBy" className="block text-sm font-medium text-gray-700">
-                Approve By
+                Approve By <span className="text-red-500">*</span>
               </label>
               <select
                 id="approvedBy"
@@ -409,6 +415,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 value={formData.approvedBy || ""}
                 onChange={handleChange}
+                required
               >
                 <option value="">Select approver</option>
                 {approvedByOptions.map((option, index) => (
@@ -457,7 +464,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
             <div className="space-y-2">
               <label htmlFor="destination" className="block text-sm font-medium text-gray-700">
-                Destination
+                Destination <span className="text-red-500">*</span>
               </label>
               <input
                 id="destination"
@@ -466,12 +473,13 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
                 placeholder="Enter destination"
                 value={formData.destination || ""}
                 onChange={handleChange}
+                required
               />
             </div>
 
             <div className="space-y-2">
               <label htmlFor="poNumber" className="block text-sm font-medium text-gray-700">
-                PO Number
+                PO Number <span className="text-red-500">*</span>
               </label>
               <input
                 id="poNumber"
@@ -480,6 +488,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
                 placeholder="Enter PO number"
                 value={formData.poNumber || ""}
                 onChange={handleChange}
+                required
               />
             </div>
 
@@ -504,7 +513,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
             <div className="space-y-2">
               <label htmlFor="transportMode" className="block text-sm font-medium text-gray-700">
-                Transport Mode
+                Transport Mode <span className="text-red-500">*</span>
               </label>
               <select
                 id="transportMode"
@@ -512,6 +521,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 value={formData.transportMode || ""}
                 onChange={handleChange}
+                required
               >
                 <option value="">Select transport mode</option>
                 {transportModeOptions.map((option, index) => (
@@ -557,7 +567,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
             <div className="space-y-2">
               <label htmlFor="conveyedForRegistration" className="block text-sm font-medium text-gray-700">
-                CONVEYED FOR REGISTRATION FORM
+                CONVEYED FOR REGISTRATION FORM <span className="text-red-500">*</span>
               </label>
               <select
                 id="conveyedForRegistration"
@@ -565,6 +575,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
                 value={formData.conveyedForRegistration || ""}
                 onChange={handleChange}
+                required
               >
                 <option value="">Select option</option>
                 {conveyedOptions.map((option, index) => (
@@ -575,14 +586,16 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
           </div>
 
           <div className="space-y-2">
-            <label htmlFor="orderVideo" className="block text-sm font-medium text-gray-700">
-              Offer No.
+            <label htmlFor="warranty" className="block text-sm font-medium text-gray-700">
+              Warranty <span className="text-red-500">*</span>
             </label>
             <select
-              id="orderVideo"
-              name="orderVideo"
+              id="warranty"
+              name="warranty"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+              value={formData.warranty || formData.orderVideo || ""}
               onChange={handleChange}
+              required
             >
               <option value="">Select an option</option>
               <option value="yes">Yes</option>
@@ -592,7 +605,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
           <div className="space-y-2">
             <label htmlFor="acceptanceFile" className="block text-sm font-medium text-gray-700">
-              Acceptance File Upload
+              Acceptance File Upload <span className="text-red-500">*</span>
             </label>
             <input
               id="acceptanceFile"
@@ -600,12 +613,13 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               type="file"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               onChange={handleFileChange}
+              required={!formData.acceptanceFile}
             />
           </div>
 
           <div className="space-y-2">
             <label htmlFor="orderRemark" className="block text-sm font-medium text-gray-700">
-              REMARK
+              REMARK <span className="text-red-500">*</span>
             </label>
             <textarea
               id="orderRemark"
@@ -614,6 +628,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               placeholder="Enter remarks"
               value={formData.orderRemark || ""}
               onChange={handleChange}
+              required
             />
           </div>
         </div>
@@ -625,7 +640,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
           <div className="space-y-2">
             <label htmlFor="apologyVideo" className="block text-sm font-medium text-gray-700">
-              Order Lost Apology Video
+              Order Lost Apology Video <span className="text-red-500">*</span>
             </label>
             <input
               id="apologyVideo"
@@ -633,6 +648,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               type="file"
               className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
               onChange={handleFileChange}
+              required={!formData.apologyVideo}
             />
           </div>
 
@@ -658,7 +674,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
 
           <div className="space-y-2">
             <label htmlFor="reasonRemark" className="block text-sm font-medium text-gray-700">
-              If No then get relevant reason Remark
+              If No then get relevant reason Remark <span className="text-red-500">*</span>
             </label>
             <textarea
               id="reasonRemark"
@@ -667,6 +683,7 @@ function OrderStatusForm({ formData, onFieldChange, enquiryNo, activeTab }) {
               placeholder="Enter reason remarks"
               value={formData.reasonRemark || ""}
               onChange={handleChange}
+              required
             />
           </div>
         </div>

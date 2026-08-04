@@ -19,12 +19,16 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   const [assignToProjectOptions, setAssignToProjectOptions] = useState([])
   const [showCompanyDropdown, setShowCompanyDropdown] = useState(false)
   const [filteredCompanies, setFilteredCompanies] = useState([])
+  const [groupOptions, setGroupOptions] = useState([])
+  const [clientMasterRecords, setClientMasterRecords] = useState([])
 
   const [newCallTrackerData, setNewCallTrackerData] = useState({
     enquiryNo: "",
     leadSource: "",
     scName: "",
     companyName: "",
+    groupName: "",
+    stateCode: "",
     phoneNumber: "",
     salesPersonName: "",
     location: "",
@@ -47,17 +51,25 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
   const [items, setItems] = useState([{ id: "1", name: "", quantity: "" }])
 
 
-  // Filter companies based on search input
+  // Filter companies based on search input and selected group
   useEffect(() => {
-    if (newCallTrackerData.companyName) {
-      const filtered = companyOptions.filter(company =>
-        company.toLowerCase().includes(newCallTrackerData.companyName.toLowerCase())
-      )
-      setFilteredCompanies(filtered)
-    } else {
-      setFilteredCompanies(companyOptions)
+    let matchingCompanies = companyOptions;
+    if (newCallTrackerData.groupName) {
+      matchingCompanies = clientMasterRecords
+        .filter(c => c.company_group_name && c.company_group_name.trim().toLowerCase() === newCallTrackerData.groupName.trim().toLowerCase())
+        .map(c => c.company_name)
+        .filter(Boolean);
+      matchingCompanies = [...new Set(matchingCompanies)].sort();
     }
-  }, [newCallTrackerData.companyName, companyOptions])
+    if (newCallTrackerData.companyName) {
+      const filtered = matchingCompanies.filter(company =>
+        company.toLowerCase().includes(newCallTrackerData.companyName.toLowerCase())
+      );
+      setFilteredCompanies(filtered);
+    } else {
+      setFilteredCompanies(matchingCompanies);
+    }
+  }, [newCallTrackerData.companyName, newCallTrackerData.groupName, companyOptions, clientMasterRecords]);
 
   useEffect(() => {
     fetchDropdownData()
@@ -249,8 +261,12 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       if (relevantRecords && relevantRecords.length > 0) {
         const companies = [];
         const detailsMap = {};
+        const groups = [];
 
         relevantRecords.forEach(company => {
+          if (company.company_group_name) {
+            groups.push(company.company_group_name.trim());
+          }
           if (company.company_name) {
             companies.push(company.company_name);
 
@@ -259,53 +275,54 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               salesPersonName: company.client_name || "",
               location: company.billing_address || "",
               gstNumber: company.gst_number || "",
-              enquiryState: company.state || ""
+              enquiryState: company.state || "",
+              stateCode: company.state_code || "",
+              scName: company.sc_name || "",
+              salesType: company.sales_type || "",
+              groupName: company.company_group_name || ""
             };
           }
         });
 
         const uniqueCompanies = [...new Set(companies)].sort();
+        const uniqueGroups = [...new Set(groups)].filter(Boolean).sort();
         setCompanyOptions(uniqueCompanies);
         setFilteredCompanies(uniqueCompanies);
         setCompanyDetailsMap(detailsMap);
+        setGroupOptions(uniqueGroups);
+        setClientMasterRecords(relevantRecords);
       }
     } catch (error) {
       console.error("Error fetching company data:", error);
       setCompanyOptions([]);
       setFilteredCompanies([]);
       setCompanyDetailsMap({});
+      setGroupOptions([]);
+      setClientMasterRecords([]);
     }
   };
 
   // Handle company name change and auto-fill other fields
   const handleCompanyChange = (companyName) => {
+    const companyDetails = companyDetailsMap[companyName] || {};
     setNewCallTrackerData(prev => ({
       ...prev,
       companyName: companyName,
+      phoneNumber: companyDetails.phoneNumber || prev.phoneNumber,
+      salesPersonName: companyDetails.salesPersonName || prev.salesPersonName,
+      location: companyDetails.location || prev.location,
+      gstNumber: companyDetails.gstNumber || prev.gstNumber,
+      stateCode: companyDetails.stateCode || prev.stateCode,
+      scName: companyDetails.scName || prev.scName,
+      groupName: companyDetails.groupName || prev.groupName,
       isCompanyAutoFilled: true
     }));
 
-    // Auto-fill related fields if company is selected
-    if (companyName) {
-      const companyDetails = companyDetailsMap[companyName] || {};
-      setNewCallTrackerData(prev => ({
-        ...prev,
-        // Omit phoneNumber and salesPersonName from auto-fill as per user request
-        phoneNumber: "",
-        salesPersonName: "",
-        location: companyDetails.location || "",
-        gstNumber: companyDetails.gstNumber || "",
-        isCompanyAutoFilled: true
-      }));
-
-      // Also update the enquiry state if available
-      if (companyDetails.enquiryState) {
-        setEnquiryFormData(prev => ({
-          ...prev,
-          enquiryState: companyDetails.enquiryState
-        }));
-      }
-    }
+    setEnquiryFormData(prev => ({
+      ...prev,
+      enquiryState: companyDetails.enquiryState || prev.enquiryState,
+      salesType: companyDetails.salesType || prev.salesType
+    }));
 
     setShowCompanyDropdown(false);
   }
@@ -529,6 +546,8 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
           if (!existingClient) {
             await supabase.from("client_master").insert([{
               company_name: newCallTrackerData.companyName.trim(),
+              company_group_name: newCallTrackerData.groupName || null,
+              state_code: newCallTrackerData.stateCode || null,
               client_name: newCallTrackerData.salesPersonName || null,
               client_mobile_number: newCallTrackerData.phoneNumber || null,
               billing_address: newCallTrackerData.location || null,
@@ -542,8 +561,12 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
           } else {
             const updatePayload = {
               already_in_tracker: `Enquiry Tracker (${assignedEnquiryNo || 'New'})`,
-              updated_at: new Date().toISOString()
+              updated_at: new Date().toISOString(),
+              state_code: newCallTrackerData.stateCode || existingClient.state_code || null
             };
+            if (newCallTrackerData.groupName && !existingClient.company_group_name) {
+              updatePayload.company_group_name = newCallTrackerData.groupName;
+            }
             if (!existingClient.sc_name && assignedScName) {
               updatePayload.sc_name = assignedScName;
             }
@@ -621,6 +644,29 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                 {leadSources.map((source, index) => (
                   <option key={index} value={source}>
                     {source}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Group Name dropdown (Optional) */}
+            <div className="space-y-2">
+              <label htmlFor="groupName" className="block text-sm font-medium text-gray-700">
+                Group Name (Optional)
+              </label>
+              <select
+                id="groupName"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                value={newCallTrackerData.groupName || ""}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setNewCallTrackerData(prev => ({ ...prev, groupName: val, companyName: "" }));
+                }}
+              >
+                <option value="">Select Group Name</option>
+                {groupOptions.map((group, index) => (
+                  <option key={index} value={group}>
+                    {group}
                   </option>
                 ))}
               </select>
@@ -802,6 +848,23 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   isCompanyAutoFilled: false
                 }))}
                 required
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label htmlFor="stateCode" className="block text-sm font-medium text-gray-700">
+                State Code
+              </label>
+              <input
+                id="stateCode"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
+                placeholder="Enter State Code"
+                value={newCallTrackerData.stateCode}
+                onChange={(e) => setNewCallTrackerData(prev => ({
+                  ...prev,
+                  stateCode: e.target.value,
+                  isCompanyAutoFilled: false
+                }))}
               />
             </div>
 

@@ -51,7 +51,7 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
   const [enquiryState, setEnquiryState] = useState("")
   const [projectName, setProjectName] = useState("")
   const [salesType, setSalesType] = useState("")
-  const [enquiryApproach, setEnquiryApproach] = useState("")
+  const [enquiryApproach, setEnquiryApproach] = useState("OUTGOING")
   const [leadsTrackingStatus, setLeadsTrackingStatus] = useState("Pending")
 
   // New state for dropdown options
@@ -128,7 +128,10 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
       setSalesTypes(toValues(salesTypesData))
       setProductCategories(toItemValues(itemsData))
       setNobOptions(toValues(nobData))
-      setEnquiryApproachOptions(toValues(approachData).length > 0 ? toValues(approachData) : ['Incoming', 'Outgoing'])
+      const approachValues = toValues(approachData).length > 0 ? toValues(approachData) : ['INCOMING', 'OUTGOING'];
+      setEnquiryApproachOptions(approachValues)
+      const outgoingMatch = approachValues.find(opt => opt && opt.toUpperCase() === 'OUTGOING') || 'OUTGOING';
+      setEnquiryApproach(prev => (!prev || prev.toUpperCase() === 'OUTGOING') ? outgoingMatch : prev);
       setCustomerFeedbackOptions(toValues(feedbackData))
       setLeadSources(toValues(sourcesData))
       setReceiverOptions(toValues(receiversData))
@@ -140,7 +143,7 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
       setSalesTypes(['NBD', 'CRR', 'NBD_CRR'])
       setProductCategories(['Product 1', 'Product 2', 'Product 3'])
       setNobOptions(['NOB 1', 'NOB 2', 'NOB 3'])
-      setEnquiryApproachOptions(['Incoming', 'Outgoing'])
+      setEnquiryApproachOptions(['INCOMING', 'OUTGOING'])
       setCustomerFeedbackOptions(['Feedback 1', 'Feedback 2', 'Feedback 3'])
       setLeadSources(['Indiamart', 'Justdial', 'Social Media', 'Website', 'Referral', 'Other'])
       setReceiverOptions(['Receiver 1', 'Receiver 2'])
@@ -185,7 +188,6 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
               salesPerson: row.client_name || "",
               phoneNumber: row.client_mobile_number || "",
               billingAddress: row.billing_address || "",
-              shippingAddress: row.billing_address || "",
               gstNumber: row.gst_number || "",
             }
           }
@@ -207,7 +209,6 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
       setSalesPersonName(details.salesPerson || "")
       setBillingLocation(details.billingAddress || "")
       setGstNumber(details.gstNumber || "")
-      setShippingAddress(details.shippingAddress || "")
     }
   }
 
@@ -240,20 +241,33 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
 
           if (error) throw error
           if (data) {
+            const compName = data.Company_Name || data.company_name || "";
             setLeadSource(data.Lead_Source || data.lead_source || "")
             setScName(data.sc_name || data.SC_Name || data.handle_person || data.salesperson_name || "")
-            setCompanyName(data.Company_Name || data.company_name || "")
+            setCompanyName(compName)
             setPhoneNumber(data.Phone_Number || data.phone_number || "")
             setSalesPersonName(data.person_name || data.Person_Name || data.client_name || data.Salesperson_Name || data.salesperson_name || "")
-            setBillingLocation(data.Location || data.location || "")
+            
+            let billingAddr = data.Location || data.location || "";
+            if (compName) {
+              const { data: cm } = await supabase
+                .from("client_master")
+                .select("billing_address")
+                .ilike("company_name", compName.trim())
+                .maybeSingle();
+              if (cm && cm.billing_address) {
+                billingAddr = cm.billing_address;
+              }
+            }
+            setBillingLocation(billingAddr)
             setEmailAddress(data.Email_Address || data.email_address || "")
-            setShippingAddress(data.Address || data.address || "")
+            setShippingAddress("")
             setEnquiryReceiverName(data.Lead_Receiver_Name || data.lead_receiver_name || "")
             setGstNumber(data.GST_Number || data.gst_number || "")
             setEnquiryState(data.State || data.state || "")
             setProjectName(data.NOB || data.nob || "")
             setSalesType(data.Sales_Type || data.sales_type || "")
-            setEnquiryApproach(data.Enquiry_Approach || data.enquiry_approach || "")
+            setEnquiryApproach(data.Enquiry_Approach || data.enquiry_approach || "OUTGOING")
             setLeadsTrackingStatus(data.Leads_Tracking_Status || data.lead_status || "Pending")
             setLeadStatus(data.Status || data.lead_status || "")
             
@@ -799,25 +813,27 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
                   <div className="space-y-2">
                     <label htmlFor="shippingAddress" className="block text-sm font-medium text-gray-700">
                       Shipping Address
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="shippingAddress"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       placeholder="Enter shipping address"
                       value={shippingAddress}
                       onChange={(e) => setShippingAddress(e.target.value)}
+                      required
                     />
                   </div>
 
                   <div className="space-y-2">
                     <label htmlFor="enquiryReceiverName" className="block text-sm font-medium text-gray-700">
                       Enquiry Receiver Name
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="enquiryReceiverName"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
                       value={enquiryReceiverName}
                       onChange={(e) => setEnquiryReceiverName(e.target.value)}
+                      required
                     >
                       <option value="">Select receiver</option>
                       {receiverOptions.map((receiver, index) => (
@@ -831,12 +847,13 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
                   <div className="space-y-2">
                     <label htmlFor="enquiryAssignToProject" className="block text-sm font-medium text-gray-700">
                       Enquiry Assign to Person
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <select
                       id="enquiryAssignToProject"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
                       value={enquiryAssignToProject}
                       onChange={(e) => setEnquiryAssignToProject(e.target.value)}
+                      required
                     >
                       <option value="">Select person</option>
                       {assignToProjectOptions.map((project, index) => (
@@ -850,13 +867,14 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
                   <div className="space-y-2">
                     <label htmlFor="gstNumber" className="block text-sm font-medium text-gray-700">
                       GST Number
-                    </label>
+                     <span className="text-red-500">*</span></label>
                     <input
                       id="gstNumber"
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-amber-500"
                       placeholder="Enter GST number"
                       value={gstNumber}
                       onChange={(e) => setGstNumber(e.target.value)}
+                      required
                     />
                   </div>
 

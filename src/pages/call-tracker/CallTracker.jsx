@@ -451,42 +451,47 @@ function CallTracker() {
     setEditedData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const parseNextCallDate = (dateStr) => {
+    if (!dateStr) return null;
+    try {
+      const cleanStr = String(dateStr).trim();
+      if (cleanStr.includes("-") || cleanStr.includes("/")) {
+        const separator = cleanStr.includes("-") ? "-" : "/";
+        const parts = cleanStr.split(separator);
+        if (parts[0].length === 4) {
+          // YYYY-MM-DD
+          return new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+        } else {
+          // DD-MM-YYYY
+          return new Date(parseInt(parts[2], 10), parseInt(parts[1], 10) - 1, parseInt(parts[0], 10));
+        }
+      }
+      return new Date(cleanStr);
+    } catch (e) {
+      console.error("Error parsing nextCallDate:", e, "Value:", dateStr);
+      return null;
+    }
+  };
+
   const checkDateFilter = (followUp, filterType) => {
     if (filterType === "all") return true;
 
-    const nextCallDate = followUp.nextCallDate;
-    if (!nextCallDate) return false;
+    const followUpDate = parseNextCallDate(followUp.nextCallDate);
+    if (!followUpDate || isNaN(followUpDate.getTime())) return false;
 
-    try {
-      let followUpDate;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    followUpDate.setHours(0, 0, 0, 0);
 
-      if (nextCallDate.includes("-")) {
-        const [year, month, day] = nextCallDate.split("-");
-        followUpDate = new Date(year, month - 1, day);
-      } else if (nextCallDate.includes("/")) {
-        const [day, month, year] = nextCallDate.split("/");
-        followUpDate = new Date(year, month - 1, day);
-      } else {
-        followUpDate = new Date(nextCallDate);
-      }
-
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      followUpDate.setHours(0, 0, 0, 0);
-
-      switch (filterType) {
-        case "today":
-          return followUpDate.getTime() === today.getTime();
-        case "overdue":
-          return followUpDate < today;
-        case "upcoming":
-          return followUpDate > today;
-        default:
-          return true;
-      }
-    } catch (error) {
-      console.error("Error parsing date:", error, "Date value:", nextCallDate);
-      return false;
+    switch (filterType) {
+      case "today":
+        return followUpDate.getTime() === today.getTime();
+      case "overdue":
+        return followUpDate < today;
+      case "upcoming":
+        return followUpDate > today;
+      default:
+        return true;
     }
   };
 
@@ -501,38 +506,17 @@ function CallTracker() {
     today.setHours(0, 0, 0, 0);
 
     pendingFollowUps.forEach((followUp) => {
-      const nextCallDate = followUp.nextCallDate;
-      if (!nextCallDate) return;
+      const followUpDate = parseNextCallDate(followUp.nextCallDate);
+      if (!followUpDate || isNaN(followUpDate.getTime())) return;
 
-      try {
-        let followUpDate;
+      followUpDate.setHours(0, 0, 0, 0);
 
-        if (nextCallDate.includes("-")) {
-          const [year, month, day] = nextCallDate.split("-");
-          followUpDate = new Date(year, month - 1, day);
-        } else if (nextCallDate.includes("/")) {
-          const [day, month, year] = nextCallDate.split("/");
-          followUpDate = new Date(year, month - 1, day);
-        } else {
-          followUpDate = new Date(nextCallDate);
-        }
-
-        followUpDate.setHours(0, 0, 0, 0);
-
-        if (followUpDate.getTime() === today.getTime()) {
-          counts.today++;
-        } else if (followUpDate < today) {
-          counts.overdue++;
-        } else if (followUpDate > today) {
-          counts.upcoming++;
-        }
-      } catch (error) {
-        console.error(
-          "Error parsing date:",
-          error,
-          "Date value:",
-          nextCallDate
-        );
+      if (followUpDate.getTime() === today.getTime()) {
+        counts.today++;
+      } else if (followUpDate < today) {
+        counts.overdue++;
+      } else if (followUpDate > today) {
+        counts.upcoming++;
       }
     });
 
@@ -880,7 +864,7 @@ function CallTracker() {
             customerSay: row.additional_notes || "",
             enquiryStatus: row.lead_status || "",
             createdAt: row.created_at || "",
-            nextCallDate: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
+            nextCallDate: (row.next_call_date || row.planned_at) ? formatDateToDDMMYYYY(row.next_call_date || row.planned_at) : "",
             nextAction: "",
             priority: determinePriority(row.lead_source || ""),
             assignedTo: row.sc_name || row.handle_person || row.salesperson_name || "",
@@ -2795,7 +2779,13 @@ function CallTracker() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(50);
 
-  const currentData = activeTab === "pending" ? filteredPendingFollowUps : filteredHistoryFollowUps;
+  const rawData = activeTab === "pending" ? filteredPendingFollowUps : filteredHistoryFollowUps;
+  const currentData = [...rawData].sort((a, b) => {
+    const valA = String(a.leadId || a.lead_no || a.leadNo || "").trim();
+    const valB = String(b.leadId || b.lead_no || b.leadNo || "").trim();
+    const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: "base" });
+    return activeTab === "history" ? -cmp : cmp;
+  });
   const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage));
   const paginatedData = currentData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
