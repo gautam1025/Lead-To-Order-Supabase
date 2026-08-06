@@ -274,116 +274,116 @@ const QuotationForm = ({
   }, []);
 
 
-  // Fetch lead numbers from Supabase tables
+  // Fetch lead and enquiry numbers from Supabase tables (leads, enquiry_tracker_for_leads, enquiries, enquiry_tracker)
   useEffect(() => {
     const fetchLeadNumbers = async () => {
       try {
         const leadNoOptionsData = ["Select Lead No."];
         const leadNoDataMap = {};
 
-        // Fetch from leads_to_order table
-        const leadsColumns = [
-          "\"LD-Lead-No\"",
-          "Company_Name",
-          "Address",
-          "State",
-          "Salesperson_Name",
-          "Phone_Number",
-          "GST_Number",
-          "Item_Name1",
-          "Quantity1",
-          "Item_Name2",
-          "Quantity2",
-          "Item_Name3",
-          "Quantity3",
-          "Item_Name4",
-          "Quantity4",
-          "Item_Name5",
-          "Quantity5",
-          "\"Item/qty\"",
-          "Enquiry_Type",
-        ].join(",");
-
+        // 1. Fetch from leads table
         const { data: leadsData, error: leadsError } = await supabase
           .from("leads")
           .select("*");
 
         if (!leadsError && leadsData) {
           leadsData.forEach((row) => {
-            const leadNo = row["LD-Lead-No"];
-
+            const leadNo = row.lead_no || row["LD-Lead-No"];
             if (leadNo && !leadNoOptionsData.includes(leadNo)) {
               leadNoOptionsData.push(leadNo);
-
               leadNoDataMap[leadNo] = {
                 sheet: "LEADS",
-                companyName: row["Company_Name"] || "",
-                address: row["Address"] || "",
-                state: row["State"] || "",
-                contactName: row["Salesperson_Name"] || "",
-                contactNo: row["Phone_Number"] || "",
-                gstin: row["GST_Number"] || "",
+                companyName: row.company_name || row["Company_Name"] || "",
+                address: row.address || row["Address"] || "",
+                state: row.state || row["State"] || "",
+                contactName: row.person_name || row["Salesperson_Name"] || row.client_name || "",
+                contactNo: row.phone_number || row["Phone_Number"] || "",
+                gstin: row.gst_number || row["GST_Number"] || "",
                 rowData: row,
               };
             }
           });
         }
 
-        // Fetch from enquiry_to_order table
-        const enquiryColumns = [
-          "enquiry_no",
-          "company_name",
-          "location",
-          "enquiry_for_state",
-          "sales_person_name",
-          "phone_number",
-          "gst_number",
-          "shipping_address",
-          "item_name1",
-          "quantity1",
-          "item_name2",
-          "quantity2",
-          "item_name3",
-          "quantity3",
-          "item_name4",
-          "quantity4",
-          "item_name5",
-          "quantity5",
-          "item_name6",
-          "quantity6",
-          "item_name7",
-          "quantity7",
-          "item_name8",
-          "quantity8",
-          "item_name9",
-          "quantity9",
-          "item_name10",
-          "quantity10",
-          "item_qty",
-          "sales_type",
-        ].join(",");
+        // 2. Fetch from enquiry_tracker_for_leads table (pending leads in enquiry tracker)
+        const { data: leadsTrackerData, error: leadsTrackerError } = await supabase
+          .from("enquiry_tracker_for_leads")
+          .select("*")
+          .order("created_at", { ascending: false });
 
+        if (!leadsTrackerError && leadsTrackerData) {
+          leadsTrackerData.forEach((row) => {
+            const parentLead = leadsData?.find(l => l.id === row.lead_id || l.lead_no === row.lead_no || l["LD-Lead-No"] === row.lead_no) || {};
+            const leadNo = row.lead_no || row.enquiry_no || parentLead.lead_no || parentLead["LD-Lead-No"];
+            if (leadNo) {
+              if (!leadNoOptionsData.includes(leadNo)) {
+                leadNoOptionsData.push(leadNo);
+              }
+              const existing = leadNoDataMap[leadNo] || {};
+              leadNoDataMap[leadNo] = {
+                sheet: "LEADS",
+                companyName: row.company_name || existing.companyName || parentLead.company_name || parentLead["Company_Name"] || "",
+                address: row.address || row.location || existing.address || parentLead.address || parentLead["Address"] || "",
+                state: row.state || row.enquiry_for_state || existing.state || parentLead.state || parentLead["State"] || "",
+                contactName: row.person_name || row.sales_person_name || row.sc_name || existing.contactName || parentLead.person_name || parentLead["Salesperson_Name"] || "",
+                contactNo: row.phone_number || existing.contactNo || parentLead.phone_number || parentLead["Phone_Number"] || "",
+                gstin: row.gst_number || existing.gstin || parentLead.gst_number || parentLead["GST_Number"] || "",
+                rowData: { ...parentLead, ...(existing.rowData || {}), ...row },
+              };
+            }
+          });
+        }
+
+        // 3. Fetch from enquiries table
         const { data: enquiryData, error: enquiryError } = await supabase
           .from("enquiries")
           .select("*");
 
         if (!enquiryError && enquiryData) {
           enquiryData.forEach((row) => {
-            const leadNo = row.enquiry_no;
-
+            const leadNo = row.enquiry_no || row["Enquiry No."];
             if (leadNo && !leadNoOptionsData.includes(leadNo)) {
               leadNoOptionsData.push(leadNo);
-
               leadNoDataMap[leadNo] = {
                 sheet: "ENQUIRY",
                 companyName: row.company_name || "",
-                address: row.location || "",
-                state: row.enquiry_for_state || "",
-                contactName: row.sales_person_name || "",
+                address: row.location || row.shipping_address || "",
+                state: row.enquiry_for_state || row.state || "",
+                contactName: row.sales_person_name || row.sales_coordinator_name || "",
                 contactNo: row.phone_number || "",
                 gstin: row.gst_number || "",
                 shipTo: row.shipping_address || "",
                 rowData: row,
+              };
+            }
+          });
+        }
+
+        // 4. Fetch from enquiry_tracker table (pending enquiries in enquiry tracker)
+        const { data: trackerData, error: trackerError } = await supabase
+          .from("enquiry_tracker")
+          .select("*")
+          .order("created_at", { ascending: false });
+
+        if (!trackerError && trackerData) {
+          trackerData.forEach((row) => {
+            const parentEnq = enquiryData?.find(e => e.id === row.enquiry_id || e.enquiry_no === row.enquiry_no || e["Enquiry No."] === row.enquiry_no) || {};
+            const leadNo = row.enquiry_no || row.lead_no || parentEnq.enquiry_no || parentEnq["Enquiry No."];
+            if (leadNo) {
+              if (!leadNoOptionsData.includes(leadNo)) {
+                leadNoOptionsData.push(leadNo);
+              }
+              const existing = leadNoDataMap[leadNo] || {};
+              leadNoDataMap[leadNo] = {
+                sheet: "ENQUIRY",
+                companyName: row.company_name || existing.companyName || parentEnq.company_name || "",
+                address: row.location || row.address || existing.address || parentEnq.location || parentEnq.shipping_address || "",
+                state: row.enquiry_for_state || row.state || existing.state || parentEnq.enquiry_for_state || parentEnq.state || "",
+                contactName: row.sales_person_name || existing.contactName || parentEnq.sales_person_name || parentEnq.sales_coordinator_name || "",
+                contactNo: row.phone_number || existing.contactNo || parentEnq.phone_number || "",
+                gstin: row.gst_number || existing.gstin || parentEnq.gst_number || "",
+                shipTo: row.shipping_address || existing.shipTo || parentEnq.shipping_address || "",
+                rowData: { ...parentEnq, ...(existing.rowData || {}), ...row },
               };
             }
           });
@@ -448,36 +448,16 @@ const QuotationForm = ({
 
     // Get prefix from Enquiry_Type column and update quotation number
     try {
-      let companyPrefix = "";
+      let companyPrefix = leadData.rowData.sales_type || leadData.rowData.Enquiry_Type || leadData.rowData.enquiry_type || "";
 
-      // Get Enquiry_Type from the lead data
-      if (leadData.sheet === "LEADS") {
-        companyPrefix = leadData.rowData.Enquiry_Type || "";
-      } else if (leadData.sheet === "ENQUIRY") {
-        companyPrefix = leadData.rowData.sales_type || "";
-      }
-
-      // If Enquiry_Type is found, use it; otherwise fallback to company-based prefix
+      // If Enquiry_Type/sales_type is found, use it; otherwise fallback to company-based prefix
       if (companyPrefix) {
         const newQuotationNumber = await getNextQuotationNumber(companyPrefix);
         handleInputChange("quotationNo", newQuotationNumber);
-        console.log(
-          "Updated quotation number to:",
-          newQuotationNumber,
-          "with Enquiry_Type prefix:",
-          companyPrefix
-        );
       } else {
-        // Fallback to original company-based prefix if Enquiry_Type is not available
         const fallbackPrefix = await getCompanyPrefix(companyName);
         const newQuotationNumber = await getNextQuotationNumber(fallbackPrefix);
         handleInputChange("quotationNo", newQuotationNumber);
-        console.log(
-          "Updated quotation number to:",
-          newQuotationNumber,
-          "with fallback company prefix:",
-          fallbackPrefix
-        );
       }
     } catch (error) {
       console.error(
@@ -486,117 +466,46 @@ const QuotationForm = ({
       );
     }
 
-    // Auto-fill items based on lead data
+    // Auto-fill items based on lead data (supports both uppercase and lowercase item columns)
     const autoItems = [];
+    const row = leadData.rowData || {};
 
-    if (leadData.sheet === "LEADS") {
-      const row = leadData.rowData;
+    // Extract items 1 to 10 checking both lowercase and uppercase formats
+    for (let i = 1; i <= 10; i++) {
+      const itemNameVal = row[`item_name${i}`] || row[`Item_Name${i}`];
+      const itemQtyVal = row[`quantity${i}`] || row[`Quantity${i}`];
 
-      // Extract items from leads_to_order table
-      const itemColumns = [
-        { nameCol: "Item_Name1", qtyCol: "Quantity1" },
-        { nameCol: "Item_Name2", qtyCol: "Quantity2" },
-        { nameCol: "Item_Name3", qtyCol: "Quantity3" },
-        { nameCol: "Item_Name4", qtyCol: "Quantity4" },
-        { nameCol: "Item_Name5", qtyCol: "Quantity5" },
-      ];
+      const itemName = itemNameVal ? safeToString(itemNameVal).trim() : "";
+      const itemQty = itemQtyVal ? safeToString(itemQtyVal) : "";
 
-      for (const { nameCol, qtyCol } of itemColumns) {
-        const itemName = row[nameCol] ? safeToString(row[nameCol]).trim() : "";
-        const itemQty = row[qtyCol] ? safeToString(row[qtyCol]) : "";
-
-        if (itemName !== "" && itemQty !== "") {
-          const qty = isNaN(Number(itemQty)) ? 1 : Number(itemQty);
-          autoItems.push({
-            name: itemName,
-            qty: qty,
-          });
-        }
+      if (itemName !== "") {
+        const qty = (!itemQty || isNaN(Number(itemQty))) ? 1 : Number(itemQty);
+        autoItems.push({
+          name: itemName,
+          qty: qty,
+        });
       }
+    }
 
-      // Also check for JSON data in Item/qty field
-      const itemQtyJson = row["Item/qty"];
+    // Also check for JSON data in item_qty / Item/qty field if no items found or in addition
+    if (autoItems.length === 0) {
+      const itemQtyJson = row.item_qty || row["Item/qty"] || row["Item_Qty"];
       if (itemQtyJson) {
         try {
-          const jsonData = JSON.parse(itemQtyJson);
+          const jsonData = typeof itemQtyJson === "string" ? JSON.parse(itemQtyJson) : itemQtyJson;
           if (Array.isArray(jsonData)) {
             jsonData.forEach((item) => {
-              if (
-                item.name &&
-                item.quantity !== undefined &&
-                item.quantity !== null
-              ) {
-                const qty = isNaN(Number(item.quantity))
-                  ? 1
-                  : Number(item.quantity);
+              if (item && item.name && item.name.trim()) {
+                const qty = isNaN(Number(item.quantity)) ? 1 : Number(item.quantity);
                 autoItems.push({
-                  name: item.name,
+                  name: item.name.trim(),
                   qty: qty,
                 });
               }
             });
           }
         } catch (error) {
-          console.error("Error parsing JSON data from leads_to_order:", error);
-        }
-      }
-    } else if (leadData.sheet === "ENQUIRY") {
-      const row = leadData.rowData;
-
-      // Extract items from enquiry_to_order table
-      const itemColumns = [
-        { nameCol: "item_name1", qtyCol: "quantity1" },
-        { nameCol: "item_name2", qtyCol: "quantity2" },
-        { nameCol: "item_name3", qtyCol: "quantity3" },
-        { nameCol: "item_name4", qtyCol: "quantity4" },
-        { nameCol: "item_name5", qtyCol: "quantity5" },
-        { nameCol: "item_name6", qtyCol: "quantity6" },
-        { nameCol: "item_name7", qtyCol: "quantity7" },
-        { nameCol: "item_name8", qtyCol: "quantity8" },
-        { nameCol: "item_name9", qtyCol: "quantity9" },
-        { nameCol: "item_name10", qtyCol: "quantity10" },
-      ];
-
-      for (const { nameCol, qtyCol } of itemColumns) {
-        const itemName = row[nameCol] ? safeToString(row[nameCol]).trim() : "";
-        const itemQty = row[qtyCol] ? safeToString(row[qtyCol]) : "";
-
-        if (itemName !== "" && itemQty !== "") {
-          const qty = isNaN(Number(itemQty)) ? 1 : Number(itemQty);
-          autoItems.push({
-            name: itemName,
-            qty: qty,
-          });
-        }
-      }
-
-      // Also check for JSON data in item_qty field
-      const itemQtyJson = row.item_qty;
-      if (itemQtyJson) {
-        try {
-          const jsonData = JSON.parse(itemQtyJson);
-          if (Array.isArray(jsonData)) {
-            jsonData.forEach((item) => {
-              if (
-                item.name &&
-                item.quantity !== undefined &&
-                item.quantity !== null
-              ) {
-                const qty = isNaN(Number(item.quantity))
-                  ? 1
-                  : Number(item.quantity);
-                autoItems.push({
-                  name: item.name,
-                  qty: qty,
-                });
-              }
-            });
-          }
-        } catch (error) {
-          console.error(
-            "Error parsing JSON data from enquiry_to_order:",
-            error
-          );
+          console.error("Error parsing JSON data from lead selection:", error);
         }
       }
     }

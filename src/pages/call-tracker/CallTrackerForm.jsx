@@ -372,23 +372,21 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
         try {
           const { data: tatConfig } = await supabase
             .from("tat_config")
-            .select("tat_hours, tat_minutes")
+            .select("tat_duration, tat_hours, tat_minutes")
             .eq("stage_name", "Enquiry Tracker for Leads")
             .maybeSingle();
 
-          let tatHours = tatConfig?.tat_hours;
-          let tatMinutes = tatConfig?.tat_minutes;
-
-          if ((tatHours === null || tatHours === undefined) && (tatMinutes === null || tatMinutes === undefined)) {
-            tatHours = 1;
-            tatMinutes = 0;
-          } else {
-            tatHours = Number(tatHours) || 0;
-            tatMinutes = Number(tatMinutes) || 0;
+          let tatDurationMinutes = 60;
+          if (tatConfig) {
+            if (tatConfig.tat_duration !== null && tatConfig.tat_duration !== undefined) {
+              tatDurationMinutes = Number(tatConfig.tat_duration) || 60;
+            } else if (tatConfig.tat_hours !== undefined || tatConfig.tat_minutes !== undefined) {
+              tatDurationMinutes = (Number(tatConfig.tat_hours) || 0) * 60 + (Number(tatConfig.tat_minutes) || 0);
+            }
           }
 
           const now = new Date();
-          const plannedAt = new Date(now.getTime() + (tatHours * 60 * 60 * 1000) + (tatMinutes * 60 * 1000));
+          const plannedAt = new Date(now.getTime() + (tatDurationMinutes * 60 * 1000));
           insertData.planned_at = plannedAt.toISOString();
         } catch (tatErr) {
           console.error("Error calculating planned_at for Enquiry Tracker:", tatErr);

@@ -193,28 +193,26 @@ function ExcelImportModal({ onClose, onSaved }) {
     setSaveError("");
     try {
       // Fetch TAT for Stage='Call-Tracker for Leads' (defaults to 1 hr if null/missing)
-      let tatHours = 1;
-      let tatMinutes = 0;
+      let tatDurationMinutes = 60;
       try {
         const { data: tatData } = await supabase
           .from("tat_config")
-          .select("tat_hours, tat_minutes")
+          .select("tat_duration, tat_hours, tat_minutes")
           .eq("stage_name", "Call-Tracker for Leads")
           .maybeSingle();
 
         if (tatData) {
-          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
-            tatHours = Number(tatData.tat_hours);
-          }
-          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
-            tatMinutes = Number(tatData.tat_minutes);
+          if (tatData.tat_duration !== null && tatData.tat_duration !== undefined) {
+            tatDurationMinutes = Number(tatData.tat_duration) || 60;
+          } else if (tatData.tat_hours !== undefined || tatData.tat_minutes !== undefined) {
+            tatDurationMinutes = (Number(tatData.tat_hours) || 0) * 60 + (Number(tatData.tat_minutes) || 0);
           }
         }
       } catch (tatErr) {
         console.error("Error fetching TAT config for bulk import:", tatErr);
       }
 
-      const tatOffsetMs = (tatHours * 3600000) + (tatMinutes * 60000);
+      const tatOffsetMs = tatDurationMinutes * 60000;
       const leadNumbers = await generateNextImportLeadNumbers(importedRows.length);
 
       const rowsToInsert = importedRows.map((row, idx) => {
@@ -549,56 +547,83 @@ function Leads() {
       );
 
       if (!isCompanyInMaster) {
-        try {
-          const { data: activeRules } = await supabase
-            .from("sc_distribution")
-            .select("*")
-            .order("sequence_order", { ascending: true })
-            .order("created_at", { ascending: true });
+        let assignedFromGroup = false;
 
-          if (activeRules && activeRules.length > 0) {
-            const currentNob = (formData.nob || "").trim().toUpperCase();
-            const currentSource = (formData.source || "").trim().toUpperCase();
-            const currentType = (formData.salesType || "").trim().toUpperCase();
+        // Priority 1: If groupName is selected, check if any client under that group already has an SC assigned
+        if (formData.groupName && formData.groupName.trim()) {
+          try {
+            const { data: groupClients } = await supabase
+              .from("client_master")
+              .select("sc_name")
+              .ilike("company_group_name", formData.groupName.trim())
+              .not("sc_name", "is", null)
+              .not("sc_name", "eq", "")
+              .order("updated_at", { ascending: false })
+              .limit(1);
 
-            const matchedRules = activeRules.filter((rule) => {
-              const types = (rule.sales_types || []).map((t) => t.toUpperCase());
-              const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
-              const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+            if (groupClients && groupClients.length > 0 && groupClients[0].sc_name) {
+              setSearchScName(groupClients[0].sc_name);
+              setFormData((prev) => ({ ...prev, scName: groupClients[0].sc_name }));
+              assignedFromGroup = true;
+            }
+          } catch (err) {
+            console.error("Error checking group SC in Leads.jsx:", err);
+          }
+        }
 
-              // 1. Sales Type match
-              const typeMatch = types.length === 0 || types.includes(currentType);
+        // Priority 2: Fall back to sc_distribution rules if no existing group SC found
+        if (!assignedFromGroup) {
+          try {
+            const { data: activeRules } = await supabase
+              .from("sc_distribution")
+              .select("*")
+              .order("sequence_order", { ascending: true })
+              .order("created_at", { ascending: true });
 
-              // 2. Lead Source match
-              const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+            if (activeRules && activeRules.length > 0) {
+              const currentNob = (formData.nob || "").trim().toUpperCase();
+              const currentSource = (formData.source || "").trim().toUpperCase();
+              const currentType = (formData.salesType || "").trim().toUpperCase();
 
-              // 3. NOB match
-              const nobMatch = nobs.some((n) => {
-                if (n === "ALL NOBS") return true;
-                if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
-                return n === currentNob;
+              const matchedRules = activeRules.filter((rule) => {
+                const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+                const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+                const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+                // 1. Sales Type match
+                const typeMatch = types.length === 0 || types.includes(currentType);
+
+                // 2. Lead Source match
+                const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+
+                // 3. NOB match
+                const nobMatch = nobs.some((n) => {
+                  if (n === "ALL NOBS") return true;
+                  if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                  return n === currentNob;
+                });
+
+                return typeMatch && sourceMatch && nobMatch;
               });
 
-              return typeMatch && sourceMatch && nobMatch;
-            });
-
-            if (matchedRules.length > 0) {
-              // Pick the one whose turn is next, otherwise default to first matched candidate
-              const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
-              if (candidate?.sc_name) {
-                setSearchScName(candidate.sc_name);
-                setFormData((prev) => ({ ...prev, scName: candidate.sc_name }));
+              if (matchedRules.length > 0) {
+                // Pick the one whose turn is next, otherwise default to first matched candidate
+                const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
+                if (candidate?.sc_name) {
+                  setSearchScName(candidate.sc_name);
+                  setFormData((prev) => ({ ...prev, scName: candidate.sc_name }));
+                }
               }
             }
+          } catch (err) {
+            console.error("Error matching dynamic SC distribution:", err);
           }
-        } catch (err) {
-          console.error("Error matching dynamic SC distribution:", err);
         }
       }
     };
 
     assignScForUnregisteredCompany();
-  }, [formData.nob, formData.salesType, formData.source, formData.companyName, clientMasterRecords]);
+  }, [formData.nob, formData.salesType, formData.source, formData.companyName, formData.groupName, clientMasterRecords]);
 
   const fetchDropdownData = async () => {
     // Helper: fetch all values for a given category from the normalized dropdown table
@@ -879,21 +904,19 @@ function Leads() {
       }
 
       // Fetch TAT for Stage='Call-Tracker for Leads' (defaults to 1 hr if null/missing)
-      let tatHours = 1;
-      let tatMinutes = 0;
+      let tatDurationMinutes = 60;
       try {
         const { data: tatData } = await supabase
           .from("tat_config")
-          .select("tat_hours, tat_minutes")
+          .select("tat_duration, tat_hours, tat_minutes")
           .eq("stage_name", "Call-Tracker for Leads")
           .maybeSingle();
 
         if (tatData) {
-          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
-            tatHours = Number(tatData.tat_hours);
-          }
-          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
-            tatMinutes = Number(tatData.tat_minutes);
+          if (tatData.tat_duration !== null && tatData.tat_duration !== undefined) {
+            tatDurationMinutes = Number(tatData.tat_duration) || 60;
+          } else if (tatData.tat_hours !== undefined || tatData.tat_minutes !== undefined) {
+            tatDurationMinutes = (Number(tatData.tat_hours) || 0) * 60 + (Number(tatData.tat_minutes) || 0);
           }
         }
       } catch (tatErr) {
@@ -902,7 +925,7 @@ function Leads() {
 
       const createdAtDate = new Date();
       const plannedAtDate = new Date(
-        createdAtDate.getTime() + (tatHours * 3600000) + (tatMinutes * 60000)
+        createdAtDate.getTime() + (tatDurationMinutes * 60000)
       );
 
       // 2. Fetch freshest lead number right before insert to prevent duplicate key error
@@ -944,50 +967,72 @@ function Leads() {
           .ilike("company_name", compNameTrimmed);
       }
 
-      // 3. Perform SC Round-Robin Turn Rotation if company was brand new and multiple pool members match
+      // 3. Perform SC Round-Robin Turn Rotation if company was brand new and SC wasn't assigned from an existing group
       if (wasNewCompany) {
-        try {
-          const { data: activeRules } = await supabase
-            .from("sc_distribution")
-            .select("*")
-            .order("sequence_order", { ascending: true })
-            .order("created_at", { ascending: true });
+        let assignedFromGroup = false;
+        if (formData.groupName && formData.groupName.trim()) {
+          try {
+            const { data: groupClients } = await supabase
+              .from("client_master")
+              .select("sc_name")
+              .ilike("company_group_name", formData.groupName.trim())
+              .not("sc_name", "is", null)
+              .not("sc_name", "eq", "")
+              .neq("company_name", compNameTrimmed)
+              .limit(1);
 
-          if (activeRules && activeRules.length > 0) {
-            const currentNob = (formData.nob || "").trim().toUpperCase();
-            const currentSource = (formData.source || "").trim().toUpperCase();
-            const currentType = (formData.salesType || "").trim().toUpperCase();
+            if (groupClients && groupClients.length > 0 && groupClients[0].sc_name) {
+              assignedFromGroup = true;
+            }
+          } catch (err) {
+            console.error("Error checking group SC on submit:", err);
+          }
+        }
 
-            const pool = activeRules.filter((rule) => {
-              const types = (rule.sales_types || []).map((t) => t.toUpperCase());
-              const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
-              const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+        if (!assignedFromGroup) {
+          try {
+            const { data: activeRules } = await supabase
+              .from("sc_distribution")
+              .select("*")
+              .order("sequence_order", { ascending: true })
+              .order("created_at", { ascending: true });
 
-              const typeMatch = types.length === 0 || types.includes(currentType);
-              const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
-              const nobMatch = nobs.some((n) => {
-                if (n === "ALL NOBS") return true;
-                if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
-                return n === currentNob;
+            if (activeRules && activeRules.length > 0) {
+              const currentNob = (formData.nob || "").trim().toUpperCase();
+              const currentSource = (formData.source || "").trim().toUpperCase();
+              const currentType = (formData.salesType || "").trim().toUpperCase();
+
+              const pool = activeRules.filter((rule) => {
+                const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+                const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+                const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+                const typeMatch = types.length === 0 || types.includes(currentType);
+                const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+                const nobMatch = nobs.some((n) => {
+                  if (n === "ALL NOBS") return true;
+                  if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                  return n === currentNob;
+                });
+
+                return typeMatch && sourceMatch && nobMatch;
               });
 
-              return typeMatch && sourceMatch && nobMatch;
-            });
+              if (pool.length > 1) {
+                const currentIndex = pool.findIndex((item) => item.is_next_in_line);
+                const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % pool.length : 0;
+                const currentItem = currentIndex !== -1 ? pool[currentIndex] : null;
+                const nextItem = pool[nextIndex];
 
-            if (pool.length > 1) {
-              const currentIndex = pool.findIndex((item) => item.is_next_in_line);
-              const nextIndex = currentIndex !== -1 ? (currentIndex + 1) % pool.length : 0;
-              const currentItem = currentIndex !== -1 ? pool[currentIndex] : null;
-              const nextItem = pool[nextIndex];
-
-              if (currentItem && currentItem.id !== nextItem.id) {
-                await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", currentItem.id);
+                if (currentItem && currentItem.id !== nextItem.id) {
+                  await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", currentItem.id);
+                }
+                await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
               }
-              await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
             }
+          } catch (rrErr) {
+            console.error("Error advancing dynamic SC round-robin pointer:", rrErr);
           }
-        } catch (rrErr) {
-          console.error("Error advancing dynamic SC round-robin pointer:", rrErr);
         }
       }
 
@@ -1183,10 +1228,19 @@ function Leads() {
                     onChange={(e) => {
                       const val = e.target.value;
                       setSearchGroupName(val);
-                      setFormData((prev) => ({ ...prev, groupName: val }));
+                      if (!val) {
+                        setFormData((prev) => ({ ...prev, groupName: "" }));
+                      }
                       setShowGroupNameDropdown(true);
                     }}
                     onFocus={() => setShowGroupNameDropdown(true)}
+                    onBlur={() => {
+                      setTimeout(() => {
+                        if (searchGroupName !== formData.groupName) {
+                          setSearchGroupName(formData.groupName || "");
+                        }
+                      }, 200);
+                    }}
                     className="w-full px-3 py-1.5 pr-8 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-sky-500 bg-white text-sm"
                     placeholder="Search or select Group"
                   />

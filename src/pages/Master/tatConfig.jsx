@@ -1,6 +1,12 @@
 import React, { useState, useEffect } from "react";
 import supabase from "../../utils/supabase";
 import { Plus, Pencil, Trash2, Clock, RefreshCw, X, AlertCircle } from "lucide-react";
+import {
+  daysAndTimeToMinutes,
+  minutesToDaysAndHHMM,
+  minutesToHHMMSS,
+  minutesToDisplayLabel,
+} from "../../utils/formatTATDuration";
 
 const STAGE_OPTIONS = [
   "Call-Tracker for Leads",
@@ -21,8 +27,8 @@ const TatConfig = () => {
   // Form State
   const [formData, setFormData] = useState({
     stage_name: STAGE_OPTIONS[0],
-    tat_hours: 0,
-    tat_minutes: 0,
+    tat_days: 0,
+    tat_time: "01:00",
     description: "",
   });
 
@@ -56,10 +62,14 @@ const TatConfig = () => {
     if (item) {
       setIsEditing(true);
       setEditingId(item.id);
+      const totalMins = item.tat_duration !== undefined && item.tat_duration !== null
+        ? Number(item.tat_duration)
+        : (Number(item.tat_hours) || 0) * 60 + (Number(item.tat_minutes) || 0);
+      const { days, hhmm } = minutesToDaysAndHHMM(totalMins);
       setFormData({
         stage_name: item.stage_name || STAGE_OPTIONS[0],
-        tat_hours: Number(item.tat_hours) || 0,
-        tat_minutes: Number(item.tat_minutes) || 0,
+        tat_days: days,
+        tat_time: hhmm,
         description: item.description || "",
       });
     } else {
@@ -67,8 +77,8 @@ const TatConfig = () => {
       setEditingId(null);
       setFormData({
         stage_name: STAGE_OPTIONS[0],
-        tat_hours: 0,
-        tat_minutes: 0,
+        tat_days: 0,
+        tat_time: "01:00",
         description: "",
       });
     }
@@ -80,8 +90,8 @@ const TatConfig = () => {
     setErrorMsg("");
     setFormData({
       stage_name: STAGE_OPTIONS[0],
-      tat_hours: 0,
-      tat_minutes: 0,
+      tat_days: 0,
+      tat_time: "01:00",
       description: "",
     });
   };
@@ -90,21 +100,15 @@ const TatConfig = () => {
     e.preventDefault();
     setErrorMsg("");
 
-    const hours = parseInt(formData.tat_hours, 10) || 0;
-    const minutes = parseInt(formData.tat_minutes, 10) || 0;
+    const totalMinutes = daysAndTimeToMinutes(formData.tat_days, formData.tat_time);
 
     if (!formData.stage_name) {
       setErrorMsg("Please select a Stage Name.");
       return;
     }
 
-    if (hours < 0 || minutes < 0 || minutes > 59) {
-      setErrorMsg("Please enter valid hours (>= 0) and minutes (0 - 59).");
-      return;
-    }
-
-    if (hours === 0 && minutes === 0) {
-      setErrorMsg("Turnaround time (TAT) must be greater than 0 minutes.");
+    if (totalMinutes <= 0) {
+      setErrorMsg("Turnaround time (TAT duration) must be greater than 0 minutes.");
       return;
     }
 
@@ -112,8 +116,7 @@ const TatConfig = () => {
     try {
       const payload = {
         stage_name: formData.stage_name,
-        tat_hours: hours,
-        tat_minutes: minutes,
+        tat_duration: totalMinutes,
         description: formData.description?.trim() || null,
         updated_at: new Date().toISOString(),
       };
@@ -258,45 +261,51 @@ const TatConfig = () => {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">
-                  {tatList.map((item) => (
-                    <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="font-semibold text-slate-900 text-sm">
-                          {item.stage_name}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200/80">
-                          <Clock className="h-3 w-3 mr-1.5 text-sky-500" />
-                          {formatDuration(item.tat_hours, item.tat_minutes)}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-mono">
-                        {getTotalMinutes(item.tat_hours, item.tat_minutes)} mins
-                      </td>
-                      <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">
-                        {item.description || <span className="text-slate-300 italic">No notes</span>}
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                        <div className="flex items-center justify-end space-x-2">
-                          <button
-                            onClick={() => handleOpenModal(item)}
-                            className="text-sky-600 hover:text-sky-800 p-1.5 rounded-lg hover:bg-sky-50 transition-colors cursor-pointer"
-                            title="Edit TAT Config"
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(item.id, item.stage_name)}
-                            className="text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Delete TAT Config"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {tatList.map((item) => {
+                    const totalMins = item.tat_duration !== undefined && item.tat_duration !== null
+                      ? Number(item.tat_duration)
+                      : (Number(item.tat_hours) || 0) * 60 + (Number(item.tat_minutes) || 0);
+
+                    return (
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="font-semibold text-slate-900 text-sm">
+                            {item.stage_name}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold bg-sky-50 text-sky-700 border border-sky-200/80">
+                            <Clock className="h-3 w-3 mr-1.5 text-sky-500" />
+                            {minutesToDisplayLabel(totalMins)}
+                          </span>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm text-slate-600 font-mono">
+                          {minutesToHHMMSS(totalMins)}
+                        </td>
+                        <td className="px-6 py-4 text-sm text-slate-500 max-w-xs truncate">
+                          {item.description || <span className="text-slate-300 italic">No notes</span>}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
+                          <div className="flex items-center justify-end space-x-2">
+                            <button
+                              onClick={() => handleOpenModal(item)}
+                              className="text-sky-600 hover:text-sky-800 p-1.5 rounded-lg hover:bg-sky-50 transition-colors cursor-pointer"
+                              title="Edit TAT Config"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(item.id, item.stage_name)}
+                              className="text-red-600 hover:text-red-800 p-1.5 rounded-lg hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete TAT Config"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -355,76 +364,73 @@ const TatConfig = () => {
                 </p>
               </div>
 
-              {/* Single Duration Selection Field (Hours & Minutes) */}
+              {/* Duration Selection Field (Days + HH:MM time picker) */}
               <div>
                 <label className="block text-sm font-semibold text-slate-700 mb-1.5">
                   TAT Selection (Duration) <span className="text-red-500">*</span>
                 </label>
                 <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-3">
                   <div className="grid grid-cols-2 gap-4">
-                    {/* Hours Selector */}
+                    {/* Days Selector */}
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        Hours
+                        Days
                       </label>
                       <div className="relative">
                         <input
                           type="number"
                           min="0"
-                          max="999"
+                          max="365"
                           required
-                          value={formData.tat_hours}
+                          value={formData.tat_days}
                           onChange={(e) =>
                             setFormData({
                               ...formData,
-                              tat_hours: Math.max(0, parseInt(e.target.value, 10) || 0),
+                              tat_days: Math.max(0, parseInt(e.target.value, 10) || 0),
                             })
                           }
                           className="w-full rounded-lg border-slate-300 bg-white shadow-xs focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2 border text-slate-800 pr-12"
                           placeholder="0"
                         />
                         <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">
-                          hrs
+                          days
                         </span>
                       </div>
                     </div>
 
-                    {/* Minutes Selector */}
+                    {/* Hours & Minutes Selector (HH:MM time picker) */}
                     <div>
                       <label className="block text-xs font-medium text-slate-600 mb-1">
-                        Minutes
+                        Hours & Minutes (HH:MM)
                       </label>
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="0"
-                          max="59"
-                          required
-                          value={formData.tat_minutes}
-                          onChange={(e) =>
-                            setFormData({
-                              ...formData,
-                              tat_minutes: Math.min(
-                                59,
-                                Math.max(0, parseInt(e.target.value, 10) || 0)
-                              ),
-                            })
-                          }
-                          className="w-full rounded-lg border-slate-300 bg-white shadow-xs focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2 border text-slate-800 pr-12"
-                          placeholder="0"
-                        />
-                        <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-medium pointer-events-none">
-                          mins
-                        </span>
-                      </div>
+                      <input
+                        type="time"
+                        required
+                        value={formData.tat_time}
+                        onChange={(e) =>
+                          setFormData({
+                            ...formData,
+                            tat_time: e.target.value || "00:00",
+                          })
+                        }
+                        className="w-full rounded-lg border-slate-300 bg-white shadow-xs focus:border-sky-500 focus:ring-sky-500 sm:text-sm p-2 border text-slate-800"
+                      />
                     </div>
                   </div>
 
-                  <div className="text-xs text-slate-500 flex justify-between items-center pt-1 border-t border-slate-200/60">
-                    <span>Formatted Duration:</span>
-                    <span className="font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
-                      {formatDuration(formData.tat_hours, formData.tat_minutes)}
-                    </span>
+                  <div className="text-xs text-slate-500 flex flex-col gap-1 pt-1 border-t border-slate-200/60">
+                    <div className="flex justify-between items-center">
+                      <span>Formatted Duration:</span>
+                      <span className="font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                        {minutesToDisplayLabel(daysAndTimeToMinutes(formData.tat_days, formData.tat_time))}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center text-[11px] text-slate-400">
+                      <span>HH:MM:SS Format:</span>
+                      <span className="font-mono text-slate-600">
+                        {minutesToHHMMSS(daysAndTimeToMinutes(formData.tat_days, formData.tat_time))}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>

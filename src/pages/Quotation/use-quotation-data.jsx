@@ -116,6 +116,7 @@ export const INITIAL_QUOTATION_DATA = {
   consignorGSTIN: "",
   consignorStateCode: "",
   companyName: "",
+  enquiryReferenceNo: "",
   consigneeName: "",
   consigneeAddress: "",
   consigneeState: "",

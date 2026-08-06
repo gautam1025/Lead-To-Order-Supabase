@@ -829,55 +829,79 @@ function NewEnquiryTracker() {
             // Sales Type Upgrade & Dynamic SC Reassignment upon Order Conversion
             let currentSalesType = (existingClient?.sales_type || leadData?.sales_type || enqData?.sales_type || "").trim();
             let targetSalesType = currentSalesType.toUpperCase() === "NBD" ? "NBD_CRR" : currentSalesType;
+            const targetGroup = (existingClient?.company_group_name || leadData?.company_group_name || enqData?.company_group_name || "").trim();
 
-            try {
-              const { data: activeRules } = await supabase
-                .from("sc_distribution")
-                .select("*")
-                .order("sequence_order", { ascending: true })
-                .order("created_at", { ascending: true });
+            let assignedScFromGroup = false;
+            if (targetGroup) {
+              try {
+                const { data: groupClients } = await supabase
+                  .from("client_master")
+                  .select("sc_name")
+                  .ilike("company_group_name", targetGroup)
+                  .not("sc_name", "is", null)
+                  .not("sc_name", "eq", "")
+                  .order("updated_at", { ascending: false })
+                  .limit(1);
 
-              if (activeRules && activeRules.length > 0) {
-                const currentNob = (leadData?.nob || enqData?.nob || "").trim().toUpperCase();
-                const currentSource = (leadData?.lead_source || enqData?.lead_source || "").trim().toUpperCase();
-                const currentType = targetSalesType.toUpperCase();
+                if (groupClients && groupClients.length > 0 && groupClients[0].sc_name) {
+                  resolvedHandlePerson = groupClients[0].sc_name;
+                  assignedScFromGroup = true;
+                }
+              } catch (groupErr) {
+                console.error("Error fetching group SC during order conversion:", groupErr);
+              }
+            }
 
-                const matchedRules = activeRules.filter((rule) => {
-                  const types = (rule.sales_types || []).map((t) => t.toUpperCase());
-                  const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
-                  const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+            if (!assignedScFromGroup) {
+              try {
+                const { data: activeRules } = await supabase
+                  .from("sc_distribution")
+                  .select("*")
+                  .order("sequence_order", { ascending: true })
+                  .order("created_at", { ascending: true });
 
-                  const typeMatch = types.length === 0 || types.includes(currentType);
-                  const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
-                  const nobMatch = nobs.length === 0 || nobs.some((n) => {
-                    if (n === "ALL NOBS") return true;
-                    if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
-                    return n === currentNob;
+                if (activeRules && activeRules.length > 0) {
+                  const currentNob = (leadData?.nob || enqData?.nob || "").trim().toUpperCase();
+                  const currentSource = (leadData?.lead_source || enqData?.lead_source || "").trim().toUpperCase();
+                  const currentType = targetSalesType.toUpperCase();
+
+                  const matchedRules = activeRules.filter((rule) => {
+                    const types = (rule.sales_types || []).map((t) => t.toUpperCase());
+                    const sources = (rule.lead_sources || []).map((s) => s.toUpperCase());
+                    const nobs = (rule.nobs || []).map((n) => n.toUpperCase());
+
+                    const typeMatch = types.length === 0 || types.includes(currentType);
+                    const sourceMatch = sources.length === 0 || sources.includes("ALL SOURCES") || sources.includes(currentSource);
+                    const nobMatch = nobs.length === 0 || nobs.some((n) => {
+                      if (n === "ALL NOBS") return true;
+                      if (n === "ALL NOBS (EXCEPT RESELLER)") return currentNob !== "RESELLER";
+                      return n === currentNob;
+                    });
+
+                    return typeMatch && sourceMatch && nobMatch;
                   });
 
-                  return typeMatch && sourceMatch && nobMatch;
-                });
-
-                if (matchedRules.length > 0) {
-                  const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
-                  if (candidate && candidate.sc_name) {
-                    resolvedHandlePerson = candidate.sc_name;
-                  }
-
-                  if (matchedRules.length > 1 && candidate?.id) {
-                    const currentIndex = matchedRules.findIndex((item) => item.id === candidate.id);
-                    const nextIndex = (currentIndex + 1) % matchedRules.length;
-                    const nextItem = matchedRules[nextIndex];
-
-                    if (candidate.id !== nextItem.id) {
-                      await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", candidate.id);
+                  if (matchedRules.length > 0) {
+                    const candidate = matchedRules.find((r) => r.is_next_in_line) || matchedRules[0];
+                    if (candidate && candidate.sc_name) {
+                      resolvedHandlePerson = candidate.sc_name;
                     }
-                    await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
+
+                    if (matchedRules.length > 1 && candidate?.id) {
+                      const currentIndex = matchedRules.findIndex((item) => item.id === candidate.id);
+                      const nextIndex = (currentIndex + 1) % matchedRules.length;
+                      const nextItem = matchedRules[nextIndex];
+
+                      if (candidate.id !== nextItem.id) {
+                        await supabase.from("sc_distribution").update({ is_next_in_line: false }).eq("id", candidate.id);
+                      }
+                      await supabase.from("sc_distribution").update({ is_next_in_line: true, updated_at: new Date().toISOString() }).eq("id", nextItem.id);
+                    }
                   }
                 }
+              } catch (scErr) {
+                console.error("Error evaluating SC conversion reassignment:", scErr);
               }
-            } catch (scErr) {
-              console.error("Error evaluating SC conversion reassignment:", scErr);
             }
 
             // CRM Distribution Algorithm (Priority 1: Group -> Priority 2: State-NOB combined with Round-Robin)
@@ -885,7 +909,6 @@ function NewEnquiryTracker() {
 
             // Evaluate rules whenever CRM Name is currently blank/null (even for existing unconverted client_master records)
             if (!assignedCrmName) {
-              const targetGroup = (existingClient?.company_group_name || leadData?.company_group_name || enqData?.company_group_name || "").trim();
               const targetState = (existingClient?.state || leadData?.state || enqData?.enquiry_for_state || enqData?.enquiryState || "").trim();
               const targetNob = (leadData?.nob || enqData?.nob || "").trim();
 

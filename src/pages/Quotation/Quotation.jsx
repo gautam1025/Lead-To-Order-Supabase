@@ -396,6 +396,7 @@ function Quotation() {
         }
 
         setQuotationData({
+          enquiryReferenceNo: loadedData.enquiry_reference_no || "",
           quotationNo: loadedData.Quotation_No || "",
           date: loadedData.Quotation_Date || "",
           preparedBy: loadedData.Prepared_By || "",
@@ -642,6 +643,7 @@ function Quotation() {
 
         // Prepare snake_case data for refactored make_quotations table
         const quotationRecord = {
+          enquiry_reference_no: quotationData.enquiryReferenceNo || null,
           quotation_no: candidateNo,
           quotation_date: convertDateToISO(quotationData.date),
           prepared_by: quotationData.preparedBy || null,

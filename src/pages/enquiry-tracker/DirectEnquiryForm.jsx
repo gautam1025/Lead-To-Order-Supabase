@@ -395,25 +395,20 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
     try {
       // Fetch TAT config for stage_name = "Enquiry Tracker for Enquiries"
-      let tatHours = 1;
-      let tatMinutes = 0;
+      let tatDurationMinutes = 60;
 
       try {
         const { data: tatData } = await supabase
           .from("tat_config")
-          .select("tat_hours, tat_minutes")
+          .select("tat_duration, tat_hours, tat_minutes")
           .eq("stage_name", "Enquiry Tracker for Enquiries")
           .maybeSingle();
 
         if (tatData) {
-          if (tatData.tat_hours !== null && tatData.tat_hours !== undefined) {
-            tatHours = parseInt(tatData.tat_hours, 10) || 0;
-          }
-          if (tatData.tat_minutes !== null && tatData.tat_minutes !== undefined) {
-            tatMinutes = parseInt(tatData.tat_minutes, 10) || 0;
-          }
-          if (tatHours === 0 && tatMinutes === 0) {
-            tatHours = 1;
+          if (tatData.tat_duration !== null && tatData.tat_duration !== undefined) {
+            tatDurationMinutes = Number(tatData.tat_duration) || 60;
+          } else if (tatData.tat_hours !== undefined || tatData.tat_minutes !== undefined) {
+            tatDurationMinutes = (Number(tatData.tat_hours) || 0) * 60 + (Number(tatData.tat_minutes) || 0);
           }
         }
       } catch (err) {
@@ -421,7 +416,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       }
 
       const createdAtDate = new Date();
-      const plannedAtTime = new Date(createdAtDate.getTime() + (tatHours * 60 + tatMinutes) * 60 * 1000);
+      const plannedAtTime = new Date(createdAtDate.getTime() + tatDurationMinutes * 60 * 1000);
 
       // Check existing client in client_master
       let existingClient = null;
@@ -438,8 +433,30 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
         }
       }
 
-      // 1. Auto-assign SC Name (sc_distribution rules with Round-Robin)
+      // 1. Auto-assign SC Name (Priority 1: Existing Group SC, Priority 2: sc_distribution rules with Round-Robin)
       let assignedScName = existingClient?.sc_name || newCallTrackerData.scName || null;
+
+      // Priority 1: Check if group already has an assigned SC in client_master
+      if (!assignedScName && newCallTrackerData.groupName && newCallTrackerData.groupName.trim()) {
+        try {
+          const { data: groupClients } = await supabase
+            .from("client_master")
+            .select("sc_name")
+            .ilike("company_group_name", newCallTrackerData.groupName.trim())
+            .not("sc_name", "is", null)
+            .not("sc_name", "eq", "")
+            .order("updated_at", { ascending: false })
+            .limit(1);
+
+          if (groupClients && groupClients.length > 0 && groupClients[0].sc_name) {
+            assignedScName = groupClients[0].sc_name;
+          }
+        } catch (groupScErr) {
+          console.error("Error fetching group SC name in DirectEnquiryForm:", groupScErr);
+        }
+      }
+
+      // Priority 2: Fall back to round-robin sc_distribution rules
       if (!assignedScName) {
         try {
           const { data: activeRules } = await supabase

@@ -59,11 +59,12 @@ const ConsigneeDetails = ({
   }
 
   const handleLeadNoChange = (e) => {
-    const selectedLeadNo = e.target.value
+    const selectedLeadNo = e.target.value;
+    handleInputChange("enquiryReferenceNo", selectedLeadNo === "Select Lead No." ? "" : selectedLeadNo);
     if (handleLeadNoSelect) {
-      handleLeadNoSelect(selectedLeadNo)
+      handleLeadNoSelect(selectedLeadNo);
     }
-  }
+  };
 
   return (
     <>
@@ -86,6 +87,7 @@ const ConsigneeDetails = ({
             <label className="block text-sm font-medium">Lead No.</label>
             <input
               list="leadNoOptions"
+              value={quotationData.enquiryReferenceNo || ""}
               onChange={handleLeadNoChange}
               className="w-full p-2 border border-gray-300 rounded-md"
               placeholder="Select or type lead number"

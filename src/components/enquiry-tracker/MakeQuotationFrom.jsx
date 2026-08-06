@@ -8,6 +8,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   const [sharedByOptions, setSharedByOptions] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [fileError, setFileError] = useState(null)
+  const [generatedQuotations, setGeneratedQuotations] = useState([])
   
   useEffect(() => {
     const fetchSharedByOptions = async () => {
@@ -59,6 +60,29 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
     generateSendQuotationNo();
   }, [enquiryNo]); // Dependency on enquiryNo
 
+  useEffect(() => {
+    const fetchGeneratedQuotations = async () => {
+      if (!enquiryNo) {
+        setGeneratedQuotations([]);
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from("make_quotations")
+          .select("quotation_no, grand_total, created_at")
+          .eq("enquiry_reference_no", enquiryNo)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        setGeneratedQuotations(data || []);
+      } catch (err) {
+        console.error("Error fetching generated quotations for enquiry:", err);
+      }
+    };
+
+    fetchGeneratedQuotations();
+  }, [enquiryNo]);
+
 // Also modify the Send Quotation No. input field to be readonly:
 // Change this line in the JSX:
 // className="w-full p-2 border border-gray-300 rounded-md"
@@ -69,7 +93,15 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
   
   const handleChange = (e) => {
     const { name, value } = e.target
-    onFieldChange(name, value)
+    if (name === "quotationNumber") {
+      onFieldChange(name, value);
+      const matchedQuotation = generatedQuotations.find((q) => q.quotation_no === value);
+      if (matchedQuotation && matchedQuotation.grand_total !== undefined && matchedQuotation.grand_total !== null) {
+        onFieldChange("valueWithTax", String(matchedQuotation.grand_total));
+      }
+    } else {
+      onFieldChange(name, value);
+    }
   }
 
   const handleFileChange = (e) => {
@@ -149,12 +181,20 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
               id="quotationNumber"
               name="quotationNumber"
               type="text"
-              placeholder="QUO-001"
+              list="generatedQuotationsList"
+              placeholder="Select or type quotation number"
               value={formData.quotationNumber}
               onChange={handleChange}
               className="w-full p-2 border border-gray-300 rounded-md"
               required
             />
+            <datalist id="generatedQuotationsList">
+              {generatedQuotations.map((q) => (
+                <option key={q.quotation_no} value={q.quotation_no}>
+                  {q.grand_total ? `Value: ₹${q.grand_total}` : ""}
+                </option>
+              ))}
+            </datalist>
           </div>
 
           <div className="space-y-2">
