@@ -371,6 +371,14 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
 
   // Function to handle form submission
   const handleSubmit = async () => {
+    if (!newCallTrackerData.groupName || !newCallTrackerData.groupName.trim()) {
+      alert("Group Name is mandatory.");
+      return;
+    }
+    if (!newCallTrackerData.stateCode || !newCallTrackerData.stateCode.trim()) {
+      alert("State Code is mandatory.");
+      return;
+    }
     // Validate that all items have a name and quantity
     for (const item of items) {
       if (!item.name || !item.name.trim()) {
@@ -649,11 +657,11 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
               </select>
             </div>
 
-            {/* Group Name dropdown (Optional) */}
+            {/* Group Name dropdown */}
             <div className="space-y-2">
               <label htmlFor="groupName" className="block text-sm font-medium text-gray-700">
-                Group Name (Optional)
-              </label>
+                Group Name
+               <span className="text-red-500">*</span></label>
               <select
                 id="groupName"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -662,6 +670,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   const val = e.target.value;
                   setNewCallTrackerData(prev => ({ ...prev, groupName: val, companyName: "" }));
                 }}
+                required
               >
                 <option value="">Select Group Name</option>
                 {groupOptions.map((group, index) => (
@@ -854,7 +863,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
             <div className="space-y-2">
               <label htmlFor="stateCode" className="block text-sm font-medium text-gray-700">
                 State Code
-              </label>
+               <span className="text-red-500">*</span></label>
               <input
                 id="stateCode"
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500"
@@ -865,6 +874,7 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
                   stateCode: e.target.value,
                   isCompanyAutoFilled: false
                 }))}
+                required
               />
             </div>
 

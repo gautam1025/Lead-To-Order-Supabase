@@ -415,55 +415,43 @@ function EnquiryTracker() {
     }
   };
 
-  // Function to fetch all existing order numbers
-  const fetchExistingOrderNumbers = async () => {
-    try {
-      const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
-        supabase
-          .from("enquiry_tracker")
-          .select('order_no')
-          .not('order_no', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1000),
-        supabase
-          .from("enquiry_tracker_for_leads")
-          .select('order_no')
-          .not('order_no', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1000)
-      ]);
-
-      const allNumbers = [
-        ...(trackerEnqRes.data || []).map(item => item.order_no),
-        ...(trackerLeadsRes.data || []).map(item => item.order_no)
-      ];
-
-      return allNumbers.filter(no => no && typeof no === 'string' && no.trim() !== "");
-    } catch (error) {
-      console.error("Exception fetching order numbers:", error);
-      return [];
-    }
-  };
-
-  // Function to generate the next order number
+  // Function to generate the next order number via Supabase RPC (Option B)
   const generateNextOrderNumber = async () => {
     try {
-      const existingOrderNumbers = await fetchExistingOrderNumbers();
-      const orderNumbers = existingOrderNumbers
-        .map(orderNo => {
-          const match = orderNo.match(/DO-(\d+)/i);
-          return match ? parseInt(match[1], 10) : 0;
-        })
-        .filter(num => !isNaN(num) && num > 0);
-
-      const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
-      const nextNumber = maxOrderNumber + 1;
-      const paddedNumber = String(nextNumber).padStart(3, "0");
-      return `DO-${paddedNumber}`;
+      // Option B: Generate order number directly via Supabase Postgres RPC function
+      const { data, error } = await supabase.rpc('get_next_order_number');
+      if (error) throw error;
+      if (data && typeof data === 'string' && data.trim() !== '') {
+        return data.trim();
+      }
+      throw new Error('RPC returned empty or invalid value');
     } catch (error) {
-      console.error("Error generating order number:", error);
-      const timestamp = Date.now().toString().slice(-4);
-      return `DO-${timestamp}`;
+      console.error("Error generating order number via RPC, falling back to local query:", error);
+      // Safe fallback if RPC function is not created yet or fails
+      try {
+        const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
+          supabase.from("enquiry_tracker").select('order_no').not('order_no', 'is', null).order('created_at', { ascending: false }).limit(500),
+          supabase.from("enquiry_tracker_for_leads").select('order_no').not('order_no', 'is', null).order('created_at', { ascending: false }).limit(500)
+        ]);
+
+        const allNumbers = [
+          ...(trackerEnqRes.data || []).map(item => item.order_no),
+          ...(trackerLeadsRes.data || []).map(item => item.order_no)
+        ];
+
+        const orderNumbers = allNumbers
+          .map(orderNo => {
+            const match = String(orderNo || '').match(/DO-(\d+)/i);
+            return match ? parseInt(match[1], 10) : 0;
+          })
+          .filter(num => !isNaN(num) && num > 0);
+
+        const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
+        return `DO-${String(maxOrderNumber + 1).padStart(3, "0")}`;
+      } catch (fbError) {
+        const timestamp = Date.now().toString().slice(-4);
+        return `DO-${timestamp}`;
+      }
     }
   };
 

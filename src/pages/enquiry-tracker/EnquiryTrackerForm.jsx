@@ -167,63 +167,43 @@ function NewEnquiryTracker() {
   }, [])
 
 
-  // Add this function to fetch all existing order numbers
-  // Fix the column name escaping
-  const fetchExistingOrderNumbers = async () => {
-    try {
-      // 🔍 Fetch from tracking tables
-      const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
-        supabase
-          .from("enquiry_tracker")
-          .select('order_no')
-          .not('order_no', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1000),
-
-        supabase
-          .from("enquiry_tracker_for_leads")
-          .select('order_no')
-          .not('order_no', 'is', null)
-          .order('created_at', { ascending: false })
-          .limit(1000)
-      ]);
-
-      const allNumbers = [
-        ...(trackerEnqRes.data || []).map(item => item.order_no),
-        ...(trackerLeadsRes.data || []).map(item => item.order_no)
-      ];
-
-      return allNumbers.filter(no => no && typeof no === 'string' && no.trim() !== "");
-    } catch (error) {
-      console.error("Exception fetching order numbers:", error);
-      return [];
-    }
-  };
-
-  // Add this function to generate the next order number
+  // Function to generate the next order number via Supabase RPC (Option B)
   const generateNextOrderNumber = async () => {
     try {
-      const existingOrderNumbers = await fetchExistingOrderNumbers();
-
-      // Extract numeric parts using regex that handles any digits after "DO-"
-      const orderNumbers = existingOrderNumbers
-        .map(orderNo => {
-          const match = orderNo.match(/DO-(\d+)/i);
-          return match ? parseInt(match[1], 10) : 0;
-        })
-        .filter(num => !isNaN(num) && num > 0);
-
-      // Find absolute maximum among all fetched records
-      const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
-
-      const nextNumber = maxOrderNumber + 1;
-      // Padding to at least 3 digits
-      const paddedNumber = String(nextNumber).padStart(3, "0");
-      return `DO-${paddedNumber}`;
+      // Option B: Generate order number directly via Supabase Postgres RPC function
+      const { data, error } = await supabase.rpc('get_next_order_number');
+      if (error) throw error;
+      if (data && typeof data === 'string' && data.trim() !== '') {
+        return data.trim();
+      }
+      throw new Error('RPC returned empty or invalid value');
     } catch (error) {
-      console.error("Error generating order number:", error);
-      const timestamp = Date.now().toString().slice(-4);
-      return `DO-${timestamp}`;
+      console.error("Error generating order number via RPC, falling back to local query:", error);
+      // Safe fallback if RPC function is not created yet or fails
+      try {
+        const [trackerEnqRes, trackerLeadsRes] = await Promise.all([
+          supabase.from("enquiry_tracker").select('order_no').not('order_no', 'is', null).order('created_at', { ascending: false }).limit(500),
+          supabase.from("enquiry_tracker_for_leads").select('order_no').not('order_no', 'is', null).order('created_at', { ascending: false }).limit(500)
+        ]);
+
+        const allNumbers = [
+          ...(trackerEnqRes.data || []).map(item => item.order_no),
+          ...(trackerLeadsRes.data || []).map(item => item.order_no)
+        ];
+
+        const orderNumbers = allNumbers
+          .map(orderNo => {
+            const match = String(orderNo || '').match(/DO-(\d+)/i);
+            return match ? parseInt(match[1], 10) : 0;
+          })
+          .filter(num => !isNaN(num) && num > 0);
+
+        const maxOrderNumber = orderNumbers.length > 0 ? Math.max(...orderNumbers) : 0;
+        return `DO-${String(maxOrderNumber + 1).padStart(3, "0")}`;
+      } catch (fbError) {
+        const timestamp = Date.now().toString().slice(-4);
+        return `DO-${timestamp}`;
+      }
     }
   };
 
@@ -835,15 +815,16 @@ function NewEnquiryTracker() {
 
           // Insert / Update client_master
           const clientName = leadData?.person_name || leadData?.salesperson_name || enqData?.sales_person_name || enqData?.sales_coordinator_name || enqData?.scName || "";
-          const compName = leadData?.company_name || enqData?.company_name || enqData?.companyName || formData.companyName || "";
+          const compName = (leadData?.company_name || enqData?.company_name || enqData?.companyName || formData.companyName || "").trim();
 
           // Only sync if company name is present
           if (compName) {
-            const { data: existingClient } = await supabase
+            const { data: clientMatches } = await supabase
               .from("client_master")
               .select("uuid, company_name, crm_name, company_group_name, sales_type, sc_name, state")
-              .eq("company_name", compName)
-              .maybeSingle();
+              .ilike("company_name", compName)
+              .limit(1);
+            const existingClient = clientMatches && clientMatches.length > 0 ? clientMatches[0] : null;
 
             // Sales Type Upgrade & Dynamic SC Reassignment upon Order Conversion
             let currentSalesType = (existingClient?.sales_type || leadData?.sales_type || enqData?.sales_type || "").trim();
@@ -899,7 +880,7 @@ function NewEnquiryTracker() {
               console.error("Error evaluating SC conversion reassignment:", scErr);
             }
 
-            // CRM Distribution Algorithm (Group -> State -> NOB hierarchy)
+            // CRM Distribution Algorithm (Priority 1: Group -> Priority 2: State-NOB combined with Round-Robin)
             let assignedCrmName = (existingClient?.crm_name || leadData?.crm_name || enqData?.crm_name || "").trim();
 
             // Evaluate rules whenever CRM Name is currently blank/null (even for existing unconverted client_master records)
@@ -911,35 +892,93 @@ function NewEnquiryTracker() {
               try {
                 const { data: crmRules, error: rulesErr } = await supabase
                   .from("crm_distribution")
-                  .select("key, value, category");
+                  .select("*");
 
                 if (!rulesErr && crmRules && crmRules.length > 0) {
-                  const groupMap = new Map();
-                  const stateMap = new Map();
-                  const nobMap = new Map();
+                  const groupRules = crmRules.filter((r) =>
+                    (r.tier || "").trim().toLowerCase() === "group"
+                  );
+                  const stateNobRules = crmRules.filter((r) =>
+                    (r.tier || "").trim().toLowerCase() !== "group"
+                  );
 
-                  crmRules.forEach(rule => {
-                    if (!rule.key || !rule.value) return;
-                    const normKey = rule.key.trim().toLowerCase();
-                    const cat = (rule.category || "").trim().toLowerCase();
-                    if (cat === "group") groupMap.set(normKey, rule.value);
-                    else if (cat === "state") stateMap.set(normKey, rule.value);
-                    else if (cat === "nob") nobMap.set(normKey, rule.value);
-                  });
+                  let matchedRule = null;
 
-                  // Priority 1: Group
-                  if (targetGroup && groupMap.has(targetGroup.toLowerCase())) {
-                    assignedCrmName = groupMap.get(targetGroup.toLowerCase());
-                  } 
-                  // Priority 2: State
-                  else if (targetState && stateMap.has(targetState.toLowerCase())) {
-                    assignedCrmName = stateMap.get(targetState.toLowerCase());
-                  } 
-                  // Priority 3: NOB
-                  else if (targetNob && nobMap.has(targetNob.toLowerCase())) {
-                    assignedCrmName = nobMap.get(targetNob.toLowerCase());
+                  // Priority 1: Group Tier
+                  if (targetGroup) {
+                    matchedRule = groupRules.find((r) => {
+                      const gList = Array.isArray(r.group_name)
+                        ? r.group_name.map((g) => String(g).trim().toLowerCase())
+                        : [];
+                      return gList.includes(targetGroup.toLowerCase());
+                    });
                   }
-                  // Fallback: remains blank ("") if no match found across all 3 tiers
+
+                  // Priority 2: State-NOB Tier
+                  if (!matchedRule) {
+                    const candidates = [];
+                    stateNobRules.forEach((r) => {
+                      const stateList = Array.isArray(r.state_keys)
+                        ? r.state_keys.map((s) => String(s).trim().toLowerCase())
+                        : [];
+                      const nobList = Array.isArray(r.nob_keys)
+                        ? r.nob_keys.map((n) => String(n).trim().toLowerCase())
+                        : [];
+
+                      const stateMatches =
+                        stateList.length === 0 ||
+                        stateList.includes("any") ||
+                        (targetState && stateList.includes(targetState.toLowerCase()));
+
+                      const nobMatches =
+                        nobList.length === 0 ||
+                        nobList.includes("any") ||
+                        (targetNob && nobList.includes(targetNob.toLowerCase()));
+
+                      if (stateMatches && nobMatches) {
+                        let score = 0;
+                        if (stateList.length > 0 && !stateList.includes("any") && targetState && stateList.includes(targetState.toLowerCase())) score += 2;
+                        if (nobList.length > 0 && !nobList.includes("any") && targetNob && nobList.includes(targetNob.toLowerCase())) score += 1;
+                        candidates.push({ rule: r, score });
+                      }
+                    });
+
+                    if (candidates.length > 0) {
+                      candidates.sort((a, b) => b.score - a.score);
+                      matchedRule = candidates[0].rule;
+                    }
+                  }
+
+                  if (matchedRule) {
+                    // Extract CRM names list
+                    const crmList = Array.isArray(matchedRule.crm_names)
+                      ? matchedRule.crm_names.map((c) => String(c).trim()).filter(Boolean)
+                      : [];
+
+                    if (crmList.length > 0) {
+                      let nextCrm = crmList[0];
+                      const lastCrm = matchedRule.last_assigned_crm;
+                      if (lastCrm && crmList.includes(lastCrm)) {
+                        const lastIdx = crmList.indexOf(lastCrm);
+                        nextCrm = crmList[(lastIdx + 1) % crmList.length];
+                      }
+                      assignedCrmName = nextCrm;
+
+                      // Update round-robin tracking on the matched rule
+                      try {
+                        await supabase
+                          .from("crm_distribution")
+                          .update({
+                            last_assigned_crm: nextCrm,
+                            last_assigned_ref: formData.enquiryNo || null,
+                            updated_at: new Date().toISOString(),
+                          })
+                          .eq("uuid", matchedRule.uuid);
+                      } catch (rrErr) {
+                        console.error("Error updating round-robin tracking:", rrErr);
+                      }
+                    }
+                  }
                 }
               } catch (crmErr) {
                 console.error("Error evaluating CRM distribution rules:", crmErr);
@@ -964,7 +1003,7 @@ function NewEnquiryTracker() {
               const { error: err } = await supabase
                 .from("client_master")
                 .update(clientPayload)
-                .eq("company_name", compName);
+                .eq("uuid", existingClient.uuid);
               cmError = err;
             } else {
               const { error: err } = await supabase

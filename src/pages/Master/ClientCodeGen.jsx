@@ -12,11 +12,13 @@ export const generateAndAssignClientCode = async (companyName) => {
     const compNameTrimmed = companyName.trim();
 
     // 1. Fetch client details from client_master
-    const { data: clientData, error: fetchError } = await supabase
+    const { data: clientMatches, error: fetchError } = await supabase
       .from("client_master")
       .select("uuid, client_code, company_group_name")
       .ilike("company_name", compNameTrimmed)
-      .maybeSingle();
+      .limit(1);
+
+    const clientData = clientMatches && clientMatches.length > 0 ? clientMatches[0] : null;
 
     if (fetchError || !clientData) {
       console.error("Error fetching client or client not found:", fetchError);

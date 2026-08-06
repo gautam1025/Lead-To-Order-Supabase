@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { Search, Plus, Pencil, Trash2, RefreshCw, UserCheck, ShieldCheck, Layers, MapPin, Briefcase, CheckSquare, Square, Users } from "lucide-react";
+import { Search, Plus, Pencil, Trash2, RefreshCw, UserCheck, ShieldCheck, Layers, MapPin, CheckSquare, Square, Users, Repeat } from "lucide-react";
 import supabase from "../../utils/supabase";
 
 export default function CREMgmt() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("ALL"); // 'ALL' | 'Group' | 'State' | 'NOB'
+  const [activeFilter, setActiveFilter] = useState("ALL"); // 'ALL' | 'Group' | 'StateNOB'
 
   // Dropdown option sources from database
   const [groupOptions, setGroupOptions] = useState([]);
@@ -19,9 +19,10 @@ export default function CREMgmt() {
   const [modalMode, setModalMode] = useState("add"); // 'add' | 'edit'
   const [currentItem, setCurrentItem] = useState(null);
   const [formData, setFormData] = useState({
-    category: "Group",
-    selectedKeys: [],
-    value: "",
+    category: "Group", // "Group" | "StateNOB"
+    selectedCrms: [],
+    selectedKeys: [], // For Group: group names. For StateNOB: state names
+    selectedNobKeys: [], // For StateNOB: multiple NOB names
   });
 
   useEffect(() => {
@@ -35,8 +36,8 @@ export default function CREMgmt() {
       const { data: records, error } = await supabase
         .from("crm_distribution")
         .select("*")
-        .order("category", { ascending: true })
-        .order("key", { ascending: true });
+        .order("tier", { ascending: true })
+        .order("created_at", { ascending: true });
 
       if (error) {
         console.error("Error fetching CRM distribution rules:", error);
@@ -90,28 +91,28 @@ export default function CREMgmt() {
     }
   };
 
-  const getOptionsForCategory = (category) => {
-    if (category === "Group") return groupOptions;
-    if (category === "State") return stateOptions;
-    if (category === "NOB") return nobOptions;
-    return [];
-  };
-
   const handleOpenModal = (mode, item = null) => {
     setModalMode(mode);
     setCurrentItem(item);
     if (item && mode === "edit") {
+      const isGroup = (item.tier || "").toUpperCase() === "GROUP";
+      const crmArray = Array.isArray(item.crm_names) ? item.crm_names : [];
+      const groupArray = Array.isArray(item.group_name) ? item.group_name : [];
+      const stateArray = Array.isArray(item.state_keys) ? item.state_keys : [];
+      const nobArray = Array.isArray(item.nob_keys) ? item.nob_keys : [];
+
       setFormData({
-        category: item.category || "Group",
-        selectedKeys: [item.key].filter(Boolean),
-        value: item.value || "",
+        category: isGroup ? "Group" : "StateNOB",
+        selectedCrms: crmArray,
+        selectedKeys: isGroup ? groupArray : (stateArray.length > 0 ? stateArray : ["Any"]),
+        selectedNobKeys: isGroup ? [] : (nobArray.length > 0 ? nobArray : ["Any"]),
       });
     } else {
-      const initialCat = "Group";
       setFormData({
-        category: initialCat,
+        category: "Group",
+        selectedCrms: crmOptions.length > 0 ? [crmOptions[0]] : [],
         selectedKeys: [],
-        value: crmOptions.length > 0 ? crmOptions[0] : "",
+        selectedNobKeys: [],
       });
     }
     setIsModalOpen(true);
@@ -127,97 +128,134 @@ export default function CREMgmt() {
       ...prev,
       category: newCat,
       selectedKeys: [],
+      selectedNobKeys: [],
     }));
   };
 
-  const handleCheckboxToggle = (opt) => {
+  const handleCrmToggle = (crm) => {
+    setFormData((prev) => {
+      const current = prev.selectedCrms || [];
+      const exists = current.includes(crm);
+      const next = exists ? current.filter((c) => c !== crm) : [...current, crm];
+      return { ...prev, selectedCrms: next };
+    });
+  };
+
+  const handleKeyToggle = (keyVal) => {
     setFormData((prev) => {
       const current = prev.selectedKeys || [];
-      const exists = current.includes(opt);
-      const next = exists ? current.filter((k) => k !== opt) : [...current, opt];
+      const exists = current.includes(keyVal);
+      const next = exists ? current.filter((k) => k !== keyVal) : [...current, keyVal];
       return { ...prev, selectedKeys: next };
     });
   };
 
-  const handleSelectAll = (opts) => {
-    setFormData((prev) => ({ ...prev, selectedKeys: [...opts] }));
+  const handleNobKeyToggle = (nobVal) => {
+    setFormData((prev) => {
+      const current = prev.selectedNobKeys || [];
+      const exists = current.includes(nobVal);
+      const next = exists ? current.filter((k) => k !== nobVal) : [...current, nobVal];
+      return { ...prev, selectedNobKeys: next };
+    });
   };
 
-  const handleDeselectAll = () => {
-    setFormData((prev) => ({ ...prev, selectedKeys: [] }));
+  const executeRuleUpsert = async (payloadData, isEdit = false, existingItem = null) => {
+    const targetId = existingItem ? existingItem.uuid : null;
+    const res = isEdit
+      ? await supabase.from("crm_distribution").update(payloadData).eq("uuid", targetId)
+      : await supabase.from("crm_distribution").insert([{ ...payloadData, created_at: new Date().toISOString() }]);
+
+    if (res.error) {
+      throw new Error(`Database Error: ${res.error.message || "Failed to save rule."}`);
+    }
+    return res;
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.category || !formData.value || !formData.selectedKeys || formData.selectedKeys.length === 0) {
-      alert("Please ensure Category, CRM Representative, and at least one Name option are selected.");
+
+    if (!formData.selectedCrms || formData.selectedCrms.length === 0) {
+      alert("Please select at least one CRM Representative.");
+      return;
+    }
+
+    if (!formData.selectedKeys || formData.selectedKeys.length === 0) {
+      alert(`Please select at least one ${formData.category === "Group" ? "Group" : "State"} option.`);
+      return;
+    }
+
+    if (formData.category === "StateNOB" && (!formData.selectedNobKeys || formData.selectedNobKeys.length === 0)) {
+      alert("Please select at least one NOB option for State-NOB Tier.");
       return;
     }
 
     try {
       if (modalMode === "add") {
-        for (const key of formData.selectedKeys) {
-          const existing = data.find(
-            (r) =>
-              (r.category || "").toLowerCase() === formData.category.toLowerCase() &&
-              (r.key || "").toLowerCase() === key.toLowerCase()
-          );
+        if (formData.category === "Group") {
+          const sortedGroups = [...formData.selectedKeys].sort().join(", ");
+          const existing = data.find((r) => {
+            if ((r.tier || "").toUpperCase() !== "GROUP") return false;
+            const rGroups = Array.isArray(r.group_name) ? [...r.group_name].sort().join(", ") : "";
+            return rGroups.toLowerCase() === sortedGroups.toLowerCase();
+          });
+
+          const payload = {
+            tier: "Group",
+            group_name: formData.selectedKeys,
+            state_keys: [],
+            nob_keys: [],
+            crm_names: formData.selectedCrms,
+            updated_at: new Date().toISOString(),
+          };
+
           if (existing) {
-            if (window.confirm(`A rule for ${formData.category} "${key}" already exists (currently assigned to ${existing.value}). Do you want to update it to ${formData.value}?`)) {
-              await supabase
-                .from("crm_distribution")
-                .update({ value: formData.value, updated_at: new Date().toISOString() })
-                .eq(existing.uuid ? "uuid" : "id", existing.uuid || existing.id);
+            if (window.confirm(`A rule for Group(s) "${sortedGroups}" already exists. Do you want to update it?`)) {
+              await executeRuleUpsert(payload, true, existing);
             }
           } else {
-            await supabase.from("crm_distribution").insert([{
-              category: formData.category,
-              key: key,
-              value: formData.value,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString()
-            }]);
+            await executeRuleUpsert(payload, false);
+          }
+        } else {
+          // StateNOB tier
+          const sortedStates = [...formData.selectedKeys].sort().join(", ");
+          const sortedNobs = [...formData.selectedNobKeys].sort().join(", ");
+
+          const existing = data.find((r) => {
+            if ((r.tier || "").toUpperCase() === "GROUP") return false;
+            const rStates = Array.isArray(r.state_keys) ? [...r.state_keys].sort().join(", ") : "";
+            const rNobs = Array.isArray(r.nob_keys) ? [...r.nob_keys].sort().join(", ") : "";
+            return rStates.toLowerCase() === sortedStates.toLowerCase() && rNobs.toLowerCase() === sortedNobs.toLowerCase();
+          });
+
+          const payload = {
+            tier: "StateNOB",
+            group_name: [],
+            state_keys: formData.selectedKeys,
+            nob_keys: formData.selectedNobKeys,
+            crm_names: formData.selectedCrms,
+            updated_at: new Date().toISOString(),
+          };
+
+          if (existing) {
+            if (window.confirm(`A rule for State(s) "${sortedStates}" + NOB(s) "${sortedNobs}" already exists. Do you want to update it?`)) {
+              await executeRuleUpsert(payload, true, existing);
+            }
+          } else {
+            await executeRuleUpsert(payload, false);
           }
         }
       } else {
-        const targetId = currentItem.uuid || currentItem.id;
-        const mainKey = formData.selectedKeys[0] || currentItem.key;
-        const { error } = await supabase
-          .from("crm_distribution")
-          .update({
-            category: formData.category,
-            key: mainKey,
-            value: formData.value,
-            updated_at: new Date().toISOString()
-          })
-          .eq(currentItem.uuid ? "uuid" : "id", targetId);
-        if (error) throw error;
+        // Edit mode
+        const payload = {
+          tier: formData.category,
+          group_name: formData.category === "Group" ? formData.selectedKeys : [],
+          state_keys: formData.category === "StateNOB" ? formData.selectedKeys : [],
+          nob_keys: formData.category === "StateNOB" ? formData.selectedNobKeys : [],
+          crm_names: formData.selectedCrms,
+          updated_at: new Date().toISOString(),
+        };
 
-        // If user selected extra items during edit, process them as additions/updates
-        if (formData.selectedKeys.length > 1) {
-          for (let i = 1; i < formData.selectedKeys.length; i++) {
-            const key = formData.selectedKeys[i];
-            const existing = data.find(
-              (r) =>
-                (r.category || "").toLowerCase() === formData.category.toLowerCase() &&
-                (r.key || "").toLowerCase() === key.toLowerCase()
-            );
-            if (!existing) {
-              await supabase.from("crm_distribution").insert([{
-                category: formData.category,
-                key: key,
-                value: formData.value,
-                created_at: new Date().toISOString(),
-                updated_at: new Date().toISOString()
-              }]);
-            } else {
-              await supabase
-                .from("crm_distribution")
-                .update({ value: formData.value, updated_at: new Date().toISOString() })
-                .eq(existing.uuid ? "uuid" : "id", existing.uuid || existing.id);
-            }
-          }
-        }
+        await executeRuleUpsert(payload, true, currentItem);
       }
 
       handleCloseModal();
@@ -229,13 +267,17 @@ export default function CREMgmt() {
   };
 
   const handleDelete = async (row) => {
-    if (!window.confirm(`Are you sure you want to delete the CRM distribution rule for ${row.category}: "${row.key}"?`)) return;
+    const isGroup = (row.tier || "").toUpperCase() === "GROUP";
+    const label = isGroup
+      ? `Group(s) "${(row.group_name || []).join(", ")}"`
+      : `State(s) "${(row.state_keys || []).join(", ")}" + NOB(s) "${(row.nob_keys || []).join(", ")}"`;
+    if (!window.confirm(`Are you sure you want to delete the CRM distribution rule for ${label}?`)) return;
     try {
-      const targetId = row.uuid || row.id;
+      const targetId = row.uuid;
       const { error } = await supabase
         .from("crm_distribution")
         .delete()
-        .eq(row.uuid ? "uuid" : "id", targetId);
+        .eq("uuid", targetId);
       if (error) throw error;
       fetchData();
     } catch (err) {
@@ -244,49 +286,42 @@ export default function CREMgmt() {
   };
 
   const filteredRows = data.filter((item) => {
-    const matchesFilter = activeFilter === "ALL" || (item.category || "").toUpperCase() === activeFilter.toUpperCase();
+    const itemTier = (item.tier || "").toUpperCase();
+    const matchesFilter =
+      activeFilter === "ALL" ||
+      (activeFilter === "Group" && itemTier === "GROUP") ||
+      (activeFilter === "StateNOB" && itemTier !== "GROUP");
+
     const matchesSearch =
       !searchQuery ||
-      (item.key && item.key.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.value && item.value.toLowerCase().includes(searchQuery.toLowerCase())) ||
-      (item.category && item.category.toLowerCase().includes(searchQuery.toLowerCase()));
+      (Array.isArray(item.group_name) && item.group_name.some((g) => g.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+      (Array.isArray(item.state_keys) && item.state_keys.some((s) => s.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+      (Array.isArray(item.nob_keys) && item.nob_keys.some((n) => n.toLowerCase().includes(searchQuery.toLowerCase()))) ||
+      (Array.isArray(item.crm_names) && item.crm_names.some((c) => c.toLowerCase().includes(searchQuery.toLowerCase())));
+
     return matchesFilter && matchesSearch;
   });
 
-  const getCategoryBadge = (cat) => {
-    const norm = (cat || "").toUpperCase();
+  const getCategoryBadge = (row) => {
+    const norm = (row.tier || "").toUpperCase();
     if (norm === "GROUP") {
       return (
         <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-purple-100 text-purple-700 border border-purple-200">
           <Layers className="w-3.5 h-3.5" />
-          Group
-        </span>
-      );
-    }
-    if (norm === "STATE") {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
-          <MapPin className="w-3.5 h-3.5" />
-          State
-        </span>
-      );
-    }
-    if (norm === "NOB") {
-      return (
-        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-700 border border-amber-200">
-          <Briefcase className="w-3.5 h-3.5" />
-          NOB
+          Group Tier (Priority 1)
         </span>
       );
     }
     return (
-      <span className="px-3 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">
-        {cat || "—"}
+      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-blue-100 text-blue-700 border border-blue-200">
+        <MapPin className="w-3.5 h-3.5" />
+        State-NOB Tier (Priority 2)
       </span>
     );
   };
 
-  const currentDynamicOptions = getOptionsForCategory(formData.category);
+  const stateListWithAny = ["Any", ...stateOptions];
+  const nobListWithAny = ["Any", ...nobOptions];
 
   return (
     <div className="min-h-screen bg-gray-50/50 p-6">
@@ -299,7 +334,7 @@ export default function CREMgmt() {
               CRM Distribution Master
             </h1>
             <p className="text-sm text-gray-500 mt-1">
-              Configure automatic CRM/CRE assignment rules based on Group, State, or NOB hierarchy upon order conversion.
+              Configure automatic CRM/CRE assignment rules with round-robin rotation upon order conversion.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -325,20 +360,30 @@ export default function CREMgmt() {
 
         {/* Tab Filter Navigation */}
         <div className="flex items-center space-x-4 border-b border-gray-200 overflow-x-auto">
-          {["ALL", "Group", "State", "NOB"].map((tab) => {
-            const count = tab === "ALL" ? data.length : data.filter((i) => (i.category || "").toUpperCase() === tab.toUpperCase()).length;
-            const isActive = activeFilter.toUpperCase() === tab.toUpperCase();
+          {[
+            { id: "ALL", label: "All Rules" },
+            { id: "Group", label: "Group Tier (Priority 1)" },
+            { id: "StateNOB", label: "State-NOB Tier (Priority 2)" },
+          ].map((tab) => {
+            const count =
+              tab.id === "ALL"
+                ? data.length
+                : data.filter((i) => {
+                    const cat = (i.tier || "").toUpperCase();
+                    return tab.id === "Group" ? cat === "GROUP" : cat !== "GROUP";
+                  }).length;
+            const isActive = activeFilter === tab.id;
             return (
               <button
-                key={tab}
-                onClick={() => setActiveFilter(tab)}
+                key={tab.id}
+                onClick={() => setActiveFilter(tab.id)}
                 className={`flex items-center gap-2 py-3 px-6 font-semibold text-sm border-b-2 whitespace-nowrap transition-colors duration-150 ${
                   isActive
                     ? "border-purple-600 text-purple-600"
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
-                <span>{tab === "ALL" ? "All Categories" : tab}</span>
+                <span>{tab.label}</span>
                 <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 font-bold">
                   {count}
                 </span>
@@ -353,7 +398,7 @@ export default function CREMgmt() {
             <Search className="w-5 h-5 absolute left-3 top-2.5 text-gray-400" />
             <input
               type="text"
-              placeholder="Search by Name or assigned CRM..."
+              placeholder="Search rules, states, NOB, or CRM names..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 text-sm"
@@ -362,7 +407,7 @@ export default function CREMgmt() {
           <div className="text-xs text-gray-500 max-w-lg">
             <span className="flex items-center gap-1.5 font-medium text-purple-700 bg-purple-50 px-3 py-1.5 rounded-lg border border-purple-200">
               <ShieldCheck className="w-4 h-4 text-purple-600 shrink-0" />
-              Hierarchy Order: Priority 1 (Group) &rarr; Priority 2 (State) &rarr; Priority 3 (NOB)
+              Hierarchy Priority: Group Tier (Priority 1) &rarr; State-NOB Tier (Priority 2)
             </span>
           </div>
         </div>
@@ -372,64 +417,126 @@ export default function CREMgmt() {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-200 text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                <th className="py-3.5 px-6">Category</th>
-                <th className="py-3.5 px-6">Name</th>
-                <th className="py-3.5 px-6">CRM</th>
+                <th className="py-3.5 px-6">Tier</th>
+                <th className="py-3.5 px-6">Rule Condition</th>
+                <th className="py-3.5 px-6">Assigned CRM Representatives</th>
+                <th className="py-3.5 px-6">Last Assigned (Round-Robin)</th>
                 <th className="py-3.5 px-6 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 text-sm">
               {loading ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-10 text-gray-400">
+                  <td colSpan="5" className="text-center py-10 text-gray-400">
                     Loading rules...
                   </td>
                 </tr>
               ) : filteredRows.length === 0 ? (
                 <tr>
-                  <td colSpan="4" className="text-center py-12 text-gray-500">
-                    No CRM distribution rules found for this selection. Click "Add CRM Rule" to configure one.
+                  <td colSpan="5" className="text-center py-12 text-gray-500">
+                    No CRM distribution rules found. Click "Add CRM Rule" to configure one.
                   </td>
                 </tr>
               ) : (
-                filteredRows.map((row) => (
-                  <tr key={row.uuid || row.id} className="hover:bg-gray-50/70 transition duration-150">
-                    <td className="py-4 px-6 whitespace-nowrap">
-                      {getCategoryBadge(row.category)}
-                    </td>
-                    <td className="py-4 px-6 font-medium text-gray-900">
-                      {row.key || "—"}
-                    </td>
-                    <td className="py-4 px-6 text-gray-700 font-semibold">
-                      {row.value || "—"}
-                    </td>
-                    <td className="py-4 px-6 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button
-                          onClick={() => handleOpenModal("edit", row)}
-                          className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition duration-150"
-                          title="Edit CRM mapping"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(row)}
-                          className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition duration-150"
-                          title="Delete rule"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
+                filteredRows.map((row) => {
+                  const crmDisplayList = Array.isArray(row.crm_names) ? row.crm_names : [];
+                  const isGroup = (row.tier || "").toUpperCase() === "GROUP";
+
+                  return (
+                    <tr key={row.uuid} className="hover:bg-gray-50/70 transition duration-150">
+                      <td className="py-4 px-6 whitespace-nowrap">
+                        {getCategoryBadge(row)}
+                      </td>
+                      <td className="py-4 px-6 font-medium text-gray-900">
+                        {isGroup ? (
+                          <div>
+                            <span className="font-bold text-purple-900">Group(s): </span>
+                            <span className="text-gray-800 font-semibold">
+                              {Array.isArray(row.group_name) && row.group_name.length > 0
+                                ? row.group_name.join(", ")
+                                : "—"}
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex flex-col gap-1">
+                            <div>
+                              <span className="font-bold text-blue-900">State(s): </span>
+                              <span className="text-gray-800 font-semibold">
+                                {Array.isArray(row.state_keys) && row.state_keys.length > 0
+                                  ? row.state_keys.join(", ")
+                                  : "Any"}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="font-bold text-amber-900 text-xs">NOB(s): </span>
+                              <span className="text-amber-700 font-semibold text-xs">
+                                {Array.isArray(row.nob_keys) && row.nob_keys.length > 0
+                                  ? row.nob_keys.join(", ")
+                                  : "Any"}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </td>
+                      <td className="py-4 px-6">
+                        <div className="flex flex-wrap gap-1.5">
+                          {crmDisplayList.length === 0 ? (
+                            <span className="text-gray-400 italic">—</span>
+                          ) : (
+                            crmDisplayList.map((cName, idx) => (
+                              <span
+                                key={idx}
+                                className="px-2.5 py-1 rounded-md text-xs font-semibold bg-purple-50 text-purple-800 border border-purple-200"
+                              >
+                                {cName}
+                              </span>
+                            ))
+                          )}
+                        </div>
+                      </td>
+                      <td className="py-4 px-6 text-gray-600">
+                        {row.last_assigned_crm ? (
+                          <div className="flex items-center gap-1.5">
+                            <Repeat className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                            <span className="font-semibold text-gray-800">{row.last_assigned_crm}</span>
+                            {row.last_assigned_ref && (
+                              <span className="text-xs font-mono bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded border border-gray-200">
+                                ({row.last_assigned_ref})
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-gray-400 italic text-xs">Not assigned yet</span>
+                        )}
+                      </td>
+                      <td className="py-4 px-6 text-right">
+                        <div className="flex items-center justify-end gap-2">
+                          <button
+                            onClick={() => handleOpenModal("edit", row)}
+                            className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-50 rounded-lg transition duration-150"
+                            title="Edit CRM mapping"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => handleDelete(row)}
+                            className="p-1.5 text-gray-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition duration-150"
+                            title="Delete rule"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* Dynamic Multi-Select Add / Edit Modal */}
+      {/* Add / Edit Rule Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden border border-gray-200">
@@ -447,116 +554,234 @@ export default function CREMgmt() {
             </div>
 
             <form onSubmit={handleSubmit} className="p-6 overflow-y-auto space-y-6 flex-1">
-              {/* Top Details: CRM Name & Category Tier */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pb-4 border-b border-gray-100 items-end">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    CRM Representative <span className="text-red-500">*</span>
-                  </label>
-                  {crmOptions.length === 0 ? (
-                    <select disabled className="w-full px-3 py-2 bg-gray-100 border border-gray-300 text-gray-400 rounded-lg text-sm italic">
-                      <option>No crm_name options found in dropdown table</option>
-                    </select>
-                  ) : (
-                    <select
-                      value={formData.value}
-                      onChange={(e) => setFormData((prev) => ({ ...prev, value: e.target.value }))}
-                      className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-semibold text-purple-900"
-                      required
-                    >
-                      <option value="" disabled>Select CRM Representative...</option>
-                      {crmOptions.map((crm) => (
-                        <option key={crm} value={crm}>
-                          {crm}
-                        </option>
-                      ))}
-                    </select>
-                  )}
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
-                    Hierarchy Category Tier <span className="text-red-500">*</span>
-                  </label>
-                  <select
-                    value={formData.category}
-                    onChange={(e) => handleCategoryChange(e.target.value)}
-                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-bold text-gray-800"
-                    required
-                  >
-                    <option value="Group">Group Tier (Priority 1)</option>
-                    <option value="State">State Tier (Priority 2)</option>
-                    <option value="NOB">NOB Tier (Priority 3)</option>
-                  </select>
-                </div>
+              {/* Category Tier Selector */}
+              <div className="space-y-1.5 pb-4 border-b border-gray-100">
+                <label className="block text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                  Hierarchy Category Tier <span className="text-red-500">*</span>
+                </label>
+                <select
+                  value={formData.category}
+                  onChange={(e) => handleCategoryChange(e.target.value)}
+                  className="w-full px-3 py-2 bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none text-sm font-bold text-gray-800"
+                  required
+                >
+                  <option value="Group">Group Tier (Priority 1)</option>
+                  <option value="StateNOB">State-NOB Tier (Priority 2)</option>
+                </select>
               </div>
 
-              {/* Dynamic Checkbox Section */}
+              {/* Multi-CRM Representatives Selection */}
               <div>
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                <div className="flex items-center justify-between gap-2 mb-3">
                   <label className="block text-xs font-bold uppercase tracking-wider text-purple-900">
-                    Select {formData.category} Options to assign to {formData.value || "this CRM"}
+                    CRM Representatives to Assign <span className="text-red-500">*</span> (Round-Robin)
                   </label>
                   <div className="flex items-center gap-2">
                     <button
                       type="button"
-                      onClick={() => handleSelectAll(currentDynamicOptions)}
-                      className="px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-md transition"
+                      onClick={() => setFormData((prev) => ({ ...prev, selectedCrms: [...crmOptions] }))}
+                      className="px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded transition"
                     >
                       Select All
                     </button>
                     <button
                       type="button"
-                      onClick={handleDeselectAll}
-                      className="px-2.5 py-1 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md transition"
+                      onClick={() => setFormData((prev) => ({ ...prev, selectedCrms: [] }))}
+                      className="px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
                     >
                       Clear
                     </button>
                   </div>
                 </div>
 
-                {currentDynamicOptions.length === 0 ? (
-                  <div className="text-center py-10 bg-gray-50 rounded-xl border border-dashed border-gray-300 text-gray-400 text-sm italic">
-                    No existing {formData.category.toLowerCase()}s found in database.
+                {crmOptions.length === 0 ? (
+                  <div className="text-center py-6 bg-gray-50 rounded-xl border border-dashed text-gray-400 text-sm italic">
+                    No CRM options found in dropdown table.
                   </div>
                 ) : (
-                  <div className={`grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-4 rounded-xl border max-h-64 overflow-y-auto ${
-                    formData.category === "Group"
-                      ? "bg-purple-50/40 border-purple-100"
-                      : formData.category === "State"
-                      ? "bg-blue-50/40 border-blue-100"
-                      : "bg-amber-50/40 border-amber-100"
-                  }`}>
-                    {currentDynamicOptions.map((opt) => {
-                      const checked = (formData.selectedKeys || []).includes(opt);
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3 bg-purple-50/40 rounded-xl border border-purple-100 max-h-40 overflow-y-auto">
+                    {crmOptions.map((crm) => {
+                      const checked = (formData.selectedCrms || []).includes(crm);
                       return (
                         <label
-                          key={opt}
-                          onClick={() => handleCheckboxToggle(opt)}
-                          className={`flex items-center gap-2.5 p-2.5 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
+                          key={crm}
+                          onClick={() => handleCrmToggle(crm)}
+                          className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
                             checked
-                              ? formData.category === "Group"
-                                ? "bg-white text-purple-900 border-purple-300 shadow-xs font-bold"
-                                : formData.category === "State"
-                                ? "bg-white text-blue-900 border-blue-300 shadow-xs font-bold"
-                                : "bg-white text-amber-900 border-amber-300 shadow-xs font-bold"
+                              ? "bg-white text-purple-900 border-purple-300 shadow-xs font-bold"
                               : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
                           }`}
                         >
                           {checked ? (
-                            <CheckSquare className={`w-4 h-4 shrink-0 ${
-                              formData.category === "Group" ? "text-purple-600" : formData.category === "State" ? "text-blue-600" : "text-amber-600"
-                            }`} />
+                            <CheckSquare className="w-4 h-4 text-purple-600 shrink-0" />
                           ) : (
                             <Square className="w-4 h-4 text-gray-300 shrink-0" />
                           )}
-                          <span className="truncate">{opt}</span>
+                          <span className="truncate">{crm}</span>
                         </label>
                       );
                     })}
                   </div>
                 )}
               </div>
+
+              {/* Dynamic Rule Conditions */}
+              {formData.category === "Group" ? (
+                <div>
+                  <div className="flex items-center justify-between gap-2 mb-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-purple-900">
+                      Select Group Options <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, selectedKeys: [...groupOptions] }))}
+                        className="px-2 py-0.5 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded transition"
+                      >
+                        Select All
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, selectedKeys: [] }))}
+                        className="px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  </div>
+
+                  {groupOptions.length === 0 ? (
+                    <div className="text-center py-8 bg-gray-50 rounded-xl border border-dashed text-gray-400 text-sm italic">
+                      No groups found in client master.
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-4 bg-purple-50/40 rounded-xl border border-purple-100 max-h-52 overflow-y-auto">
+                      {groupOptions.map((gOpt) => {
+                        const checked = (formData.selectedKeys || []).includes(gOpt);
+                        return (
+                          <label
+                            key={gOpt}
+                            onClick={() => handleKeyToggle(gOpt)}
+                            className={`flex items-center gap-2 p-2.5 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
+                              checked
+                                ? "bg-white text-purple-900 border-purple-300 shadow-xs font-bold"
+                                : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
+                            }`}
+                          >
+                            {checked ? (
+                              <CheckSquare className="w-4 h-4 text-purple-600 shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-300 shrink-0" />
+                            )}
+                            <span className="truncate">{gOpt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              ) : (
+                /* StateNOB Tier: Two Checkbox Sections */
+                <div className="space-y-4">
+                  {/* State Section */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-blue-900">
+                        1. Select State Options <span className="text-red-500">*</span>
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, selectedKeys: [...stateListWithAny] }))}
+                          className="px-2 py-0.5 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded transition"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, selectedKeys: [] }))}
+                          className="px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-blue-50/40 rounded-xl border border-blue-100 max-h-40 overflow-y-auto">
+                      {stateListWithAny.map((sOpt) => {
+                        const checked = (formData.selectedKeys || []).includes(sOpt);
+                        return (
+                          <label
+                            key={sOpt}
+                            onClick={() => handleKeyToggle(sOpt)}
+                            className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
+                              checked
+                                ? "bg-white text-blue-900 border-blue-300 shadow-xs font-bold"
+                                : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
+                            }`}
+                          >
+                            {checked ? (
+                              <CheckSquare className="w-4 h-4 text-blue-600 shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-300 shrink-0" />
+                            )}
+                            <span className="truncate">{sOpt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* NOB Section */}
+                  <div>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <label className="block text-xs font-bold uppercase tracking-wider text-amber-900">
+                        2. Select NOB Options <span className="text-red-500">*</span> (Multiple NOBs allowed)
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, selectedNobKeys: [...nobListWithAny] }))}
+                          className="px-2 py-0.5 text-xs font-semibold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded transition"
+                        >
+                          Select All
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setFormData((prev) => ({ ...prev, selectedNobKeys: [] }))}
+                          className="px-2 py-0.5 text-xs font-semibold text-gray-600 bg-gray-100 hover:bg-gray-200 rounded transition"
+                        >
+                          Clear
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 p-3 bg-amber-50/40 rounded-xl border border-amber-100 max-h-40 overflow-y-auto">
+                      {nobListWithAny.map((nOpt) => {
+                        const checked = (formData.selectedNobKeys || []).includes(nOpt);
+                        return (
+                          <label
+                            key={nOpt}
+                            onClick={() => handleNobKeyToggle(nOpt)}
+                            className={`flex items-center gap-2 p-2 rounded-lg cursor-pointer border text-xs font-semibold transition-all select-none ${
+                              checked
+                                ? "bg-white text-amber-900 border-amber-300 shadow-xs font-bold"
+                                : "bg-transparent text-gray-600 border-transparent hover:bg-white/60"
+                            }`}
+                          >
+                            {checked ? (
+                              <CheckSquare className="w-4 h-4 text-amber-600 shrink-0" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-300 shrink-0" />
+                            )}
+                            <span className="truncate">{nOpt}</span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Footer Actions */}
               <div className="flex justify-end gap-3 pt-4 border-t border-gray-200 shrink-0">
@@ -570,9 +795,15 @@ export default function CREMgmt() {
                 <button
                   type="submit"
                   className="px-5 py-2 text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 rounded-lg shadow-sm transition duration-150"
-                  disabled={currentDynamicOptions.length === 0 || crmOptions.length === 0 || formData.selectedKeys.length === 0}
+                  disabled={
+                    formData.selectedCrms.length === 0 ||
+                    formData.selectedKeys.length === 0 ||
+                    (formData.category === "StateNOB" && formData.selectedNobKeys.length === 0)
+                  }
                 >
-                  {modalMode === "add" ? `Save ${formData.selectedKeys.length} Rule(s)` : "Update Rule"}
+                  {modalMode === "add"
+                    ? `Save Rule(s)`
+                    : "Update Rule"}
                 </button>
               </div>
             </form>
