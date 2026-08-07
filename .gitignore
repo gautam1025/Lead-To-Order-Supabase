@@ -26,5 +26,8 @@ dist-ssr
 *.sw?
 
 schema.txt
-schemaOld.txt
 task.txt
+
+Claude.md
+DB
+Lead-To-Order-Supabase-main
