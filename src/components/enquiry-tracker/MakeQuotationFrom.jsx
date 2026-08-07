@@ -69,7 +69,7 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
       try {
         const { data, error } = await supabase
           .from("make_quotations")
-          .select("quotation_no, grand_total, created_at")
+          .select("quotation_no, grand_total, pdf_url, created_at")
           .eq("enquiry_reference_no", enquiryNo)
           .order("created_at", { ascending: false });
 
@@ -96,8 +96,13 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
     if (name === "quotationNumber") {
       onFieldChange(name, value);
       const matchedQuotation = generatedQuotations.find((q) => q.quotation_no === value);
-      if (matchedQuotation && matchedQuotation.grand_total !== undefined && matchedQuotation.grand_total !== null) {
-        onFieldChange("valueWithTax", String(matchedQuotation.grand_total));
+      if (matchedQuotation) {
+        if (matchedQuotation.grand_total !== undefined && matchedQuotation.grand_total !== null) {
+          onFieldChange("valueWithTax", String(matchedQuotation.grand_total));
+        }
+        if (matchedQuotation.pdf_url) {
+          onFieldChange("quotationFileUrl", matchedQuotation.pdf_url);
+        }
       }
     } else {
       onFieldChange(name, value);
@@ -268,6 +273,25 @@ function MakeQuotationForm({ enquiryNo, formData, onFieldChange }) {
                 type="button"
                 onClick={() => onFieldChange('quotationFile', null)}
                 className="text-red-500 hover:text-red-700"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
+          {formData.quotationFileUrl && !formData.quotationFile && (
+            <div className="flex items-center mt-2 p-2 bg-sky-50 rounded-md border border-sky-100">
+              <svg className="w-5 h-5 mr-2 text-sky-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              <a href={formData.quotationFileUrl} target="_blank" rel="noreferrer" className="text-sm text-sky-600 flex-1 hover:underline truncate">
+                {formData.quotationFileUrl.split('/').pop()}
+              </a>
+              <button
+                type="button"
+                onClick={() => onFieldChange('quotationFileUrl', "")}
+                className="text-red-500 hover:text-red-700 ml-2"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />

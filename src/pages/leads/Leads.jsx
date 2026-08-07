@@ -862,6 +862,10 @@ function Leads() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.groupName || !formData.groupName.trim()) {
+      alert("Group Name is required.");
+      return;
+    }
     setIsSubmitting(true);
 
     try {
@@ -1218,7 +1222,7 @@ function Leads() {
               {/* Group Name (Input search dropdown - select from client_master existing relevant groups) */}
               <div className="space-y-1 relative" ref={groupDropdownRef}>
                 <label htmlFor="groupName" className="block text-xs font-semibold text-gray-700">
-                  Group Name <span className="text-xs text-gray-400">(Optional)</span>
+                  Group Name <span className="text-red-500">*</span>
                 </label>
                 <div className="relative">
                   <input
@@ -1259,7 +1263,7 @@ function Leads() {
                           className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${
                             formData.groupName === name ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'
                           }`}
-                          onClick={() => handleSelectGroup(name)}
+                          onMouseDown={(e) => { e.preventDefault(); handleSelectGroup(name); }}
                         >
                           {name}
                         </div>
@@ -1307,7 +1311,7 @@ function Leads() {
                           className={`px-3 py-2 cursor-pointer hover:bg-sky-50 text-sm transition-colors border-b border-gray-50 last:border-0 ${
                             formData.companyName === company ? 'bg-sky-50 text-sky-700 font-medium' : 'text-gray-700'
                           }`}
-                          onClick={() => handleSelectCompany(company)}
+                          onMouseDown={(e) => { e.preventDefault(); handleSelectCompany(company); }}
                         >
                           {company}
                         </div>

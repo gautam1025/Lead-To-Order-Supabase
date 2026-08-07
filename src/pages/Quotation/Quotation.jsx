@@ -270,7 +270,15 @@ function Quotation() {
     try {
       const { data, error } = await supabase
         .from("make_quotations")
-        .select("*")
+        .select(`
+          *,
+          consignor_details (
+            reference_name, state, address, contact_num, gstin, state_code
+          ),
+          client_master (
+            company_name, billing_address, state, gst_number
+          )
+        `)
         .eq("quotation_no", quotationNo)
         .single();
 
@@ -283,8 +291,9 @@ function Quotation() {
       if (data) {
         const loadedData = data;
 
-        const references = loadedData.Reference_Name
-          ? loadedData.Reference_Name.split(",")
+        const refName = loadedData.consignor_details?.reference_name || "";
+        const references = refName
+          ? refName.split(",")
             .map((r) => r.trim())
             .filter((r) => r)
           : [];
@@ -375,60 +384,49 @@ function Quotation() {
 
         // Parse special offers from loaded data
         let specialOffers = [""];
-        if (loadedData.Divine_Empire_10th_Anniversary_Special_Offer) {
-          if (
-            typeof loadedData.Divine_Empire_10th_Anniversary_Special_Offer ===
-            "string"
-          ) {
-            specialOffers =
-              loadedData.Divine_Empire_10th_Anniversary_Special_Offer.split(
-                "|"
-              ).filter((offer) => offer.trim());
+        if (loadedData.special_offer) {
+          if (typeof loadedData.special_offer === "string") {
+            specialOffers = loadedData.special_offer.split("|").filter((offer) => offer.trim());
             if (specialOffers.length === 0) specialOffers = [""];
-          } else if (
-            Array.isArray(
-              loadedData.Divine_Empire_10th_Anniversary_Special_Offer
-            )
-          ) {
-            specialOffers =
-              loadedData.Divine_Empire_10th_Anniversary_Special_Offer;
+          } else if (Array.isArray(loadedData.special_offer)) {
+            specialOffers = loadedData.special_offer;
           }
         }
 
         setQuotationData({
           enquiryReferenceNo: loadedData.enquiry_reference_no || "",
-          quotationNo: loadedData.Quotation_No || "",
-          date: loadedData.Quotation_Date || "",
-          preparedBy: loadedData.Prepared_By || "",
-          consignorState: loadedData.Consigner_State || "",
-          consignorName: loadedData.Reference_Name || "",
-          consignorAddress: loadedData.Address || "",
-          consignorMobile: loadedData.Mobile || "",
-          consignorPhone: loadedData.Phone || "",
-          consignorGSTIN: loadedData.GSTIN || "",
-          consignorStateCode: loadedData.State_Code || "",
-          consigneeName: loadedData.Company_Name || "",
-          consigneeAddress: loadedData.Consignee_Address || "",
-          shipTo: loadedData.Ship_To || "",
-          consigneeState: loadedData.State || "",
-          consigneeContactName: loadedData.Contact_Name || "",
-          consigneeContactNo: loadedData.Contact_No || "",
-          consigneeGSTIN: loadedData.Consignee_GSTIN || "",
-          consigneeStateCode: loadedData.Consignee_State_Code || "",
-          msmeNumber: loadedData.MSME_No || "",
-          validity: loadedData.Validity || "",
-          paymentTerms: loadedData.Payment_Terms || "",
-          delivery: loadedData.Delivery || "",
-          freight: loadedData.Freight || "",
-          insurance: loadedData.Insurance || "",
-          taxes: loadedData.Taxes || "",
-          accountNo: loadedData.Account_No || "",
-          bankName: loadedData.Bank_Name || "",
-          bankAddress: loadedData.Bank_Address || "",
-          ifscCode: loadedData.IFSC_Code || "",
-          email: loadedData.Email || "",
-          website: loadedData.Website || "",
-          pan: loadedData.Pan || "",
+          quotationNo: loadedData.quotation_no || "",
+          date: loadedData.quotation_date || "",
+          preparedBy: loadedData.prepared_by || "",
+          consignorState: loadedData.consignor_details?.state || "",
+          consignorName: loadedData.consignor_details?.reference_name || "",
+          consignorAddress: loadedData.consignor_details?.address || "",
+          consignorMobile: loadedData.consignor_details?.contact_num?.toString() || "",
+          consignorPhone: loadedData.consignor_details?.contact_num?.toString() || "",
+          consignorGSTIN: loadedData.consignor_details?.gstin || "",
+          consignorStateCode: loadedData.consignor_details?.state_code || "",
+          consigneeName: loadedData.client_master?.company_name || "",
+          consigneeAddress: loadedData.client_master?.billing_address || "",
+          shipTo: loadedData.ship_to_address || "",
+          consigneeState: loadedData.client_master?.state || "",
+          consigneeContactName: loadedData.consignee_contact_name || "",
+          consigneeContactNo: loadedData.consignee_contact_no || "",
+          consigneeGSTIN: loadedData.client_master?.gst_number || "",
+          consigneeStateCode: "",
+          msmeNumber: "",
+          validity: loadedData.validity || "",
+          paymentTerms: loadedData.payment_terms || "",
+          delivery: loadedData.delivery || "",
+          freight: loadedData.freight || "",
+          insurance: loadedData.insurance || "",
+          taxes: loadedData.taxes || "",
+          accountNo: loadedData.account_no || "",
+          bankName: loadedData.bank_name || "",
+          bankAddress: loadedData.bank_address || "",
+          ifscCode: loadedData.ifsc_code || "",
+          email: "",
+          website: "",
+          pan: "",
           items,
           subtotal,
           totalFlatDiscount,
@@ -438,16 +436,16 @@ function Quotation() {
           sgstAmount,
           total,
           specialOffers: specialOffers,
-          notes: loadedData.Notes
-            ? loadedData.Notes.split("|").filter((note) => note.trim())
+          notes: loadedData.notes
+            ? loadedData.notes.split("|").filter((note) => note.trim())
             : [""],
         });
 
         setSpecialDiscount(specialDiscountFromItems);
 
         handleSpecialDiscountChangeWrapper(specialDiscountFromItems);
-        handleInputChange("consignorState", loadedData.Consigner_State || "");
-        handleInputChange("consigneeState", loadedData.State || "");
+        handleInputChange("consignorState", loadedData.consignor_details?.state || "");
+        handleInputChange("consigneeState", loadedData.client_master?.state || "");
         handleInputChange("items", items);
       }
     } catch (error) {
