@@ -60,6 +60,7 @@ const QuotationForm = ({
   const [showLeadNoDropdown, setShowLeadNoDropdown] = useState(false);
   const [leadNoOptions, setLeadNoOptions] = useState(["Select Lead No."]);
   const [leadNoData, setLeadNoData] = useState({});
+  const [leadNob, setLeadNob] = useState("");
 
   // ─── HARDCODED REFERENCE PHONE NUMBER ────────────────────────────────────────
   // TODO: Replace this value when the actual number is confirmed
@@ -117,7 +118,7 @@ const QuotationForm = ({
           while (fetchMore) {
             const { data, error } = await supabase
               .from("items")
-              .select("item_code, item_name, description, rate")
+              .select("item_code, item_name, description, rate, reseller_price, warranty")
               .range(from, from + step - 1);
 
             if (error) throw error;
@@ -230,15 +231,17 @@ const QuotationForm = ({
             const name = row.item_name;
             const description = row.description || "";
             const rate = parseFloat(row.rate) || 0;
+            const reseller_price = parseFloat(row.reseller_price) || 0;
+            const warranty = row.warranty || "";
 
             if (code && !codes.includes(code)) codes.push(code);
             if (name && !names.includes(name)) names.push(name);
 
             if (code) {
-              productDataMap[code] = { name, description, rate };
+              productDataMap[code] = { name, description, rate, reseller_price, warranty };
             }
             if (name) {
-              productDataMap[name] = { code, description, rate };
+              productDataMap[name] = { code, description, rate, reseller_price, warranty };
             }
           });
         }
@@ -432,6 +435,10 @@ const QuotationForm = ({
 
     const leadData = leadNoData[selectedLeadNo];
 
+    // Track NOB for pricing logic
+    const nob = leadData.rowData?.nob || leadData.rowData?.NOB || leadData.rowData?.nature_of_business || "";
+    setLeadNob(nob);
+
     // Fill consignee details
     const companyName = leadData.companyName;
     handleInputChange("consigneeName", companyName);
@@ -535,8 +542,11 @@ const QuotationForm = ({
 
         if (productInfo) {
           productCode = productInfo.code || "";
-          productDescription = item.name === "Freight" ? "" : (productInfo.description || "");
-          productRate = productInfo.rate || 0;
+          const desc = productInfo.description || "";
+          const warr = productInfo.warranty || "";
+          productDescription = item.name === "Freight" ? "" : (desc + (warr ? (desc ? " " : "") + warr : "")).trim();
+          const isReseller = (nob || "").toString().toUpperCase() === "RESELLER";
+          productRate = isReseller ? (productInfo.reseller_price || productInfo.rate || 0) : (productInfo.rate || 0);
         }
 
         return {
@@ -837,6 +847,7 @@ const QuotationForm = ({
         isLoading={isItemsLoading}
         hiddenColumns={hiddenColumns}
         setHiddenColumns={setHiddenColumns}
+        leadNob={leadNob}
       />
 
       <TermsAndConditions

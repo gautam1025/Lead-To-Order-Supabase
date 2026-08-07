@@ -277,7 +277,8 @@ function Quotation() {
           ),
           client_master (
             company_name, billing_address, state, gst_number
-          )
+          ),
+          make_quotation_items (*)
         `)
         .eq("quotation_no", quotationNo)
         .single();
@@ -302,26 +303,54 @@ function Quotation() {
         let items = [];
         const specialDiscountFromItems = 0; // Will be calculated from items if needed
 
-        if (
-          loadedData.Items &&
-          Array.isArray(loadedData.Items) &&
-          loadedData.Items.length > 0
-        ) {
-          items = loadedData.Items.map((item, index) => {
-            if (item.name === "Freight") {
-              const desc = item.description || "";
-              const shouldBeEmpty =
-                desc.toLowerCase().trim().startsWith("extra as per");
+        const dbItems = loadedData.make_quotation_items || [];
+        const jsonItems = (loadedData.items && Array.isArray(loadedData.items)) ? loadedData.items : ((loadedData.Items && Array.isArray(loadedData.Items)) ? loadedData.Items : []);
+        const sourceItems = dbItems.length > 0 ? dbItems : jsonItems;
+
+        if (sourceItems.length > 0) {
+          items = sourceItems.map((item, index) => {
+            const isFreight = item.is_freight || item.isFreight || item.item_name === "Freight" || item.name === "Freight";
+            const itemName = item.item_name || item.name || "";
+            const itemCode = item.item_code || item.code || "";
+            const desc = item.description || "";
+            const qty = item.quantity !== undefined ? item.quantity : (item.qty !== undefined ? item.qty : 1);
+            const units = item.unit || item.units || "Nos";
+            const rate = item.rate || 0;
+            const gst = item.gst_percent !== undefined ? item.gst_percent : (item.gst !== undefined ? item.gst : 18);
+            const discount = item.discount !== undefined ? item.discount : (item.disc !== undefined ? item.disc : 0);
+            const amount = item.amount || 0;
+
+            if (isFreight) {
+              const shouldBeEmpty = desc.toLowerCase().trim().startsWith("extra as per");
               return {
-                ...item,
                 id: index + 1,
-                isFreight: true,
+                code: itemCode,
+                name: itemName || "Freight",
                 description: shouldBeEmpty ? "" : desc,
+                gst: 0,
+                qty: qty,
+                units: units,
+                rate: rate,
+                discount: discount,
+                flatDiscount: 0,
+                amount: amount,
+                isFreight: true,
               };
             }
+
             return {
-              ...item,
               id: index + 1,
+              code: itemCode,
+              name: itemName,
+              description: desc,
+              gst: gst,
+              qty: qty,
+              units: units,
+              rate: rate,
+              discount: discount,
+              flatDiscount: 0,
+              amount: amount,
+              isFreight: false,
             };
           });
         }

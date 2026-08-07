@@ -17,6 +17,7 @@ const ItemsTable = ({
   isLoading,
   hiddenColumns,
   setHiddenColumns,
+  leadNob,
 }) => {
   // Use props instead of local state
   const hideDisc = hiddenColumns?.hideDisc || false;
@@ -315,15 +316,20 @@ const ItemsTable = ({
                                             "name",
                                             productInfo.name
                                           );
+                                          const desc = productInfo.description || "";
+                                          const warr = productInfo.warranty || "";
+                                          const fullDesc = productInfo.name === "Freight" ? "" : (desc + (warr ? (desc ? " " : "") + warr : "")).trim();
                                           handleItemChange(
                                             item.id,
                                             "description",
-                                            productInfo.name === "Freight" ? "" : (productInfo.description || "")
+                                            fullDesc
                                           );
+                                          const isReseller = (leadNob || "").toString().toUpperCase() === "RESELLER";
+                                          const selectedRate = isReseller ? (productInfo.reseller_price || productInfo.rate || 0) : (productInfo.rate || 0);
                                           handleItemChange(
                                             item.id,
                                             "rate",
-                                            productInfo.rate || 0
+                                            selectedRate
                                           );
                                           handleItemChange(
                                             item.id,
@@ -424,15 +430,20 @@ const ItemsTable = ({
                                             "code",
                                             productInfo.code
                                           );
+                                          const desc = productInfo.description || "";
+                                          const warr = productInfo.warranty || "";
+                                          const fullDesc = name === "Freight" ? "" : (desc + (warr ? (desc ? " " : "") + warr : "")).trim();
                                           handleItemChange(
                                             item.id,
                                             "description",
-                                            name === "Freight" ? "" : (productInfo.description || "")
+                                            fullDesc
                                           );
+                                          const isReseller = (leadNob || "").toString().toUpperCase() === "RESELLER";
+                                          const selectedRate = isReseller ? (productInfo.reseller_price || productInfo.rate || 0) : (productInfo.rate || 0);
                                           handleItemChange(
                                             item.id,
                                             "rate",
-                                            productInfo.rate || 0
+                                            selectedRate
                                           );
                                           handleItemChange(
                                             item.id,
