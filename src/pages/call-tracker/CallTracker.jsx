@@ -406,7 +406,7 @@ function CallTracker() {
         if (error) throw error;
 
         alert("Updated successfully!");
-        fetchFollowUpData(pendingPage, false, searchTerm);
+        fetchFollowUpData(currentPage, false, searchTerm);
         setEditingRowId(null);
         setEditedData({});
         return;
@@ -445,7 +445,7 @@ function CallTracker() {
       }
 
       alert("Updated successfully!");
-      fetchFollowUpData(historyPage, false, searchTerm);
+      fetchFollowUpData(currentPage, false, searchTerm);
       setEditingRowId(null);
       setEditedData({});
     } catch (error) {
@@ -1222,7 +1222,6 @@ function CallTracker() {
         // Keep existing fallback logic...
       } finally {
         setIsLoading(false);
-        setIsLoadingMore(false);
       }
     },
     [currentUser, isAdmin, activeTab, dateFilter, startDate, endDate, scNameFilter, companyFilter, filterType, itemsPerPage]
@@ -2811,7 +2810,7 @@ function CallTracker() {
   // and paginates that client-side.
   useEffect(() => {
     if (activeTab !== "history") return;
-    setHistoryPage(1);
+    setCurrentPage(1);
     setHasMoreHistory(true);
     fetchFollowUpData(1, false, searchTerm);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2998,7 +2997,7 @@ function CallTracker() {
               onClose={(refreshed) => {
                 setSelectedCallNowRow(null);
                 if (refreshed) {
-                  fetchFollowUpData(historyPage, false, searchTerm);
+                  fetchFollowUpData(currentPage, false, searchTerm);
                 }
               }}
             />

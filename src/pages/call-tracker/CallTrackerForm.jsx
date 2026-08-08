@@ -372,17 +372,13 @@ function NewCallTracker({ initialLeadId, initialLeadNo, isModal = false, onClose
         try {
           const { data: tatConfig } = await supabase
             .from("tat_config")
-            .select("tat_duration, tat_hours, tat_minutes")
+            .select("tat_duration")
             .eq("stage_name", "Enquiry Tracker for Leads")
             .maybeSingle();
 
           let tatDurationMinutes = 60;
-          if (tatConfig) {
-            if (tatConfig.tat_duration !== null && tatConfig.tat_duration !== undefined) {
-              tatDurationMinutes = Number(tatConfig.tat_duration) || 60;
-            } else if (tatConfig.tat_hours !== undefined || tatConfig.tat_minutes !== undefined) {
-              tatDurationMinutes = (Number(tatConfig.tat_hours) || 0) * 60 + (Number(tatConfig.tat_minutes) || 0);
-            }
+          if (tatConfig && tatConfig.tat_duration !== null && tatConfig.tat_duration !== undefined) {
+            tatDurationMinutes = Number(tatConfig.tat_duration) || 60;
           }
 
           const now = new Date();

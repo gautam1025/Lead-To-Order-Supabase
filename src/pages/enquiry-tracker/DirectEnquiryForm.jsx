@@ -400,16 +400,12 @@ const CallTrackerForm = ({ onClose = () => window.history.back() }) => {
       try {
         const { data: tatData } = await supabase
           .from("tat_config")
-          .select("tat_duration, tat_hours, tat_minutes")
+          .select("tat_duration")
           .eq("stage_name", "Enquiry Tracker for Enquiries")
           .maybeSingle();
 
-        if (tatData) {
-          if (tatData.tat_duration !== null && tatData.tat_duration !== undefined) {
-            tatDurationMinutes = Number(tatData.tat_duration) || 60;
-          } else if (tatData.tat_hours !== undefined || tatData.tat_minutes !== undefined) {
-            tatDurationMinutes = (Number(tatData.tat_hours) || 0) * 60 + (Number(tatData.tat_minutes) || 0);
-          }
+        if (tatData && tatData.tat_duration !== null && tatData.tat_duration !== undefined) {
+          tatDurationMinutes = Number(tatData.tat_duration) || 60;
         }
       } catch (err) {
         console.warn("Could not fetch TAT config for Enquiry Tracker for Enquiries, defaulting to 1 hour:", err);

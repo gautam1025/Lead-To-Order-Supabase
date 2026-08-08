@@ -232,6 +232,75 @@ function NewEnquiryTracker() {
     }
   }, [leadId])
 
+  // Prefill Enquiry Status & What Did Customer Say from this lead/enquiry's
+  // most recent tracker log, if one exists (i.e. a quotation or follow-up
+  // stage was already logged before) -- saves re-entering the same status
+  // and feedback every time a new stage update is logged for the same
+  // record. Only fills fields that are still blank, so it never clobbers
+  // something the user has already typed/selected.
+  useEffect(() => {
+    const prefillFromLatestLog = async () => {
+      if (!formData.enquiryNo) return;
+
+      const isLead = formData.enquiryNo.toUpperCase().startsWith("LD-");
+
+      try {
+        let latestLog = null;
+
+        if (isLead) {
+          const { data: leadRow } = await supabase
+            .from("leads")
+            .select("id")
+            .eq("lead_no", formData.enquiryNo)
+            .maybeSingle();
+
+          if (leadRow?.id) {
+            const { data } = await supabase
+              .from("enquiry_tracker_for_leads")
+              .select("enquiry_status, what_did_customer_say")
+              .eq("lead_id", leadRow.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            latestLog = data;
+          }
+        } else {
+          const { data: enqRow } = await supabase
+            .from("enquiries")
+            .select("id")
+            .eq("enquiry_no", formData.enquiryNo)
+            .maybeSingle();
+
+          if (enqRow?.id) {
+            const { data } = await supabase
+              .from("enquiry_tracker")
+              .select("enquiry_status, what_did_customer_say, customer_feedback")
+              .eq("enquiry_id", enqRow.id)
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            latestLog = data;
+          }
+        }
+
+        if (!latestLog) return;
+
+        const lastFeedback = latestLog.what_did_customer_say || latestLog.customer_feedback || "";
+        const lastStatus = (latestLog.enquiry_status || "").toLowerCase();
+
+        setFormData((prev) => ({
+          ...prev,
+          enquiryStatus: prev.enquiryStatus || lastStatus,
+          customerFeedback: prev.customerFeedback || lastFeedback,
+        }));
+      } catch (err) {
+        console.error("Error prefilling from latest tracker log:", err);
+      }
+    };
+
+    prefillFromLatestLog();
+  }, [formData.enquiryNo])
+
   const handleInputChange = (e) => {
     const { id, value } = e.target
     setFormData(prevData => ({
@@ -600,7 +669,7 @@ function NewEnquiryTracker() {
       }
 
       // Simulate a webhook call
-      const webhookUrl = "https://script.google.com/macros/s/AKfycbx-gZV0X8BYm3J8QIG9FfJXmi5mptDxqaCazGA2t7earQoYzUOkcfOIHlSb83ILTZoz2w/exec";
+      const webhookUrl = "";
 
       const response = await fetch(webhookUrl, {
         method: 'POST',
@@ -1272,7 +1341,7 @@ function NewEnquiryTracker() {
     <div className="container mx-auto py-1 px-2">
       <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-sm border border-slate-200">
         <div className="px-3 py-2 border-b border-slate-100">
-          <h2 className="text-base font-bold text-slate-800">Call Tracker</h2>
+          <h2 className="text-base font-bold text-slate-800">Enquiry Tracker</h2>
           <p className="text-[11px] text-slate-500">
             Track the progress of the enquiry
             {formData.enquiryNo && <span className="font-medium text-purple-600"> for Enquiry #{formData.enquiryNo}</span>}

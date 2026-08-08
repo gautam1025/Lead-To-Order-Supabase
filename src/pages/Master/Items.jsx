@@ -144,6 +144,13 @@ function Items() {
       return;
     }
 
+    // Edit mode must always operate on a specific, known uuid -- never fall
+    // back to name/code matching, since duplicate names can exist in the data.
+    if (modalMode === "edit" && !currentItem?.uuid) {
+      if (showNotification) showNotification("Cannot save: this item has no uuid. Please refresh and try again.", "error");
+      return;
+    }
+
     setIsLoading(true);
     const payload = {
       item_name: formData.item_name.trim(),
@@ -154,42 +161,74 @@ function Items() {
 
     try {
       if (modalMode === "add") {
-        const { error } = await supabase.from("items").insert([payload]);
+        const { data, error } = await supabase.from("items").insert([payload]).select().single();
         if (error) throw error;
+        setItemsData(prev => [...prev, data]);
         if (showNotification) showNotification("Item added successfully", "success");
       } else {
-        const { error } = await supabase
+        // Re-check the row still exists at this uuid before updating, so a
+        // stale/deleted currentItem can't silently update the wrong record.
+        const { data: existing, error: checkError } = await supabase
+          .from("items")
+          .select("uuid")
+          .eq("uuid", currentItem.uuid)
+          .maybeSingle();
+        if (checkError) throw checkError;
+        if (!existing) {
+          throw new Error("This item no longer exists in the database (it may have been deleted). Please refresh.");
+        }
+
+        const { data, error } = await supabase
           .from("items")
           .update(payload)
-          .eq("uuid", currentItem.uuid);
+          .eq("uuid", currentItem.uuid)
+          .select()
+          .single();
         if (error) throw error;
+
+        // Patch the exact row by uuid instead of refetching the whole list,
+        // so the UI reflects precisely the row that was updated.
+        setItemsData(prev => prev.map(it => (it.uuid === data.uuid ? data : it)));
         if (showNotification) showNotification("Item updated successfully", "success");
       }
 
-      await fetchItems();
+      setIsLoading(false);
       handleCloseModal();
     } catch (err) {
       console.error("Error saving item:", err);
+      const message = err?.code === "23505"
+        ? `An item named "${payload.item_name}" already exists. Choose a different name.`
+        : (err.message || String(err));
       if (showNotification) {
-        showNotification("Failed to save item: " + (err.message || err), "error");
+        showNotification("Failed to save item: " + message, "error");
       } else {
-        alert("Failed to save item: " + (err.message || err));
+        alert("Failed to save item: " + message);
       }
       setIsLoading(false);
     }
   };
 
   const handleDelete = useCallback(async (item) => {
+    if (!item?.uuid) {
+      if (showNotification) showNotification("Cannot delete: this item has no uuid.", "error");
+      return;
+    }
     if (window.confirm(`Are you sure you want to delete ${item.item_name}?`)) {
       setIsLoading(true);
       try {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("items")
           .delete()
-          .eq("uuid", item.uuid);
+          .eq("uuid", item.uuid)
+          .select()
+          .maybeSingle();
         if (error) throw error;
+        if (!data) {
+          throw new Error("This item was already removed (no matching uuid found).");
+        }
+        setItemsData(prev => prev.filter(it => it.uuid !== item.uuid));
         if (showNotification) showNotification("Item deleted successfully", "success");
-        await fetchItems();
+        setIsLoading(false);
       } catch (err) {
         console.error("Error deleting item:", err);
         if (showNotification) {
@@ -200,7 +239,7 @@ function Items() {
         setIsLoading(false);
       }
     }
-  }, [fetchItems, showNotification]);
+  }, [showNotification]);
 
   // Header column configuration
   const allHeaders = useMemo(() => [

@@ -62,9 +62,7 @@ const TatConfig = () => {
     if (item) {
       setIsEditing(true);
       setEditingId(item.id);
-      const totalMins = item.tat_duration !== undefined && item.tat_duration !== null
-        ? Number(item.tat_duration)
-        : (Number(item.tat_hours) || 0) * 60 + (Number(item.tat_minutes) || 0);
+      const totalMins = Number(item.tat_duration) || 0;
       const { days, hhmm } = minutesToDaysAndHHMM(totalMins);
       setFormData({
         stage_name: item.stage_name || STAGE_OPTIONS[0],
@@ -262,9 +260,7 @@ const TatConfig = () => {
                 </thead>
                 <tbody className="bg-white divide-y divide-slate-200">
                   {tatList.map((item) => {
-                    const totalMins = item.tat_duration !== undefined && item.tat_duration !== null
-                      ? Number(item.tat_duration)
-                      : (Number(item.tat_hours) || 0) * 60 + (Number(item.tat_minutes) || 0);
+                    const totalMins = Number(item.tat_duration) || 0;
 
                     return (
                       <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
