@@ -206,6 +206,16 @@ const historyDefaultVisibility = {
 
 const TRACKER_CHUNK_SIZE = 500;
 
+async function executePromisesInBatches(promiseFns, batchSize = 5) {
+  const results = [];
+  for (let i = 0; i < promiseFns.length; i += batchSize) {
+    const batch = promiseFns.slice(i, i + batchSize).map(fn => fn());
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+  }
+  return results;
+}
+
 // Pages through candidate rows (planned_at not null) in chunks of 500,
 // filtering out already-closed ids on the client instead of sending a
 // `NOT IN (...)` filter with thousands of UUIDs -- which both risks exceeding
@@ -215,26 +225,37 @@ const TRACKER_CHUNK_SIZE = 500;
 async function collectOpenRows(table, idColumn, closedIds, applyFilters, dedupeById = false) {
   const collected = [];
   const seenIds = new Set();
-  let from = 0;
-  let exhausted = false;
-  while (!exhausted) {
-    let query = supabase
+  
+  let baseQuery = supabase
+    .from(table)
+    .select("*", { count: 'exact', head: true })
+    .not("planned_at", "is", null);
+  baseQuery = applyFilters(baseQuery);
+  
+  const { count, error: countError } = await baseQuery;
+  if (countError || count === null || count === 0) {
+    return { collected, exhausted: true };
+  }
+
+  const promises = [];
+  for (let from = 0; from < count; from += TRACKER_CHUNK_SIZE) {
+    let q = supabase
       .from(table)
       .select("*")
       .not("planned_at", "is", null)
       .order("created_at", { ascending: false })
       .range(from, from + TRACKER_CHUNK_SIZE - 1);
-    query = applyFilters(query);
-    const { data, error } = await query;
+    q = applyFilters(q);
+    promises.push(() => q);
+  }
+
+  const results = await executePromisesInBatches(promises, 5);
+  for (const { data, error } of results) {
     if (error) {
-      console.error(`Error fetching ${table} candidates (offset ${from}):`, error.message);
-      break;
+      console.error(`Error fetching ${table} candidates:`, error.message);
+      continue;
     }
-    if (!data || data.length === 0) {
-      exhausted = true;
-      break;
-    }
-    for (const row of data) {
+    for (const row of (data || [])) {
       if (closedIds.has(row[idColumn])) continue;
       if (dedupeById) {
         if (seenIds.has(row[idColumn])) continue;
@@ -242,31 +263,34 @@ async function collectOpenRows(table, idColumn, closedIds, applyFilters, dedupeB
       }
       collected.push(row);
     }
-    if (data.length < TRACKER_CHUNK_SIZE) {
-      exhausted = true;
-      break;
-    }
-    from += TRACKER_CHUNK_SIZE;
   }
-  return { collected, exhausted };
+  return { collected, exhausted: true };
 }
 
 async function fetchAllRows(baseQueryFn) {
-  let allData = [];
-  let from = 0;
+  // First get exact count
+  const countQuery = baseQueryFn(true);
+  const { count, error: countError } = await countQuery;
   
-  while (true) {
-    const query = baseQueryFn().range(from, from + TRACKER_CHUNK_SIZE - 1);
-    const { data, error } = await query;
+  if (countError || count === null || count === 0) {
+    return [];
+  }
+
+  const promises = [];
+  for (let from = 0; from < count; from += TRACKER_CHUNK_SIZE) {
+    promises.push(() => baseQueryFn(false).range(from, from + TRACKER_CHUNK_SIZE - 1));
+  }
+
+  const results = await executePromisesInBatches(promises, 5);
+  let allData = [];
+  for (const { data, error } of results) {
     if (error) {
       console.error("Error in fetchAllRows:", error.message);
-      break;
+      continue;
     }
-    if (!data || data.length === 0) break;
-    
-    allData = [...allData, ...data];
-    if (data.length < TRACKER_CHUNK_SIZE) break;
-    from += TRACKER_CHUNK_SIZE;
+    if (data) {
+      allData = [...allData, ...data];
+    }
   }
   return allData;
 }
@@ -1668,11 +1692,13 @@ const handleSaveClick = async (index) => {
     const to = from + itemsPerPage - 1;
 
     try {
-      const buildTrackerQuery = () => {
-        let q = supabase
-          .from("enquiry_tracker")
-          .select("*")
-          .order("created_at", { ascending: false });
+      const buildTrackerQuery = (isCount = false) => {
+        let q = supabase.from("enquiry_tracker");
+        if (isCount) {
+          q = q.select("*", { count: 'exact', head: true });
+        } else {
+          q = q.select("*").order("created_at", { ascending: false });
+        }
         if (dateFilters.today) {
           const today = new Date().toISOString().split("T")[0];
           const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
@@ -1684,11 +1710,13 @@ const handleSaveClick = async (index) => {
         return q;
       };
 
-      const buildLeadsTrackerQuery = () => {
-        let q = supabase
-          .from("enquiry_tracker_for_leads")
-          .select("*")
-          .order("created_at", { ascending: false });
+      const buildLeadsTrackerQuery = (isCount = false) => {
+        let q = supabase.from("enquiry_tracker_for_leads");
+        if (isCount) {
+          q = q.select("*", { count: 'exact', head: true });
+        } else {
+          q = q.select("*").order("created_at", { ascending: false });
+        }
         if (dateFilters.today) {
           const today = new Date().toISOString().split("T")[0];
           const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
@@ -1718,35 +1746,39 @@ const handleSaveClick = async (index) => {
       let enqMap = {};
 
       if (leadIds.length > 0) {
+        const promises = [];
         for (let i = 0; i < leadIds.length; i += 200) {
-          const chunk = leadIds.slice(i, i + 200);
-          const { data: ldData } = await supabase
-            .from("leads")
-            .select("*")
-            .in("id", chunk);
-          if (ldData) {
-            ldData.forEach(row => {
+          promises.push(() =>
+            supabase.from("leads").select("*").in("id", leadIds.slice(i, i + 200))
+          );
+        }
+        const results = await executePromisesInBatches(promises, 5);
+        results.forEach(({ data }) => {
+          if (data) {
+            data.forEach((row) => {
               leadsMap[row.id] = row;
               if (row.lead_no) leadsMap[row.lead_no] = row;
             });
           }
-        }
+        });
       }
 
       if (enqIds.length > 0) {
+        const promises = [];
         for (let i = 0; i < enqIds.length; i += 200) {
-          const chunk = enqIds.slice(i, i + 200);
-          const { data: enqData } = await supabase
-            .from("enquiries")
-            .select("*")
-            .in("id", chunk);
-          if (enqData) {
-            enqData.forEach(row => {
+          promises.push(() =>
+            supabase.from("enquiries").select("*").in("id", enqIds.slice(i, i + 200))
+          );
+        }
+        const results = await executePromisesInBatches(promises, 5);
+        results.forEach(({ data }) => {
+          if (data) {
+            data.forEach((row) => {
               enqMap[row.id] = row;
               if (row.enquiry_no) enqMap[row.enquiry_no] = row;
             });
           }
-        }
+        });
       }
 
       const transformedData = allLogs.map((item) => {

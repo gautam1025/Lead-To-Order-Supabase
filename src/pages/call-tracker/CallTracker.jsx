@@ -18,6 +18,7 @@ const fadeOut = "animate-out fade-out duration-300";
 
 // Custom hook to detect mobile devices
 const useIsMobile = () => {
+
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -32,6 +33,16 @@ const useIsMobile = () => {
 
   return isMobile;
 };
+
+async function executePromisesInBatches(promiseFns, batchSize = 5) {
+  const results = [];
+  for (let i = 0; i < promiseFns.length; i += batchSize) {
+    const batch = promiseFns.slice(i, i + batchSize).map(fn => fn());
+    const batchResults = await Promise.all(batch);
+    results.push(...batchResults);
+  }
+  return results;
+}
 
 function CallTracker() {
   const authContext = useContext(AuthContext) || {};
@@ -757,28 +768,29 @@ function CallTracker() {
           // Chunks of 500 -- a single unpaginated select() is silently capped
           // at 1000 rows by PostgREST, which would otherwise lose data once
           // this table grows past that.
+          // First, get exact count for tracker records
+          const { count: trackerCount, error: trackerCountErr } = await supabase
+            .from("call_tracker_for_leads")
+            .select("*", { count: "exact", head: true });
+          
+          if (trackerCountErr) console.error("Error fetching tracker count:", trackerCountErr);
+          
           let allTrackerRecords = [];
-          let currentFromTracker = 0;
-          let fetchMoreTracker = true;
-
-          while (fetchMoreTracker) {
-              const { data, error } = await supabase
-                .from("call_tracker_for_leads")
-                .select("*")
-                .order("created_at", { ascending: false })
-                .range(currentFromTracker, currentFromTracker + 499);
-
-              if (error) {
-                 console.error("Error fetching tracker records:", error);
-                 break;
-              }
-              if (data && data.length > 0) {
-                 allTrackerRecords = [...allTrackerRecords, ...data];
-                 currentFromTracker += 500;
-                 if (data.length < 500) fetchMoreTracker = false;
-              } else {
-                 fetchMoreTracker = false;
-              }
+          if (trackerCount > 0) {
+            const promises = [];
+            for (let currentFromTracker = 0; currentFromTracker < trackerCount; currentFromTracker += 500) {
+              promises.push(() =>
+                supabase
+                  .from("call_tracker_for_leads")
+                  .select("*")
+                  .order("created_at", { ascending: false })
+                  .range(currentFromTracker, currentFromTracker + 499)
+              );
+            }
+            const results = await executePromisesInBatches(promises, 5);
+            results.forEach(({ data }) => {
+              if (data) allTrackerRecords = [...allTrackerRecords, ...data];
+            });
           }
 
           const latestTrackerPerLead = new Map();
@@ -793,43 +805,55 @@ function CallTracker() {
           // Group 1: leads where planned_at IS NOT NULL, chunked in 500s for
           // the same reason as above.
           let g1DataRaw = [];
-          let currentFromG1 = 0;
-          let fetchMoreG1 = true;
+          
+          // Build the base query for group 1 leads
+          let baseG1Query = supabase
+            .from("leads")
+            .select("*", { count: "exact", head: true })
+            .not("planned_at", "is", null);
 
-          while (fetchMoreG1) {
-            let group1Query = supabase
-              .from("leads")
-              .select("*")
-              .not("planned_at", "is", null)
-              .range(currentFromG1, currentFromG1 + 499);
+          if (searchTerm) {
+            baseG1Query = baseG1Query.or(
+              `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
+            );
+          }
+          if (!isAdmin() && currentUser && currentUser.username) {
+            baseG1Query = baseG1Query.in("sc_name", getUsernamesToFilter());
+          }
+          if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+            baseG1Query = baseG1Query.in("sc_name", scNameFilter);
+          }
 
-            if (searchTerm) {
-              group1Query = group1Query.or(
-                `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
-              );
+          const { count: g1Count, error: g1CountErr } = await baseG1Query;
+          if (g1CountErr) console.error("Error fetching group 1 count:", g1CountErr);
+
+          if (g1Count > 0) {
+            const promises = [];
+            for (let currentFromG1 = 0; currentFromG1 < g1Count; currentFromG1 += 500) {
+              let query = supabase
+                .from("leads")
+                .select("*")
+                .not("planned_at", "is", null)
+                .range(currentFromG1, currentFromG1 + 499);
+                
+              if (searchTerm) {
+                query = query.or(
+                  `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
+                );
+              }
+              if (!isAdmin() && currentUser && currentUser.username) {
+                query = query.in("sc_name", getUsernamesToFilter());
+              }
+              if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+                query = query.in("sc_name", scNameFilter);
+              }
+              promises.push(() => query);
             }
 
-            if (!isAdmin() && currentUser && currentUser.username) {
-              const usernamesToFilter = getUsernamesToFilter();
-              group1Query = group1Query.in("sc_name", usernamesToFilter);
-            }
-
-            if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-              group1Query = group1Query.in("sc_name", scNameFilter);
-            }
-
-            const { data, error: g1Err } = await group1Query;
-            if (g1Err) {
-              console.error("Error fetching group 1 leads:", g1Err);
-              break;
-            }
-            if (data && data.length > 0) {
-              g1DataRaw = [...g1DataRaw, ...data];
-              currentFromG1 += 500;
-              if (data.length < 500) fetchMoreG1 = false;
-            } else {
-              fetchMoreG1 = false;
-            }
+            const results = await executePromisesInBatches(promises, 5);
+            results.forEach(({ data }) => {
+              if (data) g1DataRaw = [...g1DataRaw, ...data];
+            });
           }
 
           // Filter out existingLeadIds in JS to avoid URL length limits
@@ -958,73 +982,83 @@ function CallTracker() {
 
         } else {
           // History tab data fetching from call_tracker_for_leads
-          let historyQuery = supabase
-            .from("call_tracker_for_leads")
-            .select("*", { count: "exact" });
-
-          if (searchTerm) {
-            historyQuery = historyQuery.or(
-              `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,next_action.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
-            );
-          }
-
-          // Apply user filter if not admin
-          if (!isAdmin() && currentUser && currentUser.username) {
-            const usernamesToFilter = getUsernamesToFilter();
-            historyQuery = historyQuery.in("sc_name", usernamesToFilter);
-          }
-
-          // Apply SC name filter for admin
-          if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-            historyQuery = historyQuery.in("sc_name", scNameFilter);
-          }
-
-          // Apply Company Name Filter
-          if (companyFilter && companyFilter.length > 0) {
-            historyQuery = historyQuery.in("company_name", companyFilter);
-          }
-
-          // Apply Filter Type (First Followup / Expected)
-          if (filterType === "first") {
-            historyQuery = historyQuery.or('enquiry_received_status.is.null,enquiry_received_status.eq."",enquiry_received_status.eq."New"');
-          } else if (filterType === "multi") {
-            historyQuery = historyQuery.ilike("enquiry_received_status", "%expected%");
-          }
-
-          // Apply date filter
-          if (dateFilter === "today") {
-            const today = new Date();
-            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-            historyQuery = historyQuery.gte("created_at", todayStr);
-          } else if (dateFilter === "older") {
-            const today = new Date();
-            const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
-            historyQuery = historyQuery.lt("created_at", todayStr);
-          }
-
-          if (startDate) {
-            historyQuery = historyQuery.gte("created_at", startDate);
-          }
-          if (endDate) {
-            historyQuery = historyQuery.lte("created_at", endDate);
-          }
-
-          historyQuery = historyQuery.order("created_at", { ascending: false });
-
-          // Fetch all matching rows in chunks of 500 to bypass 1000 limit
-          let allData = [];
-          let currentFrom = 0;
-          let fetchMore = true;
-          while (fetchMore) {
-            const { data, error } = await historyQuery.range(currentFrom, currentFrom + 499);
-            if (error) throw error;
-            if (data && data.length > 0) {
-              allData = [...allData, ...data];
-              currentFrom += 500;
-              if (data.length < 500) fetchMore = false;
+          const buildHistoryQuery = (isCount = false) => {
+            let q = supabase.from("call_tracker_for_leads");
+            
+            if (isCount) {
+              q = q.select("*", { count: "exact", head: true });
             } else {
-              fetchMore = false;
+              q = q.select("*");
             }
+
+            if (searchTerm) {
+              q = q.or(
+                `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,next_action.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
+              );
+            }
+
+            // Apply user filter if not admin
+            if (!isAdmin() && currentUser && currentUser.username) {
+              const usernamesToFilter = getUsernamesToFilter();
+              q = q.in("sc_name", usernamesToFilter);
+            }
+
+            // Apply SC name filter for admin
+            if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+              q = q.in("sc_name", scNameFilter);
+            }
+
+            // Apply Company Name Filter
+            if (companyFilter && companyFilter.length > 0) {
+              q = q.in("company_name", companyFilter);
+            }
+
+            // Apply Filter Type (First Followup / Expected)
+            if (filterType === "first") {
+              q = q.or('enquiry_received_status.is.null,enquiry_received_status.eq."",enquiry_received_status.eq."New"');
+            } else if (filterType === "multi") {
+              q = q.ilike("enquiry_received_status", "%expected%");
+            }
+
+            // Apply date filter
+            if (dateFilter === "today") {
+              const today = new Date();
+              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+              q = q.gte("created_at", todayStr);
+            } else if (dateFilter === "older") {
+              const today = new Date();
+              const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+              q = q.lt("created_at", todayStr);
+            }
+
+            if (startDate) {
+              q = q.gte("created_at", startDate);
+            }
+            if (endDate) {
+              q = q.lte("created_at", endDate);
+            }
+
+            if (!isCount) {
+              q = q.order("created_at", { ascending: false });
+            }
+            return q;
+          };
+
+          // Fetch all matching rows in chunks of 500 in parallel
+          const countQuery = buildHistoryQuery(true);
+          const { count: historyCount, error: historyCountErr } = await countQuery;
+          if (historyCountErr) console.error("Error fetching history count:", historyCountErr);
+
+          let allData = [];
+          if (historyCount > 0) {
+            const promises = [];
+            for (let currentFrom = 0; currentFrom < historyCount; currentFrom += 500) {
+              promises.push(() => buildHistoryQuery(false).range(currentFrom, currentFrom + 499));
+            }
+            const results = await executePromisesInBatches(promises, 5);
+            results.forEach(({ data }) => {
+              if (data) allData = [...allData, ...data];
+            });
           }
           const data = allData;
           const count = allData.length;
@@ -1038,17 +1072,24 @@ function CallTracker() {
           
           if (leadIds.length > 0) {
             try {
-              const { data: leadsData } = await supabase
-                .from("leads")
-                .select("id, lead_no, company_name, person_name, phone_number, sc_name, lead_source, lead_receiver_name")
-                .in("id", leadIds);
-
-              if (leadsData) {
-                leadsData.forEach((lead) => {
-                  leadsMap[lead.id] = lead;
-                  if (lead.lead_no) uniqueLeadNosHistory.add(lead.lead_no);
-                });
+              const promises = [];
+              for (let i = 0; i < leadIds.length; i += 200) {
+                promises.push(() =>
+                  supabase
+                    .from("leads")
+                    .select("id, lead_no, company_name, person_name, phone_number, sc_name, lead_source, lead_receiver_name")
+                    .in("id", leadIds.slice(i, i + 200))
+                );
               }
+              const results = await executePromisesInBatches(promises, 5);
+              results.forEach(({ data: leadsData }) => {
+                if (leadsData) {
+                  leadsData.forEach((lead) => {
+                    leadsMap[lead.id] = lead;
+                    if (lead.lead_no) uniqueLeadNosHistory.add(lead.lead_no);
+                  });
+                }
+              });
             } catch (err) {
               console.error("Error fetching leads for history tab:", err);
             }
@@ -1058,26 +1099,43 @@ function CallTracker() {
           const companyCountsMap = {};
           const uniqueCompanyNames = [...new Set((data || []).map(item => item.company_name || (leadsMap[item.lead_id] && leadsMap[item.lead_id].company_name)).filter(Boolean))];
           if (uniqueCompanyNames.length > 0) {
-              const { data: countData } = await supabase
-                .from("call_tracker_for_leads")
-                .select("company_name")
-                .in("company_name", uniqueCompanyNames);
-              (countData || []).forEach(item => {
-                const name = (item.company_name || "").trim();
-                companyCountsMap[name] = (companyCountsMap[name] || 0) + 1;
+              const promises = [];
+              for (let i = 0; i < uniqueCompanyNames.length; i += 200) {
+                promises.push(() =>
+                  supabase
+                    .from("call_tracker_for_leads")
+                    .select("company_name")
+                    .in("company_name", uniqueCompanyNames.slice(i, i + 200))
+                );
+              }
+              const results = await executePromisesInBatches(promises, 5);
+              results.forEach(({ data: countData }) => {
+                (countData || []).forEach(item => {
+                  const name = (item.company_name || "").trim();
+                  companyCountsMap[name] = (companyCountsMap[name] || 0) + 1;
+                });
               });
           }
 
           // Fetch Enquiry Calling Counts
           const enquiryCountsMap = {};
           if (uniqueLeadNosHistory.size > 0) {
-              const { data: enqCountData } = await supabase
-                .from("enquiries")
-                .select("lead_no")
-                .in("lead_no", Array.from(uniqueLeadNosHistory));
-              (enqCountData || []).forEach(item => {
-                const ln = item.lead_no;
-                enquiryCountsMap[ln] = (enquiryCountsMap[ln] || 0) + 1;
+              const uniqueLeadNosArray = Array.from(uniqueLeadNosHistory);
+              const promises = [];
+              for (let i = 0; i < uniqueLeadNosArray.length; i += 200) {
+                promises.push(() =>
+                  supabase
+                    .from("enquiries")
+                    .select("lead_no")
+                    .in("lead_no", uniqueLeadNosArray.slice(i, i + 200))
+                );
+              }
+              const results = await executePromisesInBatches(promises, 5);
+              results.forEach(({ data: enqCountData }) => {
+                (enqCountData || []).forEach(item => {
+                  const ln = item.lead_no;
+                  enquiryCountsMap[ln] = (enquiryCountsMap[ln] || 0) + 1;
+                });
               });
           }
 
@@ -1085,18 +1143,25 @@ function CallTracker() {
           const historyFollowUpsCountMap = {};
           const historyLastStatusMap = {};
           if (leadIds.length > 0) {
-            const { data: trackerCountData } = await supabase
-              .from("call_tracker_for_leads")
-              .select("lead_id, enquiry_received_status, created_at")
-              .in("lead_id", leadIds)
-              .order("created_at", { ascending: false });
-              
-            (trackerCountData || []).forEach(item => {
-              const lid = item.lead_id;
-              historyFollowUpsCountMap[lid] = (historyFollowUpsCountMap[lid] || 0) + 1;
-              if (!historyLastStatusMap[lid]) {
-                historyLastStatusMap[lid] = item.enquiry_received_status || "";
-              }
+            const promises = [];
+            for (let i = 0; i < leadIds.length; i += 200) {
+              promises.push(() =>
+                supabase
+                  .from("call_tracker_for_leads")
+                  .select("lead_id, enquiry_received_status, created_at")
+                  .in("lead_id", leadIds.slice(i, i + 200))
+                  .order("created_at", { ascending: false })
+              );
+            }
+            const results = await executePromisesInBatches(promises, 5);
+            results.forEach(({ data: trackerCountData }) => {
+              (trackerCountData || []).forEach(item => {
+                const lid = item.lead_id;
+                historyFollowUpsCountMap[lid] = (historyFollowUpsCountMap[lid] || 0) + 1;
+                if (!historyLastStatusMap[lid]) {
+                  historyLastStatusMap[lid] = item.enquiry_received_status || "";
+                }
+              });
             });
           }
 
@@ -2945,4 +3010,3 @@ function CallTracker() {
 }
 
 export default CallTracker;
-
