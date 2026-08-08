@@ -11,6 +11,7 @@ import {
 import { AuthContext } from "../../App";
 import DirectEnquiryForm from "./DirectEnquiryForm";
 import supabase from "../../utils/supabase";
+import { fetchClosedIdSet } from "../../utils/pendingStatus";
 import DataTable from "../../components/DataTable";
 import EnquiryTrackerFilter from "../../components/enquiry-tracker/EnquiryTrackerFilter";
 
@@ -203,6 +204,74 @@ const historyDefaultVisibility = {
   acceptanceFile: true,
 };
 
+const TRACKER_CHUNK_SIZE = 500;
+
+// Pages through candidate rows (planned_at not null) in chunks of 500,
+// filtering out already-closed ids on the client instead of sending a
+// `NOT IN (...)` filter with thousands of UUIDs -- which both risks exceeding
+// PostgREST's URL length limit and blocks rendering until it resolves.
+// Stops as soon as enough open rows are collected for the requested page, or
+// the source table is exhausted.
+async function collectOpenRows(table, idColumn, closedIds, applyFilters, dedupeById = false) {
+  const collected = [];
+  const seenIds = new Set();
+  let from = 0;
+  let exhausted = false;
+  while (!exhausted) {
+    let query = supabase
+      .from(table)
+      .select("*")
+      .not("planned_at", "is", null)
+      .order("created_at", { ascending: false })
+      .range(from, from + TRACKER_CHUNK_SIZE - 1);
+    query = applyFilters(query);
+    const { data, error } = await query;
+    if (error) {
+      console.error(`Error fetching ${table} candidates (offset ${from}):`, error.message);
+      break;
+    }
+    if (!data || data.length === 0) {
+      exhausted = true;
+      break;
+    }
+    for (const row of data) {
+      if (closedIds.has(row[idColumn])) continue;
+      if (dedupeById) {
+        if (seenIds.has(row[idColumn])) continue;
+        seenIds.add(row[idColumn]);
+      }
+      collected.push(row);
+    }
+    if (data.length < TRACKER_CHUNK_SIZE) {
+      exhausted = true;
+      break;
+    }
+    from += TRACKER_CHUNK_SIZE;
+  }
+  return { collected, exhausted };
+}
+
+async function fetchAllRows(baseQueryFn) {
+  let allData = [];
+  let from = 0;
+  
+  while (true) {
+    const query = baseQueryFn().range(from, from + TRACKER_CHUNK_SIZE - 1);
+    const { data, error } = await query;
+    if (error) {
+      console.error("Error in fetchAllRows:", error.message);
+      break;
+    }
+    if (!data || data.length === 0) break;
+    
+    allData = [...allData, ...data];
+    if (data.length < TRACKER_CHUNK_SIZE) break;
+    from += TRACKER_CHUNK_SIZE;
+  }
+  return allData;
+}
+
+
 function EnquiryTracker() {
   const authContext = useContext(AuthContext) || {};
   const {
@@ -246,10 +315,10 @@ function EnquiryTracker() {
     history: []
   });
 
-  const [pendingPage, setPendingPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
-  const [directEnquiryPage, setDirectEnquiryPage] = useState(1);
+
   const [hasMorePending, setHasMorePending] = useState(true);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(200);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
   const [hasMoreDirectEnquiry, setHasMoreDirectEnquiry] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
@@ -303,58 +372,7 @@ function EnquiryTracker() {
     }
   }, []);
 
-  // Refs for observer
-  const observer = useRef();
-  const lastElementRef = useCallback(
-    (node) => {
-      if (isLoading) return;
-      if (observer.current) observer.current.disconnect();
 
-      observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting) {
-          loadMoreData();
-        }
-      });
-
-      if (node) observer.current.observe(node);
-    },
-    [isLoading, activeTab]
-  );
-
-  // 3. Fix the loadMoreData function to properly check conditions
-  const loadMoreData = useCallback(() => {
-    if (isLoading || isSearching) {
-      return;
-    }
-
-    switch (activeTab) {
-      case "pending":
-        if (hasMorePending) {
-          setPendingPage((prev) => prev + 1);
-        }
-        break;
-      case "history":
-        if (hasMoreHistory) {
-          setHistoryPage((prev) => prev + 1);
-        }
-        break;
-      case "directEnquiry":
-        if (hasMoreDirectEnquiry) {
-          setDirectEnquiryPage((prev) => prev + 1);
-        }
-        break;
-    }
-  }, [
-    isLoading,
-    isSearching,
-    activeTab,
-    hasMorePending,
-    hasMoreHistory,
-    hasMoreDirectEnquiry,
-    pendingPage,
-    historyPage,
-    directEnquiryPage,
-  ]);
 
   const handleEditClick = (tracker, index) => {
     setEditingRowId(index);
@@ -559,7 +577,7 @@ const handleSaveClick = async (index) => {
         }
 
         alert("Updated successfully!");
-        fetchPendingData(pendingPage, searchTerm, false, getDateFiltersFromCallingDays());
+        fetchPendingData(currentPage, searchTerm, getDateFiltersFromCallingDays());
         setEditingRowId(null);
         setEditedData({});
         return;
@@ -626,7 +644,7 @@ const handleSaveClick = async (index) => {
 
       console.log("Successfully updated record:", updatedData);
       alert("Updated successfully!");
-      fetchPendingData(pendingPage, searchTerm, false, getDateFiltersFromCallingDays());
+      fetchPendingData(currentPage, searchTerm, getDateFiltersFromCallingDays());
       setEditingRowId(null);
       setEditedData({});
       return;
@@ -721,7 +739,7 @@ const handleSaveClick = async (index) => {
 
       console.log("Successfully updated Direct Enquiry record:", updatedData);
       alert("Updated successfully!");
-      fetchDirectEnquiryData(directEnquiryPage, searchTerm, false, getDateFiltersFromCallingDays());
+      fetchDirectEnquiryData(currentPage, searchTerm, getDateFiltersFromCallingDays());
       setEditingRowId(null);
       setEditedData({});
       return;
@@ -1394,25 +1412,22 @@ const handleSaveClick = async (index) => {
       switch (activeTab) {
         case "pending":
           await fetchPendingData(
-            pendingPage,
+            currentPage,
             searchTerm,
-            pendingPage > 1,
             dateFilters
           );
           break;
         case "history":
           await fetchHistoryData(
-            historyPage,
+            currentPage,
             searchTerm,
-            historyPage > 1,
             dateFilters
           );
           break;
         case "directEnquiry":
           await fetchDirectEnquiryData(
-            directEnquiryPage,
+            currentPage,
             searchTerm,
-            directEnquiryPage > 1,
             dateFilters
           );
           break;
@@ -1425,9 +1440,7 @@ const handleSaveClick = async (index) => {
     fetchData();
   }, [
     activeTab,
-    pendingPage,
-    historyPage,
-    directEnquiryPage,
+    currentPage,
     callingDaysFilter,
     scNameFilter,
   ]);
@@ -1436,126 +1449,76 @@ const handleSaveClick = async (index) => {
   const fetchPendingData = async (
     page = 1,
     searchTerm = "",
-    isLoadMore = false,
     dateFilters = {}
   ) => {
-    if (isLoadMore && !hasMorePending) return;
-
     setIsLoading(true);
 
     try {
-      // 1. Existing lead_ids in enquiry_tracker_for_leads
-      const { data: trackerLeads } = await supabase
-        .from("enquiry_tracker_for_leads")
-        .select("*")
-        .order("created_at", { ascending: true });
+      // Fetch batch size matches the UI's page-size toggle (itemsPerPage state
+      // below) so switching to e.g. 200 records/page doesn't display a
+      // truncated batch that was fetched before the toggle changed.
+      const fetchBatchSize = itemsPerPage;
+      const targetCount = page * fetchBatchSize;
 
-      const latestLeadLogMap = {};
-      const closedLeadIds = new Set();
-
-      (trackerLeads || []).forEach((log) => {
-        if (log.lead_id) {
-          latestLeadLogMap[log.lead_id] = log;
-          if (log.is_order_received_status && String(log.is_order_received_status).trim() !== "") {
-            closedLeadIds.add(log.lead_id);
-          }
-        }
-      });
-
-      const existingClosedLeadIds = Array.from(closedLeadIds);
-
-      // Query call_tracker_for_leads where planned_at IS NOT NULL and lead_id NOT IN closed list
-      let callTrackerQuery = supabase
-        .from("call_tracker_for_leads")
-        .select("*", { count: "exact" })
-        .not("planned_at", "is", null)
-        .order("created_at", { ascending: false });
-
-      if (existingClosedLeadIds.length > 0) {
-        callTrackerQuery = callTrackerQuery.not("lead_id", "in", `(${existingClosedLeadIds.join(",")})`);
-      }
-
-      if (searchTerm) {
-        callTrackerQuery = callTrackerQuery.or(
-          `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
-        );
-      }
-
-      if (!isAdmin() && currentUser && currentUser.username) {
-        const usernamesToFilter = getUsernamesToFilter();
-        callTrackerQuery = callTrackerQuery.in("sc_name", usernamesToFilter);
-      }
-
-      if (isAdmin() && scNameFilter !== "all") {
-        callTrackerQuery = callTrackerQuery.eq("sc_name", scNameFilter);
-      }
-
-      // 2. Existing enquiry_ids in enquiry_tracker
-      const { data: trackerEnquiries } = await supabase
-        .from("enquiry_tracker")
-        .select("*")
-        .order("created_at", { ascending: true });
-
-      const latestEnquiryLogMap = {};
-      const closedEnquiryIds = new Set();
-
-      (trackerEnquiries || []).forEach((log) => {
-        if (log.enquiry_id) {
-          latestEnquiryLogMap[log.enquiry_id] = log;
-          if (log.is_order_received_status && String(log.is_order_received_status).trim() !== "") {
-            closedEnquiryIds.add(log.enquiry_id);
-          }
-        }
-      });
-
-      const existingClosedEnquiryIds = Array.from(closedEnquiryIds);
-
-      // Query enquiries where planned_at IS NOT NULL and id NOT IN closed list
-      let enquiriesQuery = supabase
-        .from("enquiries")
-        .select("*", { count: "exact" })
-        .not("planned_at", "is", null)
-        .order("created_at", { ascending: false });
-
-      if (existingClosedEnquiryIds.length > 0) {
-        enquiriesQuery = enquiriesQuery.not("id", "in", `(${existingClosedEnquiryIds.join(",")})`);
-      }
-
-      if (searchTerm) {
-        enquiriesQuery = enquiriesQuery.or(
-          `enquiry_no.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,sales_person_name.ilike.%${searchTerm}%`
-        );
-      }
-
-      if (!isAdmin() && currentUser && currentUser.username) {
-        const usernamesToFilter = getUsernamesToFilter();
-        enquiriesQuery = enquiriesQuery.in("sales_coordinator_name", usernamesToFilter);
-      }
-
-      if (isAdmin() && scNameFilter !== "all") {
-        enquiriesQuery = enquiriesQuery.eq("sales_coordinator_name", scNameFilter);
-      }
-
-      const [callTrackerRes, enquiriesRes] = await Promise.all([
-        callTrackerQuery,
-        enquiriesQuery,
+      // Closed-id sets from a small, filtered query (chunks of 500) instead
+      // of scanning the entire (much larger) tracker history.
+      const [closedLeadIds, closedEnquiryIds] = await Promise.all([
+        fetchClosedIdSet("enquiry_tracker_for_leads", "lead_id"),
+        fetchClosedIdSet("enquiry_tracker", "enquiry_id"),
       ]);
 
-      const callTrackerData = callTrackerRes.data || [];
-      const enquiriesData = enquiriesRes.data || [];
-
-      // Deduplicate callTrackerData by lead_id (keep most recent)
-      const seenLeadIds = new Set();
-      const dedupedCallTracker = [];
-      for (const item of callTrackerData) {
-        if (item.lead_id && !seenLeadIds.has(item.lead_id)) {
-          seenLeadIds.add(item.lead_id);
-          dedupedCallTracker.push(item);
-        }
-      }
+      // Candidates: page through both sources concurrently in chunks of 500,
+      // filtering out closed ids client-side, stopping once enough open rows
+      // exist for the requested page (or the table is exhausted).
+      const [
+        { collected: dedupedCallTracker, exhausted: leadsExhausted },
+        { collected: enquiriesData, exhausted: enquiriesExhausted },
+      ] = await Promise.all([
+        collectOpenRows(
+          "call_tracker_for_leads",
+          "lead_id",
+          closedLeadIds,
+          (query) => {
+            let q = query;
+            if (searchTerm) {
+              q = q.or(
+                `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
+              );
+            }
+            if (!isAdmin() && currentUser && currentUser.username) {
+              q = q.in("sc_name", getUsernamesToFilter());
+            }
+            if (isAdmin() && scNameFilter !== "all") {
+              q = q.eq("sc_name", scNameFilter);
+            }
+            return q;
+          },
+          true // dedupe by lead_id (a lead can have multiple call logs)
+        ),
+        collectOpenRows(
+          "enquiries",
+          "id",
+          closedEnquiryIds,
+          (query) => {
+            let q = query;
+            if (searchTerm) {
+              q = q.or(
+                `enquiry_no.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,sales_person_name.ilike.%${searchTerm}%`
+              );
+            }
+            if (!isAdmin() && currentUser && currentUser.username) {
+              q = q.in("sales_coordinator_name", getUsernamesToFilter());
+            }
+            if (isAdmin() && scNameFilter !== "all") {
+              q = q.eq("sales_coordinator_name", scNameFilter);
+            }
+            return q;
+          }
+        ),
+      ]);
 
       // Fetch parent leads details for dedupedCallTracker
-      const parentLeadIds = Array.from(seenLeadIds);
+      const parentLeadIds = dedupedCallTracker.map((item) => item.lead_id).filter(Boolean);
       const leadsMap = {};
       if (parentLeadIds.length > 0) {
         const { data: leadsData } = await supabase
@@ -1565,6 +1528,33 @@ const handleSaveClick = async (index) => {
 
         (leadsData || []).forEach((lead) => {
           leadsMap[lead.id] = lead;
+        });
+      }
+
+      // Latest tracker log, fetched only for the open rows we're actually
+      // about to display -- not the whole tracker table.
+      const latestLeadLogMap = {};
+      if (parentLeadIds.length > 0) {
+        const { data: leadLogs } = await supabase
+          .from("enquiry_tracker_for_leads")
+          .select("*")
+          .in("lead_id", parentLeadIds)
+          .order("created_at", { ascending: false });
+        (leadLogs || []).forEach((log) => {
+          if (log.lead_id && !latestLeadLogMap[log.lead_id]) latestLeadLogMap[log.lead_id] = log;
+        });
+      }
+
+      const openEnquiryIds = enquiriesData.map((item) => item.id).filter(Boolean);
+      const latestEnquiryLogMap = {};
+      if (openEnquiryIds.length > 0) {
+        const { data: enquiryLogs } = await supabase
+          .from("enquiry_tracker")
+          .select("*")
+          .in("enquiry_id", openEnquiryIds)
+          .order("created_at", { ascending: false });
+        (enquiryLogs || []).forEach((log) => {
+          if (log.enquiry_id && !latestEnquiryLogMap[log.enquiry_id]) latestEnquiryLogMap[log.enquiry_id] = log;
         });
       }
 
@@ -1642,24 +1632,22 @@ const handleSaveClick = async (index) => {
       });
 
       const allCombined = [...transformedCallTracker, ...transformedEnquiries];
-      const totalCount = (callTrackerRes.count || 0) + (enquiriesRes.count || 0);
 
-      const itemsPerPage = 50;
-      const from = (page - 1) * itemsPerPage;
-      const to = from + itemsPerPage - 1;
+      const from = (page - 1) * fetchBatchSize;
+      const to = from + fetchBatchSize - 1;
 
       const paginated = allCombined.slice(from, to + 1).map((item, index) => ({
         ...item,
         serialNo: from + index + 1,
       }));
 
-      if (isLoadMore) {
-        setPendingData((prev) => [...prev, ...paginated]);
-      } else {
-        setPendingData(paginated);
-      }
+      setPendingData(paginated);
 
-      setHasMorePending(paginated.length < totalCount);
+      // We stopped early once enough open rows existed for this page, so we
+      // don't know an exact total -- but if either source might still have
+      // unscanned rows, or we already collected more than this page needs,
+      // there's more to load.
+      setHasMorePending(allCombined.length > to + 1 || !leadsExhausted || !enquiriesExhausted);
     } catch (err) {
       console.error("Error fetching pending data for EnquiryTracker:", err);
     } finally {
@@ -1670,50 +1658,55 @@ const handleSaveClick = async (index) => {
   const fetchHistoryData = async (
     page = 1,
     searchTerm = "",
-    isLoadMore = false,
     dateFilters = {}
   ) => {
-    if (isLoadMore && !hasMoreHistory) return;
-
     setIsLoading(true);
-    const itemsPerPage = 50;
+    // itemsPerPage here is the UI's page-size toggle state (declared further
+    // down in the component) so switching to e.g. 200 records/page actually
+    // slices that many rows instead of a hardcoded 50.
     const from = (page - 1) * itemsPerPage;
     const to = from + itemsPerPage - 1;
 
     try {
-      let trackerQuery = supabase
-        .from("enquiry_tracker")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const buildTrackerQuery = () => {
+        let q = supabase
+          .from("enquiry_tracker")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (dateFilters.today) {
+          const today = new Date().toISOString().split("T")[0];
+          const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+          q = q.gte("next_call_date", today).lt("next_call_date", tomorrow);
+        } else if (dateFilters.older) {
+          const today = new Date().toISOString().split("T")[0];
+          q = q.lt("next_call_date", today);
+        }
+        return q;
+      };
 
-      let leadsTrackerQuery = supabase
-        .from("enquiry_tracker_for_leads")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(500);
+      const buildLeadsTrackerQuery = () => {
+        let q = supabase
+          .from("enquiry_tracker_for_leads")
+          .select("*")
+          .order("created_at", { ascending: false });
+        if (dateFilters.today) {
+          const today = new Date().toISOString().split("T")[0];
+          const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+          q = q.gte("next_call_date", today).lt("next_call_date", tomorrow);
+        } else if (dateFilters.older) {
+          const today = new Date().toISOString().split("T")[0];
+          q = q.lt("next_call_date", today);
+        }
+        return q;
+      };
 
-      if (dateFilters.today) {
-        const today = new Date().toISOString().split("T")[0];
-        const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-        trackerQuery = trackerQuery.gte("next_call_date", today).lt("next_call_date", tomorrow);
-        leadsTrackerQuery = leadsTrackerQuery.gte("next_call_date", today).lt("next_call_date", tomorrow);
-      } else if (dateFilters.older) {
-        const today = new Date().toISOString().split("T")[0];
-        trackerQuery = trackerQuery.lt("next_call_date", today);
-        leadsTrackerQuery = leadsTrackerQuery.lt("next_call_date", today);
-      }
-
-      const [trackerRes, leadsTrackerRes] = await Promise.all([
-        trackerQuery,
-        leadsTrackerQuery
+      const [trackerData, leadsTrackerData] = await Promise.all([
+        fetchAllRows(buildTrackerQuery),
+        fetchAllRows(buildLeadsTrackerQuery)
       ]);
 
-      if (trackerRes.error) console.error("Error fetching enquiry_tracker:", trackerRes.error.message);
-      if (leadsTrackerRes.error) console.error("Error fetching enquiry_tracker_for_leads:", leadsTrackerRes.error.message);
-
-      const trackerRows = (trackerRes.data || []).map(item => ({ ...item, isLead: false }));
-      const leadsTrackerRows = (leadsTrackerRes.data || []).map(item => ({ ...item, isLead: true }));
+      const trackerRows = (trackerData || []).map(item => ({ ...item, isLead: false }));
+      const leadsTrackerRows = (leadsTrackerData || []).map(item => ({ ...item, isLead: true }));
 
       let allLogs = [...trackerRows, ...leadsTrackerRows];
       allLogs.sort((a, b) => new Date(b.created_at || b.Timestamp || 0) - new Date(a.created_at || a.Timestamp || 0));
@@ -1725,28 +1718,34 @@ const handleSaveClick = async (index) => {
       let enqMap = {};
 
       if (leadIds.length > 0) {
-        const { data: ldData } = await supabase
-          .from("leads")
-          .select("*")
-          .in("id", leadIds);
-        if (ldData) {
-          ldData.forEach(row => {
-            leadsMap[row.id] = row;
-            if (row.lead_no) leadsMap[row.lead_no] = row;
-          });
+        for (let i = 0; i < leadIds.length; i += 200) {
+          const chunk = leadIds.slice(i, i + 200);
+          const { data: ldData } = await supabase
+            .from("leads")
+            .select("*")
+            .in("id", chunk);
+          if (ldData) {
+            ldData.forEach(row => {
+              leadsMap[row.id] = row;
+              if (row.lead_no) leadsMap[row.lead_no] = row;
+            });
+          }
         }
       }
 
       if (enqIds.length > 0) {
-        const { data: enqData } = await supabase
-          .from("enquiries")
-          .select("*")
-          .in("id", enqIds);
-        if (enqData) {
-          enqData.forEach(row => {
-            enqMap[row.id] = row;
-            if (row.enquiry_no) enqMap[row.enquiry_no] = row;
-          });
+        for (let i = 0; i < enqIds.length; i += 200) {
+          const chunk = enqIds.slice(i, i + 200);
+          const { data: enqData } = await supabase
+            .from("enquiries")
+            .select("*")
+            .in("id", chunk);
+          if (enqData) {
+            enqData.forEach(row => {
+              enqMap[row.id] = row;
+              if (row.enquiry_no) enqMap[row.enquiry_no] = row;
+            });
+          }
         }
       }
 
@@ -1898,11 +1897,7 @@ const handleSaveClick = async (index) => {
         serialNo: from + index + 1,
       }));
 
-      if (isLoadMore) {
-        setHistoryData((prev) => [...prev, ...paginated]);
-      } else {
-        setHistoryData(paginated);
-      }
+      setHistoryData(paginated);
 
       const hasMore = paginated.length === itemsPerPage && from + paginated.length < totalCount;
       setHasMoreHistory(hasMore);
@@ -1916,26 +1911,19 @@ const handleSaveClick = async (index) => {
     }
   };
 
-  // 2. Fix the fetchDirectEnquiryData function to prevent duplicates
   const fetchDirectEnquiryData = async (
     page = 1,
     searchTerm = "",
-    isLoadMore = false,
     dateFilters = {}
   ) => {
-    if (isLoadMore && !hasMoreDirectEnquiry) return;
-
     setIsLoading(true);
-    const itemsPerPage = 50;
-    const from = (page - 1) * itemsPerPage;
-    const to = from + itemsPerPage - 1;
 
-    let query = supabase
-      .from("enquiries")
-      .select("*", { count: "exact" })
-      .not("planned_at", "is", null)
-      .order("created_at", { ascending: true })
-      .range(from, to);
+    const buildQuery = () => {
+      let query = supabase
+        .from("enquiries")
+        .select("*", { count: "exact" })
+        .not("planned_at", "is", null)
+        .order("created_at", { ascending: true });
 
     // Add date filtering for direct enquiry data
     if (dateFilters.today) {
@@ -1970,18 +1958,17 @@ const handleSaveClick = async (index) => {
       query = query.eq("sales_coordinator_name", scNameFilter);
     }
 
-    const { data, error, count } = await query;
+      return query;
+    };
 
-    if (error) {
-      console.error("Error fetching direct enquiry:", error.message);
-      setIsLoading(false);
-      return [];
-    } else {
+    try {
+      const data = await fetchAllRows(buildQuery);
+      
       // ✅ Transform data first
       const transformedData = data.map((item, index) => ({
         id: item.id, // Use actual database ID
         dbId: item.id, // Store database ID separately for clarity
-        serialNo: from + index + 1,
+        serialNo: index + 1,
         timestamp: formatDateToDDMMYYYY(item.timestamp) || "",
         enquiry_no: item.enquiry_no || "",
         lead_receiver_name: item.enquiry_receiver_name || "",
@@ -2071,40 +2058,17 @@ const handleSaveClick = async (index) => {
         return numA - numB;
       });
 
-      if (isLoadMore) {
-        setDirectEnquiryData((prev) => {
-          // Merge with existing data and re-sort
-          const existingMap = new Map(
-            prev.map((item) => [item.enquiry_no, item])
-          );
-
-          // Add new items
-          sortedData.forEach((item) => {
-            existingMap.set(item.enquiry_no, item);
-          });
-
-          // Convert back to array and sort again
-          const merged = Array.from(existingMap.values());
-          return merged.sort((a, b) => {
-            const numA =
-              parseInt((a.enquiry_no || "").replace(/^En-/i, ""), 10) || 0;
-            const numB =
-              parseInt((b.enquiry_no || "").replace(/^En-/i, ""), 10) || 0;
-            return numA - numB;
-          });
-        });
-      } else {
-        setDirectEnquiryData(sortedData);
-      }
+      setDirectEnquiryData(sortedData);
 
       // Check if there's more data
-      const hasMore =
-        sortedData.length === itemsPerPage &&
-        from + sortedData.length < (count || 0);
-      setHasMoreDirectEnquiry(hasMore);
+      setHasMoreDirectEnquiry(false); // We fetched all data
 
       setIsLoading(false);
       return sortedData;
+    } catch (err) {
+      console.error("Error fetching direct enquiry data:", err);
+      setIsLoading(false);
+      return [];
     }
   };
 
@@ -2258,25 +2222,22 @@ const handleSaveClick = async (index) => {
       switch (activeTab) {
         case "pending":
           await fetchPendingData(
-            pendingPage,
+            currentPage,
             searchTerm,
-            pendingPage > 1,
             dateFilters
           );
           break;
         case "history":
           await fetchHistoryData(
-            historyPage,
+            currentPage,
             searchTerm,
-            historyPage > 1,
             dateFilters
           );
           break;
         case "directEnquiry":
           await fetchDirectEnquiryData(
-            directEnquiryPage,
+            currentPage,
             searchTerm,
-            directEnquiryPage > 1,
             dateFilters
           );
           break;
@@ -2286,9 +2247,7 @@ const handleSaveClick = async (index) => {
     fetchData();
   }, [
     activeTab,
-    pendingPage,
-    historyPage,
-    directEnquiryPage,
+    currentPage,
     callingDaysFilter,
     scNameFilter,
   ]);
@@ -2300,9 +2259,7 @@ const handleSaveClick = async (index) => {
       if (searchTerm.trim() !== "") {
         setIsSearching(true);
         // Reset pagination and fetch with search term
-        setPendingPage(1);
-        setHistoryPage(1);
-        setDirectEnquiryPage(1);
+        setCurrentPage(1);
 
         // Reset hasMore flags for search
         setHasMorePending(true);
@@ -2315,13 +2272,13 @@ const handleSaveClick = async (index) => {
         const performSearch = async () => {
           switch (activeTab) {
             case "pending":
-              await fetchPendingData(1, searchTerm, false, dateFilters);
+              await fetchPendingData(1, searchTerm, dateFilters);
               break;
             case "history":
-              await fetchHistoryData(1, searchTerm, false, dateFilters);
+              await fetchHistoryData(1, searchTerm, dateFilters);
               break;
             case "directEnquiry":
-              await fetchDirectEnquiryData(1, searchTerm, false, dateFilters);
+              await fetchDirectEnquiryData(1, searchTerm, dateFilters);
               break;
           }
           setIsSearching(false);
@@ -2330,10 +2287,8 @@ const handleSaveClick = async (index) => {
         performSearch();
       } else if (isSearching) {
         // Clear search and reset to normal pagination
-        setIsSearching(false);
-        setPendingPage(1);
-        setHistoryPage(1);
-        setDirectEnquiryPage(1);
+        // Otherwise just reset pagination
+        setCurrentPage(1);
 
         // Reset hasMore flags
         setHasMorePending(true);
@@ -2346,13 +2301,13 @@ const handleSaveClick = async (index) => {
         const resetData = async () => {
           switch (activeTab) {
             case "pending":
-              await fetchPendingData(1, "", false, dateFilters);
+              await fetchPendingData(1, "", dateFilters);
               break;
             case "history":
-              await fetchHistoryData(1, "", false, dateFilters);
+              await fetchHistoryData(1, "", dateFilters);
               break;
             case "directEnquiry":
-              await fetchDirectEnquiryData(1, "", false, dateFilters);
+              await fetchDirectEnquiryData(1, "", dateFilters);
               break;
           }
         };
@@ -2438,10 +2393,7 @@ const handleSaveClick = async (index) => {
 
   // Reset pagination when tab changes
   useEffect(() => {
-    // Reset all pagination when active tab changes
-    setPendingPage(1);
-    setHistoryPage(1);
-    setDirectEnquiryPage(1);
+    setCurrentPage(1);
     setHasMorePending(true);
     setHasMoreHistory(true);
     setHasMoreDirectEnquiry(true);
@@ -2467,10 +2419,7 @@ const handleSaveClick = async (index) => {
       enquiryNoFilter.length > 0 ||
       currentStageFilter.length > 0
     ) {
-      // Reset pagination when filters are applied
-      setPendingPage(1);
-      setHistoryPage(1);
-      setDirectEnquiryPage(1);
+      setCurrentPage(1);
       setHasMorePending(true);
       setHasMoreHistory(true);
       setHasMoreDirectEnquiry(true);
@@ -2643,25 +2592,22 @@ const handleSaveClick = async (index) => {
       switch (activeTab) {
         case "pending":
           await fetchPendingData(
-            pendingPage,
+            currentPage,
             searchTerm,
-            pendingPage > 1,
             dateFilters
           );
           break;
         case "history":
           await fetchHistoryData(
-            historyPage,
+            currentPage,
             searchTerm,
-            historyPage > 1,
             dateFilters
           );
           break;
         case "directEnquiry":
           await fetchDirectEnquiryData(
-            directEnquiryPage,
+            currentPage,
             searchTerm,
-            directEnquiryPage > 1,
             dateFilters
           );
           break;
@@ -2674,9 +2620,7 @@ const handleSaveClick = async (index) => {
     fetchData();
   }, [
     activeTab,
-    pendingPage,
-    historyPage,
-    directEnquiryPage,
+    currentPage,
     callingDaysFilter,
     scNameFilter,
   ]);
@@ -3236,10 +3180,20 @@ const handleSaveClick = async (index) => {
   const filteredHistory = applyFilters(historyData || [], "history");
 
   // ─── Pagination ───────────────────────────────────────────────────────────
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => { setCurrentPage(1); }, [activeTab, searchTerm, callingDaysFilter, enquiryNoFilter, currentStageFilter]);
+
+  useEffect(() => {
+    const dateFilters = getDateFiltersFromCallingDays();
+    if (activeTab === "pending") {
+      fetchPendingData(currentPage, searchTerm, dateFilters);
+    } else if (activeTab === "history") {
+      fetchHistoryData(currentPage, searchTerm, dateFilters);
+    } else if (activeTab === "directEnquiry") {
+      fetchDirectEnquiryData(currentPage, searchTerm, dateFilters);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsPerPage, currentPage]);
 
   const rawCurrentData = activeTab === "pending" ? filteredPending : filteredHistory;
   const currentData = [...rawCurrentData].sort((a, b) => {
@@ -3248,7 +3202,9 @@ const handleSaveClick = async (index) => {
     const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: "base" });
     return activeTab === "history" ? -cmp : cmp;
   });
-  const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage));
+
+  const totalResults = currentData.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / itemsPerPage));
   const paginatedData = currentData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
 
@@ -3511,9 +3467,10 @@ const handleSaveClick = async (index) => {
             currentPage={currentPage}
             totalPages={totalPages}
             itemsPerPage={itemsPerPage}
+            itemsPerPageOptions={[100, 200, 500]}
             onPageChange={setCurrentPage}
             onItemsPerPageChange={(val) => { setItemsPerPage(val); setCurrentPage(1); }}
-            totalResults={currentData.length}
+            totalResults={totalResults}
             minWidth="min-w-[1200px]"
           />
         )}

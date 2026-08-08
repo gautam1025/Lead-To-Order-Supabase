@@ -42,6 +42,10 @@ function CallTracker() {
     getUsernamesToFilter = () => []
   } = authContext;
   const [searchTerm, setSearchTerm] = useState("");
+  // Declared here (rather than near the pagination UI further down) because
+  // fetchFollowUpData's useCallback below depends on itemsPerPage.
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(200);
   const [activeTab, setActiveTabState] = useState(() => {
     return localStorage.getItem("callTrackerActiveTab") || "pending";
   });
@@ -75,11 +79,8 @@ function CallTracker() {
   const [allCompanyNames, setAllCompanyNames] = useState([]); // State for all company names for filter
 
   // Fixed pagination state management
-  const [pendingPage, setPendingPage] = useState(1);
-  const [historyPage, setHistoryPage] = useState(1);
   const [hasMorePending, setHasMorePending] = useState(true);
   const [hasMoreHistory, setHasMoreHistory] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [searchTimeout, setSearchTimeout] = useState(null);
 
   const [editingRowId, setEditingRowId] = useState(null);
@@ -741,39 +742,40 @@ function CallTracker() {
   // Replace the existing fetchFollowUpData function with this updated version:
 
   const fetchFollowUpData = useCallback(
-    async (page = 1, isLoadMore = false, searchTerm = "") => {
+    async (page = 1, searchTerm = "") => {
       try {
-        if (isLoadMore) {
-          setIsLoadingMore(true);
-        } else {
-          setIsLoading(true);
-        }
+        setIsLoading(true);
 
-        const itemsPerPage = 50;
+        // itemsPerPage here is the UI's page-size toggle state (declared
+        // further down in the component, added to this callback's deps
+        // below) so switching the toggle actually fetches that many rows.
         const from = (page - 1) * itemsPerPage;
         const to = from + itemsPerPage - 1;
 
         if (activeTab === "pending") {
-          // Fetch chunked data for call_tracker_for_leads to find latest per lead
+          // Fetch chunked data for call_tracker_for_leads to find latest per lead.
+          // Chunks of 500 -- a single unpaginated select() is silently capped
+          // at 1000 rows by PostgREST, which would otherwise lose data once
+          // this table grows past that.
           let allTrackerRecords = [];
           let currentFromTracker = 0;
           let fetchMoreTracker = true;
-          
+
           while (fetchMoreTracker) {
               const { data, error } = await supabase
                 .from("call_tracker_for_leads")
                 .select("*")
                 .order("created_at", { ascending: false })
-                .range(currentFromTracker, currentFromTracker + 999);
-              
+                .range(currentFromTracker, currentFromTracker + 499);
+
               if (error) {
                  console.error("Error fetching tracker records:", error);
                  break;
               }
               if (data && data.length > 0) {
                  allTrackerRecords = [...allTrackerRecords, ...data];
-                 currentFromTracker += 1000;
-                 if (data.length < 1000) fetchMoreTracker = false;
+                 currentFromTracker += 500;
+                 if (data.length < 500) fetchMoreTracker = false;
               } else {
                  fetchMoreTracker = false;
               }
@@ -788,30 +790,47 @@ function CallTracker() {
 
           const existingLeadIds = Array.from(latestTrackerPerLead.keys());
 
-          // Group 1 Query: leads where planned_at IS NOT NULL
-          let group1Query = supabase
-            .from("leads")
-            .select("*")
-            .not("planned_at", "is", null);
+          // Group 1: leads where planned_at IS NOT NULL, chunked in 500s for
+          // the same reason as above.
+          let g1DataRaw = [];
+          let currentFromG1 = 0;
+          let fetchMoreG1 = true;
 
-          if (searchTerm) {
-            group1Query = group1Query.or(
-              `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
-            );
+          while (fetchMoreG1) {
+            let group1Query = supabase
+              .from("leads")
+              .select("*")
+              .not("planned_at", "is", null)
+              .range(currentFromG1, currentFromG1 + 499);
+
+            if (searchTerm) {
+              group1Query = group1Query.or(
+                `company_name.ilike.%${searchTerm}%,lead_no.ilike.%${searchTerm}%,person_name.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,lead_source.ilike.%${searchTerm}%,location.ilike.%${searchTerm}%,additional_notes.ilike.%${searchTerm}%`
+              );
+            }
+
+            if (!isAdmin() && currentUser && currentUser.username) {
+              const usernamesToFilter = getUsernamesToFilter();
+              group1Query = group1Query.in("sc_name", usernamesToFilter);
+            }
+
+            if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
+              group1Query = group1Query.in("sc_name", scNameFilter);
+            }
+
+            const { data, error: g1Err } = await group1Query;
+            if (g1Err) {
+              console.error("Error fetching group 1 leads:", g1Err);
+              break;
+            }
+            if (data && data.length > 0) {
+              g1DataRaw = [...g1DataRaw, ...data];
+              currentFromG1 += 500;
+              if (data.length < 500) fetchMoreG1 = false;
+            } else {
+              fetchMoreG1 = false;
+            }
           }
-
-          if (!isAdmin() && currentUser && currentUser.username) {
-            const usernamesToFilter = getUsernamesToFilter();
-            group1Query = group1Query.in("sc_name", usernamesToFilter);
-          }
-
-          if (isAdmin() && scNameFilter && scNameFilter.length > 0) {
-            group1Query = group1Query.in("sc_name", scNameFilter);
-          }
-
-          // Execute Group 1 Query
-          let { data: g1DataRaw, error: g1Err } = await group1Query;
-          if (g1Err) console.error("Error fetching group 1 leads:", g1Err);
 
           // Filter out existingLeadIds in JS to avoid URL length limits
           const existingIdsSet = new Set(existingLeadIds);
@@ -992,32 +1011,25 @@ function CallTracker() {
 
           historyQuery = historyQuery.order("created_at", { ascending: false });
 
+          // Fetch all matching rows in chunks of 500 to bypass 1000 limit
           let allData = [];
           let currentFrom = 0;
-          const chunkSize = 500;
           let fetchMore = true;
-          let totalRecordsCount = 0;
-
           while (fetchMore) {
-            const { data, error, count } = await historyQuery.range(currentFrom, currentFrom + chunkSize - 1);
+            const { data, error } = await historyQuery.range(currentFrom, currentFrom + 499);
             if (error) throw error;
-            if (count !== null) totalRecordsCount = count;
-            
             if (data && data.length > 0) {
               allData = [...allData, ...data];
-              currentFrom += chunkSize;
-              if (data.length < chunkSize) fetchMore = false;
+              currentFrom += 500;
+              if (data.length < 500) fetchMore = false;
             } else {
               fetchMore = false;
             }
           }
-          
           const data = allData;
-          const count = totalRecordsCount;
+          const count = allData.length;
 
-          if (!isLoadMore) {
-            setFilteredCount(count || 0);
-          }
+          setFilteredCount(count || 0);
 
           // Fetch parent lead details by lead_id
           const leadIds = [...new Set((data || []).map((item) => item.lead_id).filter(Boolean))];
@@ -1132,18 +1144,12 @@ function CallTracker() {
             };
           });
 
-          if (isLoadMore) {
-            setHistoryFollowUps((prev) => [...prev, ...filteredHistory]);
-          } else {
-            setHistoryFollowUps(filteredHistory);
-          }
+          setHistoryFollowUps(filteredHistory);
 
-          const totalCount = count || 0;
-          const currentDataLength = isLoadMore
-            ? historyFollowUps.length + filteredHistory.length
-            : filteredHistory.length;
-
-          setHasMoreHistory(currentDataLength < totalCount);
+          const currentDataLength = filteredHistory.length;
+          setHasMoreHistory(
+            currentDataLength > 0 && from + currentDataLength < (count || 0)
+          );
         }
       } catch (error) {
         console.error("Error fetching follow-up data:", error);
@@ -1154,7 +1160,7 @@ function CallTracker() {
         setIsLoadingMore(false);
       }
     },
-    [currentUser, isAdmin, activeTab, dateFilter, startDate, endDate, scNameFilter, companyFilter, filterType]
+    [currentUser, isAdmin, activeTab, dateFilter, startDate, endDate, scNameFilter, companyFilter, filterType, itemsPerPage]
   );
 
   // Remove or comment out these filter functions since filtering now happens at database level:
@@ -1171,27 +1177,6 @@ function CallTracker() {
   // Change all instances of `filteredPendingFollowUps` to `pendingFollowUps`
   // Change all instances of `filteredHistoryFollowUps` to `historyFollowUps`
 
-  // Update the loadMoreData function to pass the current page correctly:
-  const loadMoreData = useCallback(() => {
-    if (isLoadingMore) return;
-
-    if (activeTab === "pending" && hasMorePending) {
-      fetchFollowUpData(pendingPage + 1, true, searchTerm);
-      setPendingPage((prev) => prev + 1);
-    } else if (activeTab === "history" && hasMoreHistory) {
-      fetchFollowUpData(historyPage + 1, true, searchTerm);
-      setHistoryPage((prev) => prev + 1);
-    }
-  }, [
-    activeTab,
-    isLoadingMore,
-    hasMorePending,
-    hasMoreHistory,
-    pendingPage,
-    historyPage,
-    searchTerm,
-    fetchFollowUpData,
-  ]);
 
   useEffect(() => {
     if (activeTab === "history") {
@@ -1246,47 +1231,13 @@ function CallTracker() {
   }, []);
 
   useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, dateFilter, companyFilter, scNameFilter, filterType, currentUser]);
 
-    setPendingPage(1);
-    setHistoryPage(1);
-    setHasMorePending(true);
-    setHasMoreHistory(true);
-    fetchFollowUpData(1, false, searchTerm);
-  }, [activeTab, dateFilter, companyFilter, scNameFilter, filterType, currentUser, fetchFollowUpData]);
-
-  // Fixed scroll event listener for infinite scroll
   useEffect(() => {
-    const handleScroll = () => {
-      if (isBottom() && !isLoadingMore && !isLoading) {
-        if (
-          (activeTab === "pending" && hasMorePending) ||
-          (activeTab === "history" && hasMoreHistory)
-        ) {
-          loadMoreData();
-        }
-      }
-    };
+    fetchFollowUpData(currentPage, searchTerm);
+  }, [currentPage, itemsPerPage, activeTab, dateFilter, companyFilter, scNameFilter, filterType, currentUser, fetchFollowUpData]);
 
-    window.addEventListener("scroll", handleScroll, { passive: true });
-    return () => window.removeEventListener("scroll", handleScroll);
-  }, [
-    isLoadingMore,
-    isLoading,
-    activeTab,
-    hasMorePending,
-    hasMoreHistory,
-    loadMoreData,
-  ]);
-
-  // Reset pagination when changing tabs
-  useEffect(() => {
-
-    setPendingPage(1);
-    setHistoryPage(1);
-    setHasMorePending(true);
-    setHasMoreHistory(true);
-    fetchFollowUpData(1, false, searchTerm);
-  }, [activeTab, currentUser]);
 
   // Debounced search function
   useEffect(() => {
@@ -1295,12 +1246,8 @@ function CallTracker() {
     }
 
     const timeout = setTimeout(() => {
-
-      setPendingPage(1);
-      setHistoryPage(1);
-      setHasMorePending(true);
-      setHasMoreHistory(true);
-      fetchFollowUpData(1, false, searchTerm);
+      setCurrentPage(1);
+      fetchFollowUpData(1, searchTerm);
     }, 500);
 
     setSearchTimeout(timeout);
@@ -2775,23 +2722,35 @@ function CallTracker() {
     );
   };
 
-  // ─── Pagination ───────────────────────────────────────────────────────────
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemsPerPage, setItemsPerPage] = useState(50);
+  // ─── Pagination (state declared near the top of the component, above) ─────
 
-  const rawData = activeTab === "pending" ? filteredPendingFollowUps : filteredHistoryFollowUps;
+  const rawData = activeTab === "pending" ? filteredPendingFollowUps : historyFollowUps;
   const currentData = [...rawData].sort((a, b) => {
     const valA = String(a.leadId || a.lead_no || a.leadNo || "").trim();
     const valB = String(b.leadId || b.lead_no || b.leadNo || "").trim();
     const cmp = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: "base" });
     return activeTab === "history" ? -cmp : cmp;
   });
-  const totalPages = Math.max(1, Math.ceil(currentData.length / itemsPerPage));
+
+  const totalResults = currentData.length;
+  const totalPages = Math.max(1, Math.ceil(totalResults / itemsPerPage));
   const paginatedData = currentData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   useEffect(() => {
     setCurrentPage(1);
   }, [activeTab, searchTerm, companyFilter, personFilter, phoneFilter, dateFilter, filterType]);
+
+  // History's server fetch batch size now matches itemsPerPage, so changing
+  // the page-size toggle needs a re-fetch to actually pull that many rows.
+  // Pending isn't affected -- it already loads its full matching set upfront
+  // and paginates that client-side.
+  useEffect(() => {
+    if (activeTab !== "history") return;
+    setHistoryPage(1);
+    setHasMoreHistory(true);
+    fetchFollowUpData(1, false, searchTerm);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [itemsPerPage]);
 
   // ─── Header builder ───────────────────────────────────────────────────────
   const getHeaders = () => {
@@ -2856,9 +2815,10 @@ function CallTracker() {
             currentPage={currentPage}
             totalPages={totalPages}
             itemsPerPage={itemsPerPage}
+            itemsPerPageOptions={[100, 200, 500]}
             onPageChange={setCurrentPage}
             onItemsPerPageChange={(val) => { setItemsPerPage(val); setCurrentPage(1); }}
-            totalResults={currentData.length}
+            totalResults={totalResults}
           />
         )}
       </div>

@@ -3,6 +3,7 @@ import { HomeIcon, UsersIcon, PhoneCallIcon, BarChartIcon, FileTextIcon, ShieldI
 import { useContext, useState, useEffect } from "react"
 import { AuthContext } from "../App"
 import supabase from "../utils/supabase"
+import { fetchClosedIdSet, countOpenRows } from "../utils/pendingStatus"
 import logoSvg from "../assests/logo.jpeg"
 
 function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
@@ -83,53 +84,24 @@ function Sidebar({ mobileMenuOpen, setMobileMenuOpen }) {
                     console.error("Error fetching call tracker count:", e);
                 }
 
-                // Enquiry Tracker Pending count
+                // Enquiry Tracker Pending count -- "pending" means no tracker
+                // row has ever recorded a completed order status (yes/no),
+                // matching the Enquiry Tracker page's Pending tab definition.
+                // Paginates in chunks of 500 instead of a single unpaginated
+                // fetch (which PostgREST silently caps at 1000 rows).
                 let enquiryCount = 0;
                 try {
-                    // 1. Pending leads count from call_tracker_for_leads
-                    const { data: existingTrackerLeads } = await supabase
-                        .from("enquiry_tracker_for_leads")
-                        .select("lead_id")
-                        .not("lead_id", "is", null);
-
-                    const existingLeadIds = Array.from(
-                        new Set((existingTrackerLeads || []).map((r) => r.lead_id).filter(Boolean))
-                    );
-
-                    let enquiryLeadsQuery = supabase
-                        .from("call_tracker_for_leads")
-                        .select("*", { count: "exact", head: true })
-                        .not("planned_at", "is", null);
-
-                    if (existingLeadIds.length > 0) {
-                        enquiryLeadsQuery = enquiryLeadsQuery.not("lead_id", "in", `(${existingLeadIds.join(",")})`);
-                    }
-
-                    // 2. Pending direct enquiries count from enquiries
-                    const { data: existingTrackerEnquiries } = await supabase
-                        .from("enquiry_tracker")
-                        .select("enquiry_id")
-                        .not("enquiry_id", "is", null);
-
-                    const existingEnquiryIds = Array.from(
-                        new Set((existingTrackerEnquiries || []).map((r) => r.enquiry_id).filter(Boolean))
-                    );
-
-                    let enquiryDirectQuery = supabase
-                        .from("enquiries")
-                        .select("*", { count: "exact", head: true })
-                        .not("planned_at", "is", null);
-
-                    if (existingEnquiryIds.length > 0) {
-                        enquiryDirectQuery = enquiryDirectQuery.not("id", "in", `(${existingEnquiryIds.join(",")})`);
-                    }
-
-                    const [enquiryLeadsRes, enquiryDirectRes] = await Promise.all([
-                        safeFetch(enquiryLeadsQuery),
-                        safeFetch(enquiryDirectQuery)
+                    const [closedLeadIds, closedEnquiryIds] = await Promise.all([
+                        fetchClosedIdSet("enquiry_tracker_for_leads", "lead_id"),
+                        fetchClosedIdSet("enquiry_tracker", "enquiry_id"),
                     ]);
 
-                    enquiryCount = (enquiryLeadsRes?.count || 0) + (enquiryDirectRes?.count || 0);
+                    const [pendingLeadsCount, pendingDirectCount] = await Promise.all([
+                        countOpenRows("call_tracker_for_leads", "lead_id", closedLeadIds, true),
+                        countOpenRows("enquiries", "id", closedEnquiryIds, false),
+                    ]);
+
+                    enquiryCount = pendingLeadsCount + pendingDirectCount;
                 } catch (e) {
                     console.error("Error fetching enquiry tracker count:", e);
                 }
