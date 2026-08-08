@@ -8,12 +8,13 @@ import {
   ArrowRightIcon,
   BuildingIcon,
 } from "../../components/Icons";
+import { useQueryClient } from "@tanstack/react-query";
 import { AuthContext } from "../../App";
 import DirectEnquiryForm from "./DirectEnquiryForm";
 import supabase from "../../utils/supabase";
-import { fetchClosedIdSet } from "../../utils/pendingStatus";
 import DataTable from "../../components/DataTable";
 import EnquiryTrackerFilter from "../../components/enquiry-tracker/EnquiryTrackerFilter";
+import { usePendingEnquiries, useHistoryEnquiries, CURRENT_STAGE_OPTIONS } from "./queries";
 
 // Animation classes
 const slideIn = "animate-in slide-in-from-right duration-300";
@@ -214,57 +215,6 @@ async function executePromisesInBatches(promiseFns, batchSize = 5) {
     results.push(...batchResults);
   }
   return results;
-}
-
-// Pages through candidate rows (planned_at not null) in chunks of 500,
-// filtering out already-closed ids on the client instead of sending a
-// `NOT IN (...)` filter with thousands of UUIDs -- which both risks exceeding
-// PostgREST's URL length limit and blocks rendering until it resolves.
-// Stops as soon as enough open rows are collected for the requested page, or
-// the source table is exhausted.
-async function collectOpenRows(table, idColumn, closedIds, applyFilters, dedupeById = false) {
-  const collected = [];
-  const seenIds = new Set();
-  
-  let baseQuery = supabase
-    .from(table)
-    .select("*", { count: 'exact', head: true })
-    .not("planned_at", "is", null);
-  baseQuery = applyFilters(baseQuery);
-  
-  const { count, error: countError } = await baseQuery;
-  if (countError || count === null || count === 0) {
-    return { collected, exhausted: true };
-  }
-
-  const promises = [];
-  for (let from = 0; from < count; from += TRACKER_CHUNK_SIZE) {
-    let q = supabase
-      .from(table)
-      .select("*")
-      .not("planned_at", "is", null)
-      .order("created_at", { ascending: false })
-      .range(from, from + TRACKER_CHUNK_SIZE - 1);
-    q = applyFilters(q);
-    promises.push(() => q);
-  }
-
-  const results = await executePromisesInBatches(promises, 5);
-  for (const { data, error } of results) {
-    if (error) {
-      console.error(`Error fetching ${table} candidates:`, error.message);
-      continue;
-    }
-    for (const row of (data || [])) {
-      if (closedIds.has(row[idColumn])) continue;
-      if (dedupeById) {
-        if (seenIds.has(row[idColumn])) continue;
-        seenIds.add(row[idColumn]);
-      }
-      collected.push(row);
-    }
-  }
-  return { collected, exhausted: true };
 }
 
 async function fetchAllRows(baseQueryFn) {
@@ -1469,478 +1419,140 @@ const handleSaveClick = async (index) => {
     scNameFilter,
   ]);
 
-  // 1. Update the fetchPendingData function to pull from call_tracker_for_leads & enquiries
-  const fetchPendingData = async (
-    page = 1,
-    searchTerm = "",
-    dateFilters = {}
-  ) => {
-    setIsLoading(true);
+  // ─── TanStack Query: Pending/History data ──────────────────────────────────
+  // Both tabs now query enquiry_pending_view / enquiry_history_view (Postgres
+  // views that pre-compute open/closed status via a join -- see
+  // DB/create_enquiry_tracker_views.sql). Real .range()-based pagination and
+  // every filter is a WHERE clause evaluated against the whole dataset, not
+  // a client-side re-scan of whatever happened to already be loaded.
+  const queryClient = useQueryClient();
+  const usernamesToFilter = isAdmin() ? [] : getUsernamesToFilter();
 
-    try {
-      // Fetch batch size matches the UI's page-size toggle (itemsPerPage state
-      // below) so switching to e.g. 200 records/page doesn't display a
-      // truncated batch that was fetched before the toggle changed.
-      const fetchBatchSize = itemsPerPage;
-      const targetCount = page * fetchBatchSize;
+  const pendingQuery = usePendingEnquiries({
+    page: currentPage,
+    itemsPerPage,
+    searchTerm,
+    currentStageFilter,
+    enquiryNoFilter,
+    callingDaysFilter,
+    scNameFilter,
+    isAdmin: isAdmin(),
+    usernamesToFilter,
+    enabled: activeTab === "pending",
+  });
 
-      // Closed-id sets from a small, filtered query (chunks of 500) instead
-      // of scanning the entire (much larger) tracker history.
-      const [closedLeadIds, closedEnquiryIds] = await Promise.all([
-        fetchClosedIdSet("enquiry_tracker_for_leads", "lead_id"),
-        fetchClosedIdSet("enquiry_tracker", "enquiry_id"),
-      ]);
+  const historyQuery = useHistoryEnquiries({
+    page: currentPage,
+    itemsPerPage,
+    searchTerm,
+    currentStageFilter,
+    enquiryNoFilter,
+    callingDaysFilter,
+    scNameFilter,
+    isAdmin: isAdmin(),
+    usernamesToFilter,
+    enabled: activeTab === "history",
+  });
 
-      // Candidates: page through both sources concurrently in chunks of 500,
-      // filtering out closed ids client-side, stopping once enough open rows
-      // exist for the requested page (or the table is exhausted).
-      const [
-        { collected: dedupedCallTracker, exhausted: leadsExhausted },
-        { collected: enquiriesData, exhausted: enquiriesExhausted },
-      ] = await Promise.all([
-        collectOpenRows(
-          "call_tracker_for_leads",
-          "lead_id",
-          closedLeadIds,
-          (query) => {
-            let q = query;
-            if (searchTerm) {
-              q = q.or(
-                `what_did_customer_say.ilike.%${searchTerm}%,enquiry_received_status.ilike.%${searchTerm}%,enquiry_for_state.ilike.%${searchTerm}%,project_name.ilike.%${searchTerm}%,enquiry_type.ilike.%${searchTerm}%,sc_name.ilike.%${searchTerm}%`
-              );
-            }
-            if (!isAdmin() && currentUser && currentUser.username) {
-              q = q.in("sc_name", getUsernamesToFilter());
-            }
-            if (isAdmin() && scNameFilter !== "all") {
-              q = q.eq("sc_name", scNameFilter);
-            }
-            return q;
-          },
-          true // dedupe by lead_id (a lead can have multiple call logs)
-        ),
-        collectOpenRows(
-          "enquiries",
-          "id",
-          closedEnquiryIds,
-          (query) => {
-            let q = query;
-            if (searchTerm) {
-              q = q.or(
-                `enquiry_no.ilike.%${searchTerm}%,company_name.ilike.%${searchTerm}%,phone_number.ilike.%${searchTerm}%,sales_person_name.ilike.%${searchTerm}%`
-              );
-            }
-            if (!isAdmin() && currentUser && currentUser.username) {
-              q = q.in("sales_coordinator_name", getUsernamesToFilter());
-            }
-            if (isAdmin() && scNameFilter !== "all") {
-              q = q.eq("sales_coordinator_name", scNameFilter);
-            }
-            return q;
-          }
-        ),
-      ]);
-
-      // Fetch parent leads details for dedupedCallTracker
-      const parentLeadIds = dedupedCallTracker.map((item) => item.lead_id).filter(Boolean);
-      const leadsMap = {};
-      if (parentLeadIds.length > 0) {
-        const { data: leadsData } = await supabase
-          .from("leads")
-          .select("*")
-          .in("id", parentLeadIds);
-
-        (leadsData || []).forEach((lead) => {
-          leadsMap[lead.id] = lead;
-        });
-      }
-
-      // Latest tracker log, fetched only for the open rows we're actually
-      // about to display -- not the whole tracker table.
-      const latestLeadLogMap = {};
-      if (parentLeadIds.length > 0) {
-        const { data: leadLogs } = await supabase
-          .from("enquiry_tracker_for_leads")
-          .select("*")
-          .in("lead_id", parentLeadIds)
-          .order("created_at", { ascending: false });
-        (leadLogs || []).forEach((log) => {
-          if (log.lead_id && !latestLeadLogMap[log.lead_id]) latestLeadLogMap[log.lead_id] = log;
-        });
-      }
-
-      const openEnquiryIds = enquiriesData.map((item) => item.id).filter(Boolean);
-      const latestEnquiryLogMap = {};
-      if (openEnquiryIds.length > 0) {
-        const { data: enquiryLogs } = await supabase
-          .from("enquiry_tracker")
-          .select("*")
-          .in("enquiry_id", openEnquiryIds)
-          .order("created_at", { ascending: false });
-        (enquiryLogs || []).forEach((log) => {
-          if (log.enquiry_id && !latestEnquiryLogMap[log.enquiry_id]) latestEnquiryLogMap[log.enquiry_id] = log;
-        });
-      }
-
-      const transformedCallTracker = dedupedCallTracker.map((item) => {
-        const parentLead = leadsMap[item.lead_id] || {};
-        const latestLog = latestLeadLogMap[item.lead_id] || {};
-        return {
-          id: item.id,
-          dbId: item.id,
-          leadIdVal: item.lead_id,
-          tableSource: "call_tracker_for_leads",
-          sourceType: "lead",
-          timestamp: formatDateToDDMMYYYY(latestLog.created_at || item.created_at) || "",
-          leadNo: parentLead.lead_no || "",
-          lead_no: parentLead.lead_no || "",
-          leadReceiverName: parentLead.lead_receiver_name || "",
-          leadSource: parentLead.lead_source || "",
-          phoneNo: parentLead.phone_number || "",
-          salespersonName: parentLead.person_name || parentLead.Person_Name || parentLead.client_name || parentLead.salesperson_name || item.sales_person_name || item.person_name || "",
-          companyName: parentLead.company_name || item.company_name || "",
-          currentStage: latestLog.current_stage || "Enquiry Tracker",
-          callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.created_at ? formatDateToDDMMYYYY(item.created_at) : ""),
-          priority: determinePriority(parentLead.lead_source || ""),
-          assignedTo: item.sc_name || parentLead.salesperson_name || "",
-          nextCallDate: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
-          nextCallTime: latestLog.next_call_time || item.next_call_time || "",
-          customerSay: latestLog.what_did_customer_say || item.what_did_customer_say || "",
-          enquiryStatus: latestLog.enquiry_status || item.enquiry_received_status || "",
-          enquiryReceivedStatus: item.enquiry_received_status || "",
-          enquiryReceivedDate: item.enquiry_received_date
-            ? formatDateToDDMMYYYY(item.enquiry_received_date)
-            : "",
-          enquiryForState: item.enquiry_for_state || parentLead.state || "",
-          projectName: item.project_name || parentLead.nob || "",
-          enquiryType: item.enquiry_type || parentLead.sales_type || "",
-          enquiryApproach: item.enquiry_approach || "",
-          projectApproximateValue: item.project_approximate_value || "",
-          nextAction: item.next_action || "",
-          plannedAt: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
-        };
-      });
-
-      const transformedEnquiries = enquiriesData.map((item) => {
-        const latestLog = latestEnquiryLogMap[item.id] || {};
-        return {
-          id: item.id,
-          dbId: item.id,
-          enquiryIdVal: item.id,
-          tableSource: "enquiries",
-          sourceType: "enquiry",
-          timestamp: formatDateToDDMMYYYY(latestLog.created_at || item.created_at || item.enquiry_date) || "",
-          leadNo: item.enquiry_no || "",
-          lead_no: item.enquiry_no || "",
-          leadReceiverName: item.enquiry_receiver_name || "",
-          leadSource: item.lead_source || "",
-          phoneNo: item.phone_number || "",
-          salespersonName: item.sales_person_name || item.person_name || item.client_name || "",
-          companyName: item.company_name || "",
-          currentStage: latestLog.current_stage || "Enquiry Tracker",
-          callingDate: latestLog.created_at ? formatDateToDDMMYYYY(latestLog.created_at) : (item.enquiry_date ? formatDateToDDMMYYYY(item.enquiry_date) : ""),
-          priority: determinePriority(item.lead_source || ""),
-          assignedTo: item.sales_coordinator_name || "",
-          nextCallDate: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
-          nextCallTime: latestLog.next_call_time || "",
-          customerSay: latestLog.what_did_customer_say || latestLog.customer_feedback || "",
-          enquiryStatus: latestLog.enquiry_status || "Direct Enquiry",
-          enquiryReceivedStatus: "Direct Enquiry",
-          enquiryReceivedDate: formatDateToDDMMYYYY(item.enquiry_date) || "",
-          enquiryForState: item.enquiry_for_state || "",
-          projectName: item.project_name || "",
-          enquiryType: item.sales_type || "",
-          enquiryApproach: item.enquiry_approach || "",
-          plannedAt: latestLog.next_call_date ? formatDateToDDMMYYYY(latestLog.next_call_date) : (item.planned_at ? formatDateToDDMMYYYY(item.planned_at) : ""),
-        };
-      });
-
-      const allCombined = [...transformedCallTracker, ...transformedEnquiries];
-
-      const from = (page - 1) * fetchBatchSize;
-      const to = from + fetchBatchSize - 1;
-
-      const paginated = allCombined.slice(from, to + 1).map((item, index) => ({
-        ...item,
-        serialNo: from + index + 1,
-      }));
-
-      setPendingData(paginated);
-
-      // We stopped early once enough open rows existed for this page, so we
-      // don't know an exact total -- but if either source might still have
-      // unscanned rows, or we already collected more than this page needs,
-      // there's more to load.
-      setHasMorePending(allCombined.length > to + 1 || !leadsExhausted || !enquiriesExhausted);
-    } catch (err) {
-      console.error("Error fetching pending data for EnquiryTracker:", err);
-    } finally {
-      setIsLoading(false);
-    }
+  const mapPendingRow = (row) => {
+    const isEnquiry = row.source_type === "enquiry";
+    return {
+      id: row.record_id,
+      dbId: row.record_id,
+      leadIdVal: !isEnquiry ? row.record_id : undefined,
+      enquiryIdVal: isEnquiry ? row.record_id : undefined,
+      tableSource: isEnquiry ? "enquiries" : "call_tracker_for_leads",
+      sourceType: row.source_type,
+      timestamp: formatDateToDDMMYYYY(row.last_activity_at || row.created_at) || "",
+      leadId: row.display_no || "",
+      leadNo: row.display_no || "",
+      lead_no: row.display_no || "",
+      enquiryNo: row.display_no || "",
+      companyName: row.company_name || "",
+      phoneNumber: row.phone_number || "",
+      phoneNo: row.phone_number || "",
+      salespersonName: row.person_name || "",
+      leadSource: row.lead_source || "",
+      currentStage: row.current_stage || "",
+      callingDate: formatDateToDDMMYYYY(row.last_activity_at) || "",
+      customerFeedback: row.customer_feedback || "",
+      customerSay: row.customer_feedback || "",
+      nextCallDate: row.next_call_date ? formatDateToDDMMYYYY(row.next_call_date) : "",
+      nextCallTime: row.next_call_time || "",
+      enquiryStatus: row.enquiry_status || "",
+      assignedTo: row.assigned_to || "",
+      sc_name: row.assigned_to || "",
+      plannedAt: row.planned_at ? formatDateToDDMMYYYY(row.planned_at) : "",
+      itemQty: row.item_qty || "",
+      priority: determinePriority(row.lead_source || ""),
+    };
   };
 
-  const fetchHistoryData = async (
-    page = 1,
-    searchTerm = "",
-    dateFilters = {}
-  ) => {
-    setIsLoading(true);
-    // itemsPerPage here is the UI's page-size toggle state (declared further
-    // down in the component) so switching to e.g. 200 records/page actually
-    // slices that many rows instead of a hardcoded 50.
-    const from = (page - 1) * itemsPerPage;
-    const to = from + itemsPerPage - 1;
+  const mapHistoryRow = (row) => ({
+    id: row.record_id,
+    uuid: row.record_id,
+    sourceType: row.source_type,
+    Timestamp: formatDateToDDMMYYYY(row.created_at) || "",
+    timestamp: formatDateToDDMMYYYY(row.created_at) || "",
+    enquiryNo: row.display_no || "",
+    leadNo: row.display_no || "",
+    lead_no: row.display_no || "",
+    companyName: row.company_name || "",
+    Company_Name: row.company_name || "",
+    currentStage: row.current_stage || "",
+    callingDate: row.calling_days || formatDateToDDMMYYYY(row.created_at) || "",
+    quotationNumber: row.quotation_number || "",
+    valueWithTax: row.quotation_value_with_tax ?? "",
+    valueWithoutTax: row.quotation_value_without_tax ?? "",
+    quotationUpload: row.quotation_upload || "",
+    sendStatus: row.quotation_send_status || "",
+    orderStatus: row.order_status || "",
+    order_no: row.order_no || "",
+    poNumber: row.po_number || "",
+    po_number: row.po_number || "",
+    destination: row.destination || "",
+    paymentMode: row.payment_mode || "",
+    transportMode: row.transport_mode || "",
+    nextCallDate: row.next_call_date ? formatDateToDDMMYYYY(row.next_call_date) : "",
+    nextCallTime: row.next_call_time ? formatTimeTo12Hour(row.next_call_time) : "",
+    customerFeedback: row.customer_feedback || "",
+    enquiryStatus: row.enquiry_status || "",
+    acceptanceVia: row.acceptance_via || "",
+    acceptanceFile: row.acceptance_file_upload || "",
+    sc_name: row.assigned_to || "",
+    salespersonName: row.assigned_to || "",
+    calling_days: row.calling_days || "",
+    itemQty: row.item_qty || "",
+    priority: determinePriority(row.enquiry_status || ""),
+  });
 
-    try {
-      const buildTrackerQuery = (isCount = false) => {
-        let q = supabase.from("enquiry_tracker");
-        if (isCount) {
-          q = q.select("*", { count: 'exact', head: true });
-        } else {
-          q = q.select("*").order("created_at", { ascending: false });
-        }
-        if (dateFilters.today) {
-          const today = new Date().toISOString().split("T")[0];
-          const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-          q = q.gte("next_call_date", today).lt("next_call_date", tomorrow);
-        } else if (dateFilters.older) {
-          const today = new Date().toISOString().split("T")[0];
-          q = q.lt("next_call_date", today);
-        }
-        return q;
-      };
-
-      const buildLeadsTrackerQuery = (isCount = false) => {
-        let q = supabase.from("enquiry_tracker_for_leads");
-        if (isCount) {
-          q = q.select("*", { count: 'exact', head: true });
-        } else {
-          q = q.select("*").order("created_at", { ascending: false });
-        }
-        if (dateFilters.today) {
-          const today = new Date().toISOString().split("T")[0];
-          const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-          q = q.gte("next_call_date", today).lt("next_call_date", tomorrow);
-        } else if (dateFilters.older) {
-          const today = new Date().toISOString().split("T")[0];
-          q = q.lt("next_call_date", today);
-        }
-        return q;
-      };
-
-      const [trackerData, leadsTrackerData] = await Promise.all([
-        fetchAllRows(buildTrackerQuery),
-        fetchAllRows(buildLeadsTrackerQuery)
-      ]);
-
-      const trackerRows = (trackerData || []).map(item => ({ ...item, isLead: false }));
-      const leadsTrackerRows = (leadsTrackerData || []).map(item => ({ ...item, isLead: true }));
-
-      let allLogs = [...trackerRows, ...leadsTrackerRows];
-      allLogs.sort((a, b) => new Date(b.created_at || b.Timestamp || 0) - new Date(a.created_at || a.Timestamp || 0));
-
-      const leadIds = Array.from(new Set(allLogs.filter(i => i.isLead && i.lead_id).map(i => i.lead_id)));
-      const enqIds = Array.from(new Set(allLogs.filter(i => !i.isLead && i.enquiry_id).map(i => i.enquiry_id)));
-
-      let leadsMap = {};
-      let enqMap = {};
-
-      if (leadIds.length > 0) {
-        const promises = [];
-        for (let i = 0; i < leadIds.length; i += 200) {
-          promises.push(() =>
-            supabase.from("leads").select("*").in("id", leadIds.slice(i, i + 200))
-          );
-        }
-        const results = await executePromisesInBatches(promises, 5);
-        results.forEach(({ data }) => {
-          if (data) {
-            data.forEach((row) => {
-              leadsMap[row.id] = row;
-              if (row.lead_no) leadsMap[row.lead_no] = row;
-            });
-          }
-        });
-      }
-
-      if (enqIds.length > 0) {
-        const promises = [];
-        for (let i = 0; i < enqIds.length; i += 200) {
-          promises.push(() =>
-            supabase.from("enquiries").select("*").in("id", enqIds.slice(i, i + 200))
-          );
-        }
-        const results = await executePromisesInBatches(promises, 5);
-        results.forEach(({ data }) => {
-          if (data) {
-            data.forEach((row) => {
-              enqMap[row.id] = row;
-              if (row.enquiry_no) enqMap[row.enquiry_no] = row;
-            });
-          }
-        });
-      }
-
-      const transformedData = allLogs.map((item) => {
-        const mL = item.isLead ? (leadsMap[item.lead_id] || leadsMap[item.lead_no] || {}) : {};
-        const mE = !item.isLead ? (enqMap[item.enquiry_id] || enqMap[item.enquiry_no] || {}) : {};
-
-        const enqNo = mL.lead_no || mE.enquiry_no || item.enquiry_no || item["Enquiry No."] || "";
-        const companyName = mL.company_name || mL["Company_Name"] || mE.company_name || mE["company_name"] || item.company_name || "";
-        const phoneNo = mL.phone_number || mL["Phone_Number"] || mE.phone_number || mE["phone_number"] || item.phone_number || "";
-        const salespersonName = mL.salesperson_name || mL.sc_name || mE.sales_coordinator_name || mE.sales_person_name || item.sc_name || item.sales_coordinator_name || item["Sales Cordinator"] || "";
-        const leadSource = mL.lead_source || mE.lead_source || "";
-        const shippingAddress = mL.address || mE.shipping_address || "";
-        const gstNumber = mL.gst_number || mE.gst_number || "";
-        const enquiryReceiverName = mL.lead_receiver_name || mE.enquiry_receiver_name || "";
-        const enquiryAssignToProject = mL.salesperson_name || mE.sales_coordinator_name || mE.enquiry_assign_to_project || salespersonName || "";
-        const enquiryDate = formatDateToDDMMYYYY(mL.created_at || mL.enquiry_received_date || mE.created_at || mE.enquiry_date || item.created_at) || "";
-        const enquiryState = mL.state || mE.enquiry_for_state || mE.state || "";
-        const projectName = mL.nob || mE.project_name || "";
-        const salesType = mL.sales_type || mE.sales_type || "";
-        const enquiryApproach = mL.enquiry_approach || mE.enquiry_approach || "";
-        const callingDate = item.calling_days || mL.calling_days || mE.calling_days || "";
-        const totalQty = mL["Total Order Qty"] || mE["total_qty"] || "";
-        const itemQty = aggregateItemsForSummary(mL.id ? mL : mE, mL.id ? "Item_Name" : "item_name", mL.id ? "Quantity" : "quantity", mL.id ? "Item/qty" : "item_qty") || "";
-
-        return {
-          id: item.id,
-          uuid: item.id,
-          serialNo: 0, // Assigned during pagination
-          Timestamp: formatDateToDDMMYYYY(item.created_at || item.Timestamp) || "",
-          enquiryNo: enqNo,
-          leadNo: enqNo,
-          lead_no: enqNo,
-          companyName: companyName,
-          Company_Name: companyName,
-          phoneNo: phoneNo,
-          Phone_Number: phoneNo,
-          salespersonName: salespersonName,
-          salesperson_Name: salespersonName,
-          leadSource: leadSource,
-          Lead_Source: leadSource,
-          shippingAddress: shippingAddress,
-          gstNumber: gstNumber,
-          enquiryReceiverName: enquiryReceiverName,
-          enquiryAssignToProject: enquiryAssignToProject,
-          enquiryDate: enquiryDate,
-          enquiryState: enquiryState,
-          projectName: projectName,
-          salesType: salesType,
-          enquiryApproach: enquiryApproach,
-          callingDate: callingDate,
-          totalQty: totalQty,
-          itemQty: itemQty,
-          itemName1: mL["Item_Name1"] || mE["item_name1"] || "",
-          quantity1: mL["Quantity1"] || mE["quantity1"] || "",
-          itemName2: mL["Item_Name2"] || mE["item_name2"] || "",
-          quantity2: mL["Quantity2"] || mE["quantity2"] || "",
-          itemName3: mL["Item_Name3"] || mE["item_name3"] || "",
-          quantity3: mL["Quantity3"] || mE["quantity3"] || "",
-          itemName4: mL["Item_Name4"] || mE["item_name4"] || "",
-          quantity4: mL["Quantity4"] || mE["quantity4"] || "",
-          itemName5: mL["Item_Name5"] || mE["item_name5"] || "",
-          quantity5: mL["Quantity5"] || mE["quantity5"] || "",
-          enquiryStatus: item.enquiry_status || item["Enquiry Status"] || "Active",
-          customerFeedback: item.what_did_customer_say || item.customer_feedback || item["What Did Customer Say"] || "",
-          currentStage: item.current_stage || item["Current Stage"] || "",
-          sendQuotationNo: item.send_quotation_no || item["Send Quotation No."] || "",
-          quotationSharedBy: item.quotation_shared_by || item["Quotation Shared By"] || "",
-          quotationNumber: item.quotation_number || item["Quotation Number"] || "",
-          valueWithoutTax: item.quotation_value_without_tax || item["Quotation Value Without Tax"] || "",
-          valueWithTax: item.quotation_value_with_tax || item.amount_with_tax || item["Quotation Value With Tax"] || "",
-          quotationUpload: item.quotation_upload || item["Quotation Upload"] || item["Quotation Copy"] || mL.quotation_upload || mE.quotation_upload || "",
-          quotationRemarks: item.quotation_remarks || item["Quotation Remarks"] || "",
-          validatorName: item.quotation_validator_name || item["Quotation Validator Name"] || "",
-          sendStatus: item.quotation_send_status || item["Quotation Send Status"] || "",
-          validationRemark: item.quotation_validation_remark || item["Quotation Validation Remark"] || "",
-          faqVideo: item.send_faq_video || item["Send Faq Video"] || "",
-          productVideo: item.send_product_video || item["Send Product Video"] || "",
-          offerVideo: item.send_offer_video || item["Send Offer Video"] || "",
-          productCatalog: item.send_product_catalog || item["Send Product Catalog"] || "",
-          productImage: item.send_product_image || item["Send Product Image"] || "",
-          nextCallDate: formatDateToDDMMYYYY(item.next_call_date || item["Next Call Date"]) || "",
-          nextCallTime: formatTimeTo12Hour(item.next_call_time || item["Next Call Time"]) || "",
-          orderStatus: item.is_order_received_status || item["Is Order Received? Status"] || "",
-          acceptanceVia: item.acceptance_via || item["Acceptance Via"] || mL.acceptance_via || mE.acceptance_via || "",
-          paymentMode: item.payment_mode || item["Payment Mode"] || "",
-          paymentTerms: item.payment_terms_days || item["Payment Terms (In Days)"] || "",
-          transportMode: item.transport_mode || item["Transport Mode"] || "",
-          registrationFrom: item.conveyed_for_registration_form || item["CONVEYED FOR REGISTRATION FORM"] || "",
-          conveyedForRegistration: item.conveyed_for_registration_form || item["CONVEYED FOR REGISTRATION FORM"] || "",
-          offer: item.offer || item["Offer"] || "",
-          acceptanceFile: item.acceptance_file_upload || item["Acceptance File Upload"] || mL.acceptance_file_upload || mE.acceptance_file_upload || "",
-          orderRemark: item.remark || item["Remark"] || "",
-          apologyVideo: item.order_lost_apology_video || item["Order Lost Apology Video"] || "",
-          reasonStatus: item.if_no_reason_status || item["If No Then Get Relevant Reason Status"] || "",
-          reasonRemark: item.if_no_reason_remark || item["If No Then Get Relevant Reason Remark"] || "",
-          holdReason: item.customer_order_hold_reason_category || item["Customer Order Hold Reason Category"] || "",
-          holdingDate: formatDateToDDMMYYYY(item.holding_date || item["Holding Date"]) || "",
-          holdRemark: item.hold_remark || item["Hold Remark"] || "",
-          sales_coordinator: salespersonName,
-          followup_status: item.followup_status || item["Followup Status"] || "",
-          credit_days: mL.credit_days || mE.credit_days || item["Credit Days"] || "",
-          credit_limit: mL.credit_limit || mE.credit_limit || item["Credit Limit"] || "",
-          calling_days: item.calling_days || mL.calling_days || mE.calling_days || "",
-          order_no: item.order_no || item["Order No."] || "",
-          sc_name: salespersonName,
-          destination: item.destination || item["Destination"] || "",
-          po_number: item.po_number || item["PO Number"] || "",
-          poNumber: item.po_number || item["PO Number"] || "",
-          priority: determinePriority(leadSource || item.enquiry_status || ""),
-        };
-      });
-
-      let finalRows = transformedData;
-
-      if (!isAdmin() && currentUser && currentUser.username) {
-        const usernamesToFilter = getUsernamesToFilter();
-        finalRows = finalRows.filter((item) =>
-          usernamesToFilter.includes(item.salespersonName) ||
-          usernamesToFilter.includes(item.enquiryAssignToProject) ||
-          usernamesToFilter.includes(item.sc_name)
-        );
-      }
-
-      if (isAdmin() && scNameFilter !== "all") {
-        finalRows = finalRows.filter((item) =>
-          item.salespersonName === scNameFilter ||
-          item.enquiryAssignToProject === scNameFilter ||
-          item.sc_name === scNameFilter
-        );
-      }
-
-      if (searchTerm) {
-        const lowerSearch = searchTerm.toLowerCase();
-        finalRows = finalRows.filter((item) =>
-          String(item.enquiryNo || "").toLowerCase().includes(lowerSearch) ||
-          String(item.companyName || "").toLowerCase().includes(lowerSearch) ||
-          String(item.customerFeedback || "").toLowerCase().includes(lowerSearch) ||
-          String(item.currentStage || "").toLowerCase().includes(lowerSearch) ||
-          String(item.quotationNumber || "").toLowerCase().includes(lowerSearch) ||
-          String(item.orderStatus || "").toLowerCase().includes(lowerSearch) ||
-          String(item.order_no || "").toLowerCase().includes(lowerSearch)
-        );
-      }
-
-      const totalCount = finalRows.length;
-      const paginated = finalRows.slice(from, to + 1).map((item, index) => ({
-        ...item,
-        serialNo: from + index + 1,
-      }));
-
-      setHistoryData(paginated);
-
-      const hasMore = paginated.length === itemsPerPage && from + paginated.length < totalCount;
-      setHasMoreHistory(hasMore);
-
-      setIsLoading(false);
-      return paginated;
-    } catch (error) {
-      console.error("Error fetching history data:", error);
-      setIsLoading(false);
-      return [];
+  useEffect(() => {
+    setIsLoading(pendingQuery.isLoading);
+    if (pendingQuery.data) {
+      setPendingData(pendingQuery.data.rows.map(mapPendingRow));
+      setHasMorePending(currentPage * itemsPerPage < pendingQuery.data.totalCount);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingQuery.data, pendingQuery.isLoading]);
+
+  useEffect(() => {
+    setIsLoading(historyQuery.isLoading);
+    if (historyQuery.data) {
+      setHistoryData(historyQuery.data.rows.map(mapHistoryRow));
+      setHasMoreHistory(currentPage * itemsPerPage < historyQuery.data.totalCount);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [historyQuery.data, historyQuery.isLoading]);
+
+  // Legacy call sites throughout this file call these after a save/filter
+  // change expecting a refetch; the query key already reacts to state
+  // changes automatically, so these just force a refresh as a safety net.
+  const fetchPendingData = () => {
+    queryClient.invalidateQueries({ queryKey: ["enquiryTracker", "pending"] });
+  };
+
+  const fetchHistoryData = () => {
+    queryClient.invalidateQueries({ queryKey: ["enquiryTracker", "history"] });
   };
 
   const fetchDirectEnquiryData = async (
@@ -2423,21 +2035,18 @@ const handleSaveClick = async (index) => {
 
 
 
-  // Reset pagination when tab changes
+  // Reset pagination when tab changes. Data itself is no longer cleared here
+  // -- pendingData/historyData are now kept in sync with their respective
+  // TanStack Query results (see the sync effects above), which already
+  // manage loading/empty state correctly per tab. Clearing them here raced
+  // against that sync (the query could resolve and populate data, then this
+  // effect would wipe it back to [] on the same mount), causing the Pending
+  // tab to flash data and then go blank.
   useEffect(() => {
     setCurrentPage(1);
     setHasMorePending(true);
     setHasMoreHistory(true);
     setHasMoreDirectEnquiry(true);
-
-    // Clear existing data to prevent stale data
-    if (activeTab === "pending") {
-      setPendingData([]);
-    } else if (activeTab === "history") {
-      setHistoryData([]);
-    } else if (activeTab === "directEnquiry") {
-      setDirectEnquiryData([]);
-    }
   }, [activeTab]);
 
   // Fetch unique SC names on component mount
@@ -3482,6 +3091,7 @@ const handleSaveClick = async (index) => {
         setShowNewCallTrackerForm={setShowNewCallTrackerForm}
         pendingCallTrackers={mergedPending}
         historyCallTrackers={historyData}
+        currentStageOptions={CURRENT_STAGE_OPTIONS}
       />
 
       <div className="flex-1 flex flex-col min-h-0 mt-1">

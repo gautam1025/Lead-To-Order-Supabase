@@ -15,7 +15,8 @@ const EnquiryTrackerFilter = ({
   visiblePendingColumns = {}, handleSelectAllPending = () => {}, handleColumnTogglePending = () => {}, pendingColumnOptions = [],
   setShowNewCallTrackerForm,
   pendingCallTrackers = [],
-  historyCallTrackers = []
+  historyCallTrackers = [],
+  currentStageOptions = null,
 }) => {
   const activeData = activeTab === "pending"
     ? pendingCallTrackers
@@ -81,7 +82,14 @@ const EnquiryTrackerFilter = ({
         <div className="flex-1 min-w-[120px] z-[40]">
           <SearchableDropdown
             isMulti={true}
-            options={Array.from(new Set(activeData.map(c => c.currentStage).filter(Boolean))).map(l => ({ value: l, label: l, count: activeData.filter(d => d.currentStage === l).length }))}
+            options={
+              // A fixed, complete list (passed in) so a stage that only
+              // exists on not-yet-loaded rows is still selectable -- falls
+              // back to deriving from loaded rows if not provided.
+              currentStageOptions
+                ? currentStageOptions.map(l => ({ value: l, label: l, count: activeData.filter(d => d.currentStage === l).length }))
+                : Array.from(new Set(activeData.map(c => c.currentStage).filter(Boolean))).map(l => ({ value: l, label: l, count: activeData.filter(d => d.currentStage === l).length }))
+            }
             value={currentStageFilter}
             onChange={setCurrentStageFilter}
             placeholder="Current Stage"
